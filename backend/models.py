@@ -127,6 +127,27 @@ class WorkSet(SQLModel, table=True):
     rpe: float | None = None
 
 
+class Climb(SQLModel, table=True):
+    __tablename__ = "climbs"
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True)
+    date: date_type
+    # "boulder" / "sport" — determines the grade scale; only boulder climbs
+    # feed the strength-grade correlation (see CONTEXT.md: Discipline).
+    discipline: str
+    grade: str
+    # Fixed vocabulary, deliberately not a lookup table: onsight / flash /
+    # redpoint / attempt.
+    style: str
+    notes: str | None = None
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+CLIMB_DISCIPLINES = ("boulder", "sport")
+CLIMB_STYLES = ("onsight", "flash", "redpoint", "attempt")
+
+
 class Invite(SQLModel, table=True):
     __tablename__ = "invites"
 

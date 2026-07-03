@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Climbs</h2>
+<form method="post" action="/climbs">
+  <label>Date <input type="date" name="date" value="{{ today }}" required></label>
+  <label>Discipline
+    <select name="discipline">
+      {% for d in disciplines %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Grade <input type="text" name="grade" placeholder="V5 / 7a+" required></label>
+  <label>Style
+    <select name="style">
+      {% for s in styles %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Notes <input type="text" name="notes"></label>
+  <button type="submit">Log climb</button>
+</form>
+<ul>
+  {% for climb in climbs %}
+  <li class="climb" data-discipline="{{ climb.discipline }}" data-grade="{{ climb.grade }}" data-style="{{ climb.style }}" data-date="{{ climb.date }}">
+    {{ climb.date }} — {{ climb.grade }} ({{ climb.discipline }}, {{ climb.style }})
+    {% if climb.notes %}<br><small>{{ climb.notes }}</small>{% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% endblock %}
