@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Plate inventory</h2>
+<p>One stack, in {{ user.unit_pref }}. Suggestions only ever use weights you can actually load.</p>
+<table>
+  <thead>
+    <tr><th>Plate</th><th>Count</th></tr>
+  </thead>
+  <tbody>
+    {% for item in items %}
+    <tr>
+      <td class="plate-weight">{{ item.weight }}</td>
+      <td class="plate-count">{{ item.count }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<form method="post" action="/plates">
+  <label>Plate ({{ user.unit_pref }})
+    <input type="number" name="weight" step="0.25" min="0.25" required>
+  </label>
+  <label>Count (0 removes)
+    <input type="number" name="count" step="1" min="0" required>
+  </label>
+  <button type="submit">Save plate</button>
+</form>
+{% endblock %}

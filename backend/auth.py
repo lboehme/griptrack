@@ -6,6 +6,7 @@ from sqlmodel import Session, func, select
 
 from backend.db import get_session
 from backend.models import Invite, User, utcnow
+from backend.plates import seed_default_inventory
 
 
 class RegistrationError(Exception):
@@ -100,5 +101,7 @@ def register_user(
         invite.used_at = utcnow()
         session.add(invite)
         session.commit()
+
+    seed_default_inventory(session, user)
 
     return user

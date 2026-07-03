@@ -35,6 +35,17 @@ class BodyWeightLog(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow)
 
 
+class PlateInventoryItem(SQLModel, table=True):
+    __tablename__ = "plate_inventory_items"
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True)
+    # Stored in the owning user's unit_pref (ADR-0003). One row per plate
+    # denomination; the whole inventory is a single stack (ADR-0002).
+    weight: float
+    count: int
+
+
 class Invite(SQLModel, table=True):
     __tablename__ = "invites"
 
