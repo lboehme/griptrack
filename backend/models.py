@@ -86,6 +86,7 @@ class TrainingProtocol(SQLModel, table=True):
     user_id: int | None = Field(default=None, foreign_key="users.id")
     ramp_percentages: str = "50,65,80,90"
     base_work_set_reps: int = 5
+    default_work_sets: int = 3
 
 
 class TrainingSession(SQLModel, table=True):
@@ -108,6 +109,22 @@ class WarmupStepCheck(SQLModel, table=True):
     training_session_id: int = Field(foreign_key="training_sessions.id", index=True)
     hand: str
     step_index: int
+
+
+class WorkSet(SQLModel, table=True):
+    __tablename__ = "work_sets"
+
+    id: int | None = Field(default=None, primary_key=True)
+    training_session_id: int = Field(foreign_key="training_sessions.id", index=True)
+    hand: str
+    grip_type_id: int = Field(foreign_key="grip_types.id")
+    edge_mm: int
+    # Stored in the owning user's unit_pref (ADR-0003).
+    weight: float
+    reps: int
+    set_number: int
+    # 1.0-10.0 in 0.5 increments, optional (see CONTEXT.md: RPE).
+    rpe: float | None = None
 
 
 class Invite(SQLModel, table=True):

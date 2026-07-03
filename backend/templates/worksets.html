@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Work sets — {{ grip.name }} @ {{ edge_mm }} mm</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Set</th>
+      {% for hand in hands %}<th>{{ hand[0]|upper }} ({{ user.unit_pref }} × reps @ RPE)</th>{% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for set_number in set_numbers %}
+    <tr>
+      <td>{{ set_number }}</td>
+      {% for hand in hands %}
+      {% set ws = saved.get((hand, set_number)) %}
+      <td class="workset-cell" data-hand="{{ hand }}" data-set="{{ set_number }}">
+        <form method="post" action="/session/workset">
+          <input type="hidden" name="grip_type_id" value="{{ grip.id }}">
+          <input type="hidden" name="edge_mm" value="{{ edge_mm }}">
+          <input type="hidden" name="date" value="{{ date }}">
+          <input type="hidden" name="hand" value="{{ hand }}">
+          <input type="hidden" name="set_number" value="{{ set_number }}">
+          <input type="number" name="weight" value="{{ ws.weight if ws else current_max[hand] }}" step="0.25" min="0.25" required>
+          <input type="number" name="reps" value="{{ ws.reps if ws else default_reps }}" step="1" min="1" required>
+          <input type="number" name="rpe" value="{{ ws.rpe if ws and ws.rpe is not none else '' }}" step="0.5" min="1" max="10" placeholder="RPE">
+          <button type="submit">Save</button>
+        </form>
+      </td>
+      {% endfor %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<p><a href="/session/worksets?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}&amp;sets={{ more_sets }}{% if hands|length == 1 %}&amp;hand={{ hands[0] }}{% endif %}">Add another set</a></p>
+{% endblock %}

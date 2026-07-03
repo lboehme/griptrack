@@ -9,7 +9,70 @@ from backend.models import (
     TrainingSession,
     User,
     WarmupStepCheck,
+    WorkSet,
 )
+
+
+def worksets_for_combo(
+    session: Session,
+    user: User,
+    grip_type_id: int,
+    edge_mm: int,
+    date: date_type,
+) -> list[WorkSet]:
+    training_session = find_session(session, user, date)
+    if training_session is None:
+        return []
+    return list(
+        session.exec(
+            select(WorkSet)
+            .where(WorkSet.training_session_id == training_session.id)
+            .where(WorkSet.grip_type_id == grip_type_id)
+            .where(WorkSet.edge_mm == edge_mm)
+        )
+    )
+
+
+def record_work_set(
+    session: Session,
+    training_session: TrainingSession,
+    hand: str,
+    grip_type_id: int,
+    edge_mm: int,
+    set_number: int,
+    weight: float,
+    reps: int,
+    rpe: float | None,
+) -> WorkSet:
+    """Upsert one work set — every field edit autosaves, so the same
+    (hand, set_number) cell is written repeatedly within a session."""
+    work_set = session.exec(
+        select(WorkSet)
+        .where(WorkSet.training_session_id == training_session.id)
+        .where(WorkSet.hand == hand)
+        .where(WorkSet.grip_type_id == grip_type_id)
+        .where(WorkSet.edge_mm == edge_mm)
+        .where(WorkSet.set_number == set_number)
+    ).first()
+    if work_set is None:
+        work_set = WorkSet(
+            training_session_id=training_session.id,
+            hand=hand,
+            grip_type_id=grip_type_id,
+            edge_mm=edge_mm,
+            set_number=set_number,
+            weight=weight,
+            reps=reps,
+            rpe=rpe,
+        )
+    else:
+        work_set.weight = weight
+        work_set.reps = reps
+        work_set.rpe = rpe
+    session.add(work_set)
+    session.commit()
+    session.refresh(work_set)
+    return work_set
 
 
 def start_or_get_session(
@@ -124,15 +187,29 @@ def latest_max_test(
 def compute_current_max(
     session: Session, user: User, hand: str, grip_type_id: int, edge_mm: int
 ) -> float | None:
-    """CurrentMax: the latest MaxWeightTest for this combination.
+    """CurrentMax: the heavier of the latest MaxWeightTest and the heaviest
+    WorkSet logged since that test (see CONTEXT.md: CurrentMax).
 
-    A newer test supersedes an older one even when lower (deliberate
-    reset). Once WorkSets exist, a heavier work set logged since the
-    latest test also raises this (see CONTEXT.md: CurrentMax).
+    A newer test supersedes everything before it, even when lower
+    (deliberate reset) — work sets predating the latest test never count.
     Returns None when the combination has never been tested.
     """
     test = latest_max_test(session, user, hand, grip_type_id, edge_mm)
-    return test.weight if test is not None else None
+    if test is None:
+        return None
+    heaviest_since = session.exec(
+        select(WorkSet)
+        .join(TrainingSession, WorkSet.training_session_id == TrainingSession.id)  # type: ignore[arg-type]
+        .where(TrainingSession.user_id == user.id)
+        .where(TrainingSession.date >= test.date)
+        .where(WorkSet.hand == hand)
+        .where(WorkSet.grip_type_id == grip_type_id)
+        .where(WorkSet.edge_mm == edge_mm)
+        .order_by(WorkSet.weight.desc())
+    ).first()
+    if heaviest_since is not None and heaviest_since.weight > test.weight:
+        return heaviest_since.weight
+    return test.weight
 
 
 def record_max_weight_test(
@@ -161,15 +238,31 @@ def record_max_weight_test(
 def last_used_combination(session: Session, user: User) -> tuple[int, int] | None:
     """(grip_type_id, edge_mm) the user last trained or tested with.
 
-    WorkSets will take precedence here once they exist; until then the
-    most recent MaxWeightTest is the only usage signal.
+    Actual training (the latest WorkSet by session date) outranks the
+    latest MaxWeightTest: tests are rare, training is the living signal.
     """
+    work_set = session.exec(
+        select(WorkSet)
+        .join(TrainingSession, WorkSet.training_session_id == TrainingSession.id)  # type: ignore[arg-type]
+        .where(TrainingSession.user_id == user.id)
+        .order_by(TrainingSession.date.desc(), WorkSet.id.desc())
+    ).first()
     test = session.exec(
         select(MaxWeightTest)
         .where(MaxWeightTest.user_id == user.id)
         .order_by(MaxWeightTest.date.desc(), MaxWeightTest.id.desc())
     ).first()
-    return (test.grip_type_id, test.edge_mm) if test else None
+
+    latest_signals = []
+    if work_set is not None:
+        work_session = session.get(TrainingSession, work_set.training_session_id)
+        latest_signals.append((work_session.date, 1, work_set.grip_type_id, work_set.edge_mm))
+    if test is not None:
+        latest_signals.append((test.date, 0, test.grip_type_id, test.edge_mm))
+    if not latest_signals:
+        return None
+    _, _, grip_type_id, edge_mm = max(latest_signals)
+    return (grip_type_id, edge_mm)
 
 
 def tested_combinations(session: Session, user: User) -> list[dict]:
