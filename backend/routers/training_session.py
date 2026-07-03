@@ -102,6 +102,7 @@ def save_work_set(
 
 @router.post("/session/workset/delete")
 def delete_work_set(
+    request: Request,
     grip_type_id: int = Form(),
     edge_mm: int = Form(gt=0),
     date: date_type = Form(),
@@ -115,6 +116,8 @@ def delete_work_set(
         training_log.delete_work_set(
             session, training_session, hand, grip_type_id, edge_mm, set_number
         )
+    if request.headers.get("HX-Request"):
+        return Response(status_code=204)
     return RedirectResponse(
         f"/session/worksets?grip_type_id={grip_type_id}&edge_mm={edge_mm}"
         f"&date={date}&hand={hand}",

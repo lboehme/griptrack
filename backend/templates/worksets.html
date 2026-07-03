@@ -4,7 +4,7 @@
 <h2>Work sets</h2>
 <p class="page-sub">{{ grip.name }} · {{ edge_mm }} mm · {{ date }}{% if hands|length == 1 %} · <span class="hand-heading">{{ hands[0] }} hand</span>{% endif %}</p>
 <div class="card">
-<p class="muted" style="margin:0 0 .6rem; font-size:.82rem">Changes save automatically.</p>
+<p class="muted" style="margin:0 0 .6rem; font-size:.82rem">Tick a set when you've done it — edits to ticked sets save automatically, and a weight change carries down to later unticked sets.</p>
 <div class="table-scroll">
 <table>
   <thead>
@@ -20,8 +20,7 @@
       {% for hand in hands %}
       {% set ws = saved.get((hand, set_number)) %}
       <td class="workset-cell" data-hand="{{ hand }}" data-set="{{ set_number }}">
-        <form method="post" action="/session/workset"
-              hx-post="/session/workset" hx-trigger="change" hx-swap="none">
+        <form method="post" action="/session/workset">
           <input type="hidden" name="grip_type_id" value="{{ grip.id }}">
           <input type="hidden" name="edge_mm" value="{{ edge_mm }}">
           <input type="hidden" name="date" value="{{ date }}">
@@ -36,18 +35,9 @@
           <label class="mini">RPE
             <input type="number" name="rpe" value="{{ ws.rpe if ws and ws.rpe is not none else '' }}" step="0.5" min="1" max="10" placeholder="–">
           </label>
+          <input type="checkbox" class="set-done" data-hand="{{ hand }}" data-set="{{ set_number }}"{% if ws %} checked{% endif %} aria-label="Set {{ set_number }} {{ hand }} done">
           <noscript><button type="submit">Save</button></noscript>
         </form>
-        {% if ws %}
-        <form method="post" action="/session/workset/delete" class="delete-set-form">
-          <input type="hidden" name="grip_type_id" value="{{ grip.id }}">
-          <input type="hidden" name="edge_mm" value="{{ edge_mm }}">
-          <input type="hidden" name="date" value="{{ date }}">
-          <input type="hidden" name="hand" value="{{ hand }}">
-          <input type="hidden" name="set_number" value="{{ set_number }}">
-          <button type="submit" class="delete-set" aria-label="Delete this set">Remove set ✕</button>
-        </form>
-        {% endif %}
       </td>
       {% endfor %}
     </tr>
@@ -70,4 +60,39 @@
   {% endif %}
   <a class="btn" href="/">Done — back home</a>
 </div>
+<script>
+document.querySelectorAll(".workset-cell").forEach((cell) => {
+  const form = cell.querySelector("form");
+  const done = cell.querySelector(".set-done");
+  const post = (action) =>
+    fetch(action, {
+      method: "POST",
+      body: new FormData(form),
+      headers: { "HX-Request": "true" },
+    });
+
+  done.addEventListener("change", () => {
+    post(done.checked ? "/session/workset" : "/session/workset/delete");
+  });
+
+  form.querySelectorAll('input[type="number"]').forEach((input) => {
+    input.addEventListener("change", () => {
+      if (done.checked) post("/session/workset");
+      if (input.name === "weight") {
+        // Carry the new weight down to later, not-yet-done sets of this hand.
+        const hand = cell.dataset.hand;
+        const setNumber = parseInt(cell.dataset.set, 10);
+        document
+          .querySelectorAll(`.workset-cell[data-hand="${hand}"]`)
+          .forEach((other) => {
+            const otherDone = other.querySelector(".set-done");
+            if (parseInt(other.dataset.set, 10) > setNumber && !otherDone.checked) {
+              other.querySelector('input[name="weight"]').value = input.value;
+            }
+          });
+      }
+    });
+  });
+});
+</script>
 {% endblock %}

@@ -457,11 +457,13 @@ ul.plain { list-style: none; margin: 0; padding: 0; }
 
 .workset-cell form {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr auto;
   gap: .4rem;
   align-items: end;
   margin: 0;
 }
+
+.workset-cell .set-done { margin-bottom: .4rem; }
 
 .workset-cell .mini { margin: 0; font-size: .66rem; }
 
@@ -496,21 +498,6 @@ input[type="number"]::-webkit-outer-spin-button {
   padding: .3rem .95rem;
   font-size: .88rem;
   border-radius: 10px;
-}
-
-.delete-set-form { margin: .45rem 0 0; }
-
-button.delete-set {
-  min-height: 1.9rem;
-  width: auto;
-  padding: .1rem .7rem;
-  font-size: .74rem;
-  font-weight: 650;
-  color: var(--danger);
-  background: transparent;
-  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
-  border-radius: 999px;
-  box-shadow: none;
 }
 
 .set-label { font-weight: 800; color: var(--muted); }

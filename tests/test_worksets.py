@@ -103,6 +103,23 @@ def test_rpe_must_be_on_the_half_point_grid_between_1_and_10(client):
         assert response.status_code == 200, good_rpe
 
 
+def test_saved_sets_render_as_done_ticks(client):
+    setup_tested_user(client)
+    save_work_set(client, "left", 1, "42.5", "5")
+
+    page = worksets_page(client).text
+    ticks = {
+        (hand, int(set_number)): "checked" in attrs
+        for hand, set_number, attrs in re.findall(
+            r'class="set-done" data-hand="(\w+)" data-set="(\d+)"([^>]*)>', page
+        )
+    }
+
+    assert ticks[("left", 1)] is True
+    assert ticks[("left", 2)] is False
+    assert ticks[("right", 1)] is False
+
+
 def test_an_accidentally_added_set_can_be_deleted(client):
     setup_tested_user(client)
     save_work_set(client, "left", 3, "42.5", "5")
