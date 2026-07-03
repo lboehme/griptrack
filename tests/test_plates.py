@@ -14,7 +14,8 @@ def inventory_rows(client):
     return {
         float(w): int(c)
         for w, c in re.findall(
-            r'class="plate-weight">([^<]+)</\w+>.*?class="plate-count">(\d+)<',
+            r'class="plate-weight">([^<]+)</\w+>.*?'
+            r'class="plate-count" data-count="(\d+)"',
             page,
             re.DOTALL,
         )

@@ -126,9 +126,10 @@ def find_session(
     ).first()
 
 
-def record_warmup_check(
+def toggle_warmup_check(
     session: Session, training_session: TrainingSession, hand: str, step_index: int
 ) -> None:
+    """Check the step, or uncheck it when already checked (accidental tap)."""
     exists = session.exec(
         select(WarmupStepCheck)
         .where(WarmupStepCheck.training_session_id == training_session.id)
@@ -143,7 +144,9 @@ def record_warmup_check(
                 step_index=step_index,
             )
         )
-        session.commit()
+    else:
+        session.delete(exists)
+    session.commit()
 
 
 def warmup_checks(

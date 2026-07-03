@@ -51,7 +51,12 @@
     {% endfor %}
   </tbody>
 </table>
-<p class="add-set"><a class="btn btn-secondary" href="/session/worksets?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}&amp;sets={{ more_sets }}{% if hands|length == 1 %}&amp;hand={{ hands[0] }}{% endif %}">＋ Add another set</a></p>
+<p class="add-set">
+  <a class="btn btn-secondary" href="/session/worksets?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}&amp;sets={{ more_sets }}{% if hands|length == 1 %}&amp;hand={{ hands[0] }}{% endif %}">＋ Add another set</a>
+  {% if removable_to %}
+  <a class="btn btn-secondary remove-empty-set" href="/session/worksets?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}&amp;sets={{ removable_to }}{% if hands|length == 1 %}&amp;hand={{ hands[0] }}{% endif %}">－ Remove empty set</a>
+  {% endif %}
+</p>
 </div>
 <div class="flow-next">
   <a class="btn btn-secondary" href="/session/warmup?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}{% if hands|length == 1 %}&amp;hand={{ hands[0] }}{% endif %}">← Back to warmup</a>

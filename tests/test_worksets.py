@@ -77,9 +77,18 @@ def test_add_another_set_extends_the_table_and_saved_sets_stay(client):
     extended = client.get(add_link.replace("&amp;", "&"))
     assert ("left", 4) in workset_rows(extended.text)
 
+    # An unsaved extra row can be dismissed without saving it first.
+    remove_link = re.search(
+        r'class="[^"]*remove-empty-set[^"]*"\s+href="([^"]+)"', extended.text
+    )
+    assert remove_link and "sets=3" in remove_link.group(1)
+
     save_work_set(client, "left", 4, "42.5", "5")
-    # The 4th row now persists without the ?sets= hint.
-    assert ("left", 4) in workset_rows(worksets_page(client).text)
+    # The 4th row now persists without the ?sets= hint, and there is no
+    # dangling "remove empty set" link for saved rows.
+    base = worksets_page(client)
+    assert ("left", 4) in workset_rows(base.text)
+    assert "remove-empty-set" not in base.text
 
 
 def test_rpe_must_be_on_the_half_point_grid_between_1_and_10(client):

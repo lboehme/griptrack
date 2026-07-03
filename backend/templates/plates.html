@@ -12,24 +12,33 @@
     {% for item in items %}
     <tr>
       <td class="plate-weight">{{ item.weight }}</td>
-      <td class="plate-count">{{ item.count }}</td>
+      <td class="plate-count" data-count="{{ item.count }}">
+        <form method="post" action="/plates">
+          <input type="hidden" name="weight" value="{{ item.weight }}">
+          <select name="count" onchange="this.form.submit()" aria-label="Count of {{ item.weight }} {{ user.unit_pref }} plates">
+            {% for n in range(0, 13) %}
+            <option value="{{ n }}"{% if n == item.count %} selected{% endif %}>{{ n if n > 0 else "0 — remove" }}</option>
+            {% endfor %}
+          </select>
+        </form>
+      </td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
 </div>
 <div class="card">
-<h3>Add or change a plate</h3>
+<h3>Add a new plate</h3>
 <form method="post" action="/plates">
   <div class="form-row">
     <label>Plate ({{ user.unit_pref }})
       <input type="number" name="weight" step="0.25" min="0.25" required>
     </label>
-    <label>Count <span class="muted">(0 removes)</span>
-      <input type="number" name="count" step="1" min="0" required>
+    <label>Count
+      <input type="number" name="count" step="1" min="1" required>
     </label>
   </div>
-  <button type="submit">Save plate</button>
+  <button type="submit">Add plate</button>
 </form>
 </div>
 {% endblock %}

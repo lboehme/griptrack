@@ -27,7 +27,12 @@ def max_tests_page(
     return templates.TemplateResponse(
         request,
         "max_tests.html",
-        {"user": user, "grip_types": grip_types, "combos": combos},
+        {
+            "user": user,
+            "grip_types": grip_types,
+            "combos": combos,
+            "today": date_type.today().isoformat(),
+        },
     )
 
 
@@ -61,4 +66,4 @@ def add_grip_type(
     if existing is None:
         session.add(GripType(name=name))
         session.commit()
-    return RedirectResponse("/max-tests", status_code=303)
+    return RedirectResponse("/profile", status_code=303)

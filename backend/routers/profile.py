@@ -29,7 +29,11 @@ def profile(
     return templates.TemplateResponse(
         request,
         "profile.html",
-        {"user": user, "current_bodyweight": latest_bodyweight(session, user)},
+        {
+            "user": user,
+            "current_bodyweight": latest_bodyweight(session, user),
+            "today": date_type.today().isoformat(),
+        },
     )
 
 

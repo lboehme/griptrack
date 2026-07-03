@@ -83,6 +83,16 @@ def test_starter_grip_types_are_offered(client):
         assert name in page.text
 
 
+def test_max_test_date_defaults_to_today(client):
+    from datetime import date
+
+    register(client)
+
+    page = client.get("/max-tests")
+
+    assert f'name="date" value="{date.today().isoformat()}"' in page.text
+
+
 def test_admin_can_add_a_grip_type_but_non_admin_cannot(client):
     register(client)  # founder = admin
 

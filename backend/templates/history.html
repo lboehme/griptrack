@@ -7,23 +7,7 @@
 <div class="card">
 <h3>Training sessions</h3>
 {% if history %}
-{% for entry in history %}
-<details class="history-session" data-date="{{ entry.session.date }}">
-  <summary>
-    <strong>{{ entry.session.date }}</strong>
-    <span class="muted">· {{ entry.work_sets|length }} work set{{ "s" if entry.work_sets|length != 1 }}</span>
-  </summary>
-  <ul class="plain history-sets">
-    {% for ws in entry.work_sets %}
-    <li class="history-set" data-hand="{{ ws.hand }}" data-set="{{ ws.set_number }}" data-weight="{{ ws.weight }}" data-reps="{{ ws.reps }}">
-      <span class="hand-heading">{{ ws.hand[0]|upper }}</span>
-      <strong>{{ ws.weight }} {{ user.unit_pref }}</strong> × {{ ws.reps }}
-      <span class="muted">· set {{ ws.set_number }} · {{ grip_names[ws.grip_type_id] }} @ {{ ws.edge_mm }} mm{% if ws.rpe is not none %} · RPE {{ ws.rpe }}{% endif %}</span>
-    </li>
-    {% endfor %}
-  </ul>
-</details>
-{% endfor %}
+{% include "_session_list.html" %}
 {% else %}
 <p class="muted" style="margin:0">No sessions logged yet.</p>
 {% endif %}

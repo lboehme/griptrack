@@ -173,6 +173,30 @@ def test_checking_a_warmup_step_autosaves_and_starts_the_session(client):
     }
 
 
+def test_unchecking_a_warmup_step_persists_too(client):
+    register(client)
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "42.5")
+    log_max_test(client, "right", "half crimp", 20, "2026-07-01", "40")
+
+    check_step(client, "left", 0)
+    assert checked_steps(warmup_page(client).text) == {("left", 0)}
+
+    # The same action on a checked step unchecks it (accidental tap).
+    check_step(client, "left", 0)
+    assert checked_steps(warmup_page(client).text) == set()
+
+
+def test_session_start_page_lists_previous_sessions(client):
+    register(client)
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "42.5")
+    log_max_test(client, "right", "half crimp", 20, "2026-07-01", "40")
+    check_step(client, "left", 0, date="2026-07-04")
+
+    page = client.get("/session/new").text
+
+    assert 'class="history-session" data-date="2026-07-04"' in page
+
+
 def test_session_start_form_defaults_to_the_last_used_combination(client):
     register(client)
     log_max_test(client, "left", "half crimp", 20, "2026-07-01", "42.5")

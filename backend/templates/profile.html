@@ -16,7 +16,7 @@
 </p>
 <form method="post" action="/profile/bodyweight">
   <div class="form-row">
-    <label>Date <input type="date" name="date" required></label>
+    <label>Date <input type="date" name="date" value="{{ today }}" required></label>
     <label>Bodyweight ({{ user.unit_pref }})
       <input type="number" name="weight" step="0.1" min="1" required>
     </label>
@@ -48,6 +48,13 @@
 <h3>Invites <span class="muted" style="font-weight:500">(admin)</span></h3>
 <form method="post" action="/invites">
   <button type="submit">Generate invite code</button>
+</form>
+</div>
+<div class="card">
+<h3>Grip types <span class="muted" style="font-weight:500">(admin)</span></h3>
+<form method="post" action="/grip-types">
+  <label>New grip type <input type="text" name="name" required></label>
+  <button type="submit">Add grip type</button>
 </form>
 </div>
 {% endif %}

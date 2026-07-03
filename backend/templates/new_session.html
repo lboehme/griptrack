@@ -21,4 +21,11 @@
     <button type="submit">Start warmup →</button>
   </form>
 </div>
+{% if history %}
+<div class="card">
+  <h3>Previous sessions</h3>
+  {% include "_session_list.html" %}
+  <p style="margin:.6rem 0 0"><a class="muted" href="/history">Full history →</a></p>
+</div>
+{% endif %}
 {% endblock %}

@@ -465,9 +465,26 @@ ul.plain { list-style: none; margin: 0; padding: 0; }
 
 .workset-cell input {
   min-height: 2.7rem;
+  min-width: 4.2rem;
   padding: .3rem .5rem;
   font-size: .98rem;
   border-radius: 10px;
+}
+
+/* Spin buttons eat width on desktop and clip the decimals ("20" for 20.5). */
+input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.plate-count select {
+  min-height: 2.6rem;
+  margin-top: 0;
+  width: auto;
+  padding-right: 1.6rem;
 }
 
 .workset-cell button {

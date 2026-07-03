@@ -1,7 +1,7 @@
 from datetime import date as date_type
 
 from fastapi import APIRouter, Depends, Form, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlmodel import Session, select
 
 from backend import auth, training_log
@@ -45,7 +45,10 @@ def worksets_page(
         for h in hands
     }
     highest_saved = max((n for _, n in saved), default=0)
-    row_count = max(protocol.default_work_sets, highest_saved, sets or 0)
+    needed_rows = max(protocol.default_work_sets, highest_saved)
+    row_count = max(needed_rows, sets or 0)
+    # Extra empty rows (from "add another set") can be dismissed again.
+    removable_to = row_count - 1 if row_count > needed_rows else None
     return templates.TemplateResponse(
         request,
         "worksets.html",
@@ -60,6 +63,7 @@ def worksets_page(
             "current_max": current_max,
             "default_reps": protocol.base_work_set_reps,
             "more_sets": row_count + 1,
+            "removable_to": removable_to,
         },
     )
 
@@ -117,6 +121,7 @@ def delete_work_set(
 
 @router.post("/session/check")
 def check_warmup_step(
+    request: Request,
     grip_type_id: int = Form(),
     edge_mm: int = Form(gt=0),
     date: date_type = Form(),
@@ -126,7 +131,10 @@ def check_warmup_step(
     session: Session = Depends(get_session),
 ):
     training_session = training_log.start_or_get_session(session, user, date)
-    training_log.record_warmup_check(session, training_session, hand, step_index)
+    training_log.toggle_warmup_check(session, training_session, hand, step_index)
+    # htmx ticks stay on the page (no reload); plain form posts redirect.
+    if request.headers.get("HX-Request"):
+        return Response(status_code=204)
     return RedirectResponse(
         f"/session/warmup?grip_type_id={grip_type_id}&edge_mm={edge_mm}"
         f"&date={date}&hand={hand}",
@@ -151,6 +159,8 @@ def new_session_form(
             "default_grip_type_id": last_used[0] if last_used else None,
             "default_edge_mm": last_used[1] if last_used else "",
             "today": date_type.today().isoformat(),
+            "history": training_log.session_history(session, user)[:8],
+            "grip_names": {grip.id: grip.name for grip in grip_types},
         },
     )
 
