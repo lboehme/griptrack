@@ -9,6 +9,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from backend.db import get_session
 from backend.routers import auth as auth_router
 from backend.routers import climbs as climbs_router
+from backend.routers import dashboard as dashboard_router
 from backend.routers import history as history_router
 from backend.routers import home as home_router
 from backend.routers import max_tests as max_tests_router
@@ -35,6 +36,7 @@ def create_app() -> FastAPI:
     app.include_router(training_session_router.router)
     app.include_router(climbs_router.router)
     app.include_router(history_router.router)
+    app.include_router(dashboard_router.router)
 
     @app.get("/health")
     def health(request: Request, session: Session = Depends(get_session)):

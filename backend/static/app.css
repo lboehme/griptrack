@@ -547,6 +547,30 @@ li.climb .meta { color: var(--muted); font-size: .87rem; margin-top: .15rem; }
   border-color: transparent;
 }
 
+/* ---------- dashboard ---------- */
+
+.trend-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 10px;
+  margin: .3rem 0 .5rem;
+}
+
+.volume-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: .3rem 0;
+  font-size: .92rem;
+}
+
+.pill.plateau-flag {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border-color: transparent;
+  margin-left: .4rem;
+}
+
 /* ---------- misc ---------- */
 
 .notice {
