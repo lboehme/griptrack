@@ -69,10 +69,11 @@ def register(
     email: str = Form(),
     password: str = Form(),
     invite_code: str | None = Form(default=None),
+    unit_pref: str = Form(default="kg"),
     session: Session = Depends(get_session),
 ):
     try:
-        user = auth.register_user(session, email, password, invite_code)
+        user = auth.register_user(session, email, password, invite_code, unit_pref)
     except auth.RegistrationError as error:
         return HTMLResponse(str(error), status_code=400)
     request.session["user_id"] = user.id

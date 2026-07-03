@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Profile</h2>
+<p>Email: {{ user.email }}</p>
+<p>Units: <span class="unit-pref">{{ user.unit_pref }}</span> (fixed at signup)</p>
+<p>Current bodyweight:
+  {% if current_bodyweight %}
+  <span class="current-bodyweight">{{ current_bodyweight.weight }}</span> {{ user.unit_pref }}
+  (logged {{ current_bodyweight.date }})
+  {% else %}
+  not logged yet
+  {% endif %}
+</p>
+<form method="post" action="/profile/bodyweight">
+  <label>Date <input type="date" name="date" required></label>
+  <label>Bodyweight ({{ user.unit_pref }})
+    <input type="number" name="weight" step="0.1" min="1" required>
+  </label>
+  <button type="submit">Log bodyweight</button>
+</form>
+<form method="post" action="/profile">
+  <label>Hand order
+    <select name="hand_order_pref">
+      <option value="alternating" {% if user.hand_order_pref == "alternating" %}selected{% endif %}>alternating</option>
+      <option value="sequential" {% if user.hand_order_pref == "sequential" %}selected{% endif %}>sequential</option>
+    </select>
+  </label>
+  <button type="submit">Save</button>
+</form>
+{% endblock %}

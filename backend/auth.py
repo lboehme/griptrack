@@ -68,6 +68,7 @@ def register_user(
     email: str,
     password: str,
     invite_code: str | None = None,
+    unit_pref: str = "kg",
 ) -> User:
     # The first account ever created bootstraps the Admin (see ADR-0004:
     # invite-only registration needs at least one invite-generating user).
@@ -81,10 +82,14 @@ def register_user(
         if invite is None or invite.used_by_user_id is not None:
             raise RegistrationError("A valid, unused invite code is required.")
 
+    if unit_pref not in ("kg", "lbs"):
+        raise RegistrationError("Unit must be kg or lbs.")
+
     user = User(
         email=email,
         hashed_password=hash_password(password),
         is_admin=no_users_yet,
+        unit_pref=unit_pref,
     )
     session.add(user)
     session.commit()

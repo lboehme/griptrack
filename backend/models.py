@@ -1,3 +1,4 @@
+from datetime import date as date_type
 from datetime import datetime, timezone
 
 from sqlmodel import Field, SQLModel
@@ -14,6 +15,23 @@ class User(SQLModel, table=True):
     email: str = Field(unique=True, index=True)
     hashed_password: str
     is_admin: bool = False
+    # Fixed at signup; determines the storage unit for all of this user's
+    # weight values (ADR-0003: native-unit storage).
+    unit_pref: str = "kg"
+    # "alternating": both hands side by side per step; "sequential": one
+    # hand's full flow, then the other (see HandOrderPreference in CONTEXT.md).
+    hand_order_pref: str = "alternating"
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class BodyWeightLog(SQLModel, table=True):
+    __tablename__ = "body_weight_logs"
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True)
+    date: date_type
+    # Stored in the owning user's unit_pref (ADR-0003).
+    weight: float
     created_at: datetime = Field(default_factory=utcnow)
 
 
