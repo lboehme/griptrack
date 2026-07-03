@@ -582,6 +582,23 @@ li.climb .meta { color: var(--muted); font-size: .87rem; margin-top: .15rem; }
   .pill.overtraining-flag { color: #f3b95f; }
 }
 
+.corr-headline {
+  margin: 0 0 .5rem;
+  font-size: 1.05rem;
+}
+
+.corr-headline .corr-r { font-size: 1.9rem; letter-spacing: -0.02em; }
+
+.corr-points li {
+  display: flex;
+  justify-content: space-between;
+  gap: .8rem;
+  padding: .3rem 0;
+  font-size: .92rem;
+}
+
+.corr-note { font-size: .78rem; margin: .7rem 0 0; }
+
 /* ---------- misc ---------- */
 
 .notice {

@@ -60,5 +60,9 @@ def dashboard_page(
     return templates.TemplateResponse(
         request,
         "dashboard.html",
-        {"user": user, "combos": combos},
+        {
+            "user": user,
+            "combos": combos,
+            "correlation": analytics.strength_grade_correlation(session, user),
+        },
     )

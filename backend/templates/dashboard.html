@@ -3,6 +3,25 @@
 {% block content %}
 <h2>Trends</h2>
 <p class="page-sub">TrainingVolume (weight × reps, summed per session) for every combination you train.</p>
+{% if correlation and correlation.r is not none %}
+<div class="card corr-card">
+  <h3>Strength ↔ boulder grade</h3>
+  <p class="corr-headline">
+    r = <strong class="corr-r" data-r="{{ "%.2f"|format(correlation.r) }}" data-n="{{ correlation.n }}">{{ "%.2f"|format(correlation.r) }}</strong>
+    <span class="muted">across {{ correlation.n }} boulder sends</span>
+  </p>
+  <ul class="plain corr-points">
+    {% for point in correlation.points %}
+    <li class="corr-point" data-date="{{ point.date }}" data-pct="{{ "%.3f"|format(point.pct_bodyweight) }}" data-grade="{{ point.grade_value }}">
+      <span class="muted">{{ point.date }}</span>
+      <span>{{ "%.0f"|format(point.pct_bodyweight * 100) }}% BW</span>
+      <strong>{{ point.grade }}</strong>
+    </li>
+    {% endfor %}
+  </ul>
+  <p class="muted corr-note">Correlation between your best pull (as % of bodyweight at the time) and boulder grade. Framed against Lattice's published finger-strength research as a reference point — their data covers hangboard hangs, not block pulls.</p>
+</div>
+{% endif %}
 {% if combos %}
 {% for combo in combos %}
 <div class="card">
