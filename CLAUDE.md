@@ -39,10 +39,14 @@ through an explicit design-interview session (the `grilling` +
   before revisiting any of the choices below; each explains a real
   trade-off that was deliberately made.
 
-**Current state:** planning/design stage only — no backend or frontend code
-exists yet. All paths/modules mentioned below are the intended layout. Build
-in the phase order given under Roadmap; don't jump ahead to later phases
-before earlier ones are working and tested.
+**Current state:** the full PRD (issue #1, slices #2–#13) is implemented —
+auth, profile, plates, max tests, session logging, climbs, history, and the
+analytics dashboard (volume trend charts, plateau, overtraining warning,
+%BW-vs-grade correlation), with a 53-test suite at the HTTP seam. Remaining
+open work lives in the GitHub issue tracker (e.g. #14, the guided
+max-testing routine — needs design input before it's buildable). Work
+test-first (see the `tdd` skill) and keep migrations in lockstep with model
+changes.
 
 ## Environment & running
 
