@@ -26,7 +26,7 @@ def log_max_test(client, hand, grip, edge_mm, date, weight):
     )
 
 
-def warmup_page(client, grip="half_crimp", edge_mm=20, date="2026-07-04"):
+def warmup_page(client, grip="half crimp", edge_mm=20, date="2026-07-04"):
     return client.get(
         "/session/warmup",
         params={
@@ -51,8 +51,8 @@ def ramp_weights(page_text):
 
 def test_ramp_is_percent_of_current_max_rounded_down_to_loadable(client):
     register(client)
-    log_max_test(client, "left", "half_crimp", 20, "2026-07-01", "42.5")
-    log_max_test(client, "right", "half_crimp", 20, "2026-07-01", "40")
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "42.5")
+    log_max_test(client, "right", "half crimp", 20, "2026-07-01", "40")
 
     weights = ramp_weights(warmup_page(client).text)
 
@@ -79,8 +79,8 @@ def clear_inventory(client):
 
 def test_empty_plate_inventory_suggests_zero_for_every_step(client):
     register(client)
-    log_max_test(client, "left", "half_crimp", 20, "2026-07-01", "42.5")
-    log_max_test(client, "right", "half_crimp", 20, "2026-07-01", "40")
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "42.5")
+    log_max_test(client, "right", "half crimp", 20, "2026-07-01", "40")
     clear_inventory(client)
 
     weights = ramp_weights(warmup_page(client).text)
@@ -90,8 +90,8 @@ def test_empty_plate_inventory_suggests_zero_for_every_step(client):
 
 def test_target_below_smallest_loadable_increment_suggests_zero(client):
     register(client)
-    log_max_test(client, "left", "half_crimp", 20, "2026-07-01", "15")
-    log_max_test(client, "right", "half_crimp", 20, "2026-07-01", "15")
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "15")
+    log_max_test(client, "right", "half crimp", 20, "2026-07-01", "15")
     clear_inventory(client)
     client.post("/plates", data={"weight": "20", "count": "1"})
 
@@ -104,8 +104,8 @@ def test_target_below_smallest_loadable_increment_suggests_zero(client):
 def test_sequential_hand_order_shows_one_hand_at_a_time(client):
     register(client)
     client.post("/profile", data={"hand_order_pref": "sequential"})
-    log_max_test(client, "left", "half_crimp", 20, "2026-07-01", "42.5")
-    log_max_test(client, "right", "half_crimp", 20, "2026-07-01", "40")
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "42.5")
+    log_max_test(client, "right", "half crimp", 20, "2026-07-01", "40")
 
     first = warmup_page(client)
     assert {hand for hand, step in ramp_weights(first.text)} == {"left"}
@@ -113,7 +113,7 @@ def test_sequential_hand_order_shows_one_hand_at_a_time(client):
     second = client.get(
         "/session/warmup",
         params={
-            "grip_type_id": grip_type_id(client, "half_crimp"),
+            "grip_type_id": grip_type_id(client, "half crimp"),
             "edge_mm": 20,
             "date": "2026-07-04",
             "hand": "right",
@@ -133,7 +133,7 @@ def checked_steps(page_text):
     }
 
 
-def check_step(client, hand, step, grip="half_crimp", edge_mm=20, date="2026-07-04"):
+def check_step(client, hand, step, grip="half crimp", edge_mm=20, date="2026-07-04"):
     return client.post(
         "/session/check",
         data={
@@ -149,8 +149,8 @@ def check_step(client, hand, step, grip="half_crimp", edge_mm=20, date="2026-07-
 
 def test_checking_a_warmup_step_autosaves_and_starts_the_session(client):
     register(client)
-    log_max_test(client, "left", "half_crimp", 20, "2026-07-01", "42.5")
-    log_max_test(client, "right", "half_crimp", 20, "2026-07-01", "40")
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "42.5")
+    log_max_test(client, "right", "half crimp", 20, "2026-07-01", "40")
 
     before = warmup_page(client)
     assert 'class="session-started"' not in before.text
@@ -175,14 +175,14 @@ def test_checking_a_warmup_step_autosaves_and_starts_the_session(client):
 
 def test_session_start_form_defaults_to_the_last_used_combination(client):
     register(client)
-    log_max_test(client, "left", "half_crimp", 20, "2026-07-01", "42.5")
-    log_max_test(client, "left", "open_hand", 10, "2026-07-02", "35")
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "42.5")
+    log_max_test(client, "left", "open hand", 10, "2026-07-02", "35")
 
     page = client.get("/session/new")
 
     assert page.status_code == 200
     # The most recently used grip/edge is preselected.
-    grip_id = grip_type_id(client, "open_hand")
+    grip_id = grip_type_id(client, "open hand")
     assert f'value="{grip_id}" selected' in page.text
     assert 'name="edge_mm" value="10"' in page.text
 
@@ -190,7 +190,7 @@ def test_session_start_form_defaults_to_the_last_used_combination(client):
 def test_untested_combination_prompts_for_a_max_test_first(client):
     register(client)
     # Only the left hand is tested; the right hand has no max for this combo.
-    log_max_test(client, "left", "half_crimp", 20, "2026-07-01", "42.5")
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "42.5")
 
     page = warmup_page(client)
 

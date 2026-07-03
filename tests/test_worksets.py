@@ -3,7 +3,7 @@ import re
 from tests.helpers import current_maxes, grip_type_id, log_max_test, register
 
 
-def worksets_page(client, grip="half_crimp", edge_mm=20, date="2026-07-04", hand=None):
+def worksets_page(client, grip="half crimp", edge_mm=20, date="2026-07-04", hand=None):
     params = {
         "grip_type_id": grip_type_id(client, grip),
         "edge_mm": edge_mm,
@@ -31,13 +31,13 @@ def workset_rows(page_text):
 
 def setup_tested_user(client):
     register(client)
-    log_max_test(client, "left", "half_crimp", 20, "2026-07-01", "42.5")
-    log_max_test(client, "right", "half_crimp", 20, "2026-07-01", "40")
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "42.5")
+    log_max_test(client, "right", "half crimp", 20, "2026-07-01", "40")
 
 
 def save_work_set(
     client, hand, set_number, weight, reps, rpe=None,
-    grip="half_crimp", edge_mm=20, date="2026-07-04",
+    grip="half crimp", edge_mm=20, date="2026-07-04",
 ):
     data = {
         "grip_type_id": grip_type_id(client, grip),
@@ -94,18 +94,42 @@ def test_rpe_must_be_on_the_half_point_grid_between_1_and_10(client):
         assert response.status_code == 200, good_rpe
 
 
+def test_an_accidentally_added_set_can_be_deleted(client):
+    setup_tested_user(client)
+    save_work_set(client, "left", 3, "42.5", "5")
+    save_work_set(client, "left", 4, "30", "2")  # oops
+
+    response = client.post(
+        "/session/workset/delete",
+        data={
+            "grip_type_id": grip_type_id(client, "half crimp"),
+            "edge_mm": 20,
+            "date": "2026-07-04",
+            "hand": "left",
+            "set_number": 4,
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+
+    rows = workset_rows(worksets_page(client).text)
+    # Set 3's data survives; the table shrinks back to the default rows.
+    assert rows[("left", 3)] == ("42.5", "5", "")
+    assert ("left", 4) not in rows
+
+
 def test_current_max_rises_with_a_heavier_work_set_since_the_last_test(client):
     setup_tested_user(client)  # tested 2026-07-01 at 42.5 (L) / 40 (R)
 
     save_work_set(client, "left", 1, "45", "3", date="2026-07-04")
 
-    combo = ("left", "half_crimp", 20)
+    combo = ("left", "half crimp", 20)
     assert current_maxes(client)[combo] == 45.0
     # The other hand is untouched by the left hand's work set.
-    assert current_maxes(client)[("right", "half_crimp", 20)] == 40.0
+    assert current_maxes(client)[("right", "half crimp", 20)] == 40.0
 
     # A newer max test supersedes: the heavy work set predates it.
-    log_max_test(client, "left", "half_crimp", 20, "2026-07-05", "41")
+    log_max_test(client, "left", "half crimp", 20, "2026-07-05", "41")
     assert current_maxes(client)[combo] == 41.0
 
 
@@ -121,14 +145,14 @@ def test_sequential_hand_order_shows_one_hand_of_work_sets_at_a_time(client):
 
 
 def test_session_start_defaults_prefer_the_last_trained_combination(client):
-    setup_tested_user(client)  # half_crimp/20 tested 2026-07-01
-    log_max_test(client, "left", "open_hand", 10, "2026-07-02", "35")
+    setup_tested_user(client)  # half crimp/20 tested 2026-07-01
+    log_max_test(client, "left", "open hand", 10, "2026-07-02", "35")
 
-    # Training happened on half_crimp/20 after the open_hand test.
+    # Training happened on half crimp/20 after the open hand test.
     save_work_set(client, "left", 1, "42.5", "5", date="2026-07-03")
 
     page = client.get("/session/new")
-    grip_id = grip_type_id(client, "half_crimp")
+    grip_id = grip_type_id(client, "half crimp")
     assert f'value="{grip_id}" selected' in page.text
     assert 'name="edge_mm" value="20"' in page.text
 

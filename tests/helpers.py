@@ -32,7 +32,7 @@ def current_maxes(client):
     return {
         (h, g, int(e)): float(w)
         for h, g, e, w in re.findall(
-            r'data-combo="(\w+)\|(\w+)\|(\d+)".*?class="max-weight">([\d.]+)<',
+            r'data-combo="(\w+)\|([^|]+)\|(\d+)".*?class="max-weight">([\d.]+)<',
             page,
             re.DOTALL,
         )

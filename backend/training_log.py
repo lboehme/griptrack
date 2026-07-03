@@ -13,6 +13,29 @@ from backend.models import (
 )
 
 
+def delete_work_set(
+    session: Session,
+    training_session: TrainingSession,
+    hand: str,
+    grip_type_id: int,
+    edge_mm: int,
+    set_number: int,
+) -> bool:
+    work_set = session.exec(
+        select(WorkSet)
+        .where(WorkSet.training_session_id == training_session.id)
+        .where(WorkSet.hand == hand)
+        .where(WorkSet.grip_type_id == grip_type_id)
+        .where(WorkSet.edge_mm == edge_mm)
+        .where(WorkSet.set_number == set_number)
+    ).first()
+    if work_set is None:
+        return False
+    session.delete(work_set)
+    session.commit()
+    return True
+
+
 def worksets_for_combo(
     session: Session,
     user: User,

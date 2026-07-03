@@ -43,11 +43,12 @@ class GripType(SQLModel, table=True):
 
 
 # Seeded into grip_types by the migration (prod) and the test fixture.
+# Names are display names — human-readable, no underscores.
 STARTER_GRIP_TYPES = [
-    "half_crimp",
-    "full_crimp",
-    "open_hand",
-    "three_finger_drag",
+    "half crimp",
+    "full crimp",
+    "open hand",
+    "three finger drag",
     "pinch",
 ]
 

@@ -93,6 +93,28 @@ def save_work_set(
     )
 
 
+@router.post("/session/workset/delete")
+def delete_work_set(
+    grip_type_id: int = Form(),
+    edge_mm: int = Form(gt=0),
+    date: date_type = Form(),
+    hand: str = Form(),
+    set_number: int = Form(ge=1),
+    user: User = Depends(auth.current_user),
+    session: Session = Depends(get_session),
+):
+    training_session = training_log.find_session(session, user, date)
+    if training_session is not None:
+        training_log.delete_work_set(
+            session, training_session, hand, grip_type_id, edge_mm, set_number
+        )
+    return RedirectResponse(
+        f"/session/worksets?grip_type_id={grip_type_id}&edge_mm={edge_mm}"
+        f"&date={date}&hand={hand}",
+        status_code=303,
+    )
+
+
 @router.post("/session/check")
 def check_warmup_step(
     grip_type_id: int = Form(),
