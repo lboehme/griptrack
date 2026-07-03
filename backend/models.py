@@ -35,6 +35,37 @@ class BodyWeightLog(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow)
 
 
+class GripType(SQLModel, table=True):
+    __tablename__ = "grip_types"
+
+    id: int | None = Field(default=None, primary_key=True)
+    name: str = Field(unique=True, index=True)
+
+
+# Seeded into grip_types by the migration (prod) and the test fixture.
+STARTER_GRIP_TYPES = [
+    "half_crimp",
+    "full_crimp",
+    "open_hand",
+    "three_finger_drag",
+    "pinch",
+]
+
+
+class MaxWeightTest(SQLModel, table=True):
+    __tablename__ = "max_weight_tests"
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True)
+    hand: str  # "left" / "right"
+    grip_type_id: int = Field(foreign_key="grip_types.id")
+    edge_mm: int
+    date: date_type
+    # Stored in the owning user's unit_pref (ADR-0003).
+    weight: float
+    created_at: datetime = Field(default_factory=utcnow)
+
+
 class PlateInventoryItem(SQLModel, table=True):
     __tablename__ = "plate_inventory_items"
 

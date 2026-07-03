@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Max-weight tests</h2>
+{% if combos %}
+<table>
+  <thead>
+    <tr><th>Hand</th><th>Grip</th><th>Edge</th><th>Current max ({{ user.unit_pref }})</th></tr>
+  </thead>
+  <tbody>
+    {% for combo in combos %}
+    <tr data-combo="{{ combo.hand }}|{{ combo.grip_name }}|{{ combo.edge_mm }}">
+      <td>{{ combo.hand }}</td>
+      <td>{{ combo.grip_name }}</td>
+      <td>{{ combo.edge_mm }} mm</td>
+      <td class="max-weight">{{ combo.current_max }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No max tests yet — log one below before your first training session.</p>
+{% endif %}
+<form method="post" action="/max-tests">
+  <label>Hand
+    <select name="hand">
+      <option value="left">left</option>
+      <option value="right">right</option>
+    </select>
+  </label>
+  <label>Grip type
+    <select name="grip_type_id">
+      {% for grip in grip_types %}
+      <option value="{{ grip.id }}">{{ grip.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Edge (mm) <input type="number" name="edge_mm" step="1" min="1" required></label>
+  <label>Date <input type="date" name="date" required></label>
+  <label>Weight ({{ user.unit_pref }})
+    <input type="number" name="weight" step="0.1" min="0.1" required>
+  </label>
+  <button type="submit">Log max test</button>
+</form>
+{% if user.is_admin %}
+<form method="post" action="/grip-types">
+  <label>New grip type <input type="text" name="name" required></label>
+  <button type="submit">Add grip type</button>
+</form>
+{% endif %}
+{% endblock %}

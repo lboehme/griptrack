@@ -5,6 +5,7 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from backend.db import get_session
 from backend.main import create_app
+from backend.models import STARTER_GRIP_TYPES, GripType
 
 
 @pytest.fixture
@@ -20,6 +21,11 @@ def client():
         poolclass=StaticPool,
     )
     SQLModel.metadata.create_all(engine)
+    with Session(engine) as seed_session:
+        # Mirrors the grip-types data migration that seeds production.
+        for name in STARTER_GRIP_TYPES:
+            seed_session.add(GripType(name=name))
+        seed_session.commit()
 
     app = create_app()
 
