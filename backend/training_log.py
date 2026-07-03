@@ -4,6 +4,7 @@ from sqlmodel import Session, select
 
 from backend import plates
 from backend.models import (
+    GripType,
     MaxWeightTest,
     TrainingProtocol,
     TrainingSession,
@@ -11,6 +12,93 @@ from backend.models import (
     WarmupStepCheck,
     WorkSet,
 )
+
+
+def hands_for(user: User, hand: str | None) -> list[str]:
+    """HandOrderPreference policy: "alternating" shows both hands side by
+    side; "sequential" does one hand's full flow at a time (default left,
+    an explicit hand selects the other)."""
+    if user.hand_order_pref == "sequential":
+        return [hand if hand in ("left", "right") else "left"]
+    return ["left", "right"]
+
+
+def warmup_view(
+    session: Session,
+    user: User,
+    grip_type_id: int,
+    edge_mm: int,
+    date: date_type,
+    hand: str | None = None,
+) -> dict:
+    """Everything the warmup page shows, assembled in one call: ramp plans
+    per hand (or which hands still need a MaxWeightTest), the step list,
+    and the TrainingSession's persisted checks."""
+    hands = hands_for(user, hand)
+    plans = {
+        h: compute_ramp_plan(session, user, h, grip_type_id, edge_mm)
+        for h in hands
+    }
+    untested_hands = [h for h, plan in plans.items() if plan is None]
+    steps = []
+    if not untested_hands:
+        first_plan = plans[hands[0]]
+        steps = [
+            {"index": index, "percent": first_plan[index]["percent"]}
+            for index in range(len(first_plan))
+        ]
+    training_session = find_session(session, user, date)
+    return {
+        "grip": session.get(GripType, grip_type_id),
+        "edge_mm": edge_mm,
+        "date": date,
+        "hands": hands,
+        "plans": plans,
+        "untested_hands": untested_hands,
+        "steps": steps,
+        "training_session": training_session,
+        "checks": warmup_checks(session, training_session),
+    }
+
+
+def worksets_view(
+    session: Session,
+    user: User,
+    grip_type_id: int,
+    edge_mm: int,
+    date: date_type,
+    hand: str | None = None,
+    sets_hint: int | None = None,
+) -> dict:
+    """Everything the work-sets page shows: saved sets by (hand, set),
+    prefills from CurrentMax and the TrainingProtocol, and the row math
+    (default rows, add-another-set hint, dismissable empty rows)."""
+    hands = hands_for(user, hand)
+    protocol = get_protocol(session, user)
+    saved = {
+        (ws.hand, ws.set_number): ws
+        for ws in worksets_for_combo(session, user, grip_type_id, edge_mm, date)
+    }
+    current_max = {
+        h: compute_current_max(session, user, h, grip_type_id, edge_mm)
+        for h in hands
+    }
+    highest_saved = max((n for _, n in saved), default=0)
+    needed_rows = max(protocol.default_work_sets, highest_saved)
+    row_count = max(needed_rows, sets_hint or 0)
+    return {
+        "grip": session.get(GripType, grip_type_id),
+        "edge_mm": edge_mm,
+        "date": date,
+        "hands": hands,
+        "set_numbers": list(range(1, row_count + 1)),
+        "saved": saved,
+        "current_max": current_max,
+        "default_reps": protocol.base_work_set_reps,
+        "more_sets": row_count + 1,
+        # Extra empty rows (from "add another set") can be dismissed again.
+        "removable_to": row_count - 1 if row_count > needed_rows else None,
+    }
 
 
 def delete_work_set(

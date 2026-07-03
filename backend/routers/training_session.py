@@ -12,14 +12,6 @@ from backend.templating import templates
 router = APIRouter()
 
 
-def hands_for(user: User, hand: str | None) -> list[str]:
-    # "alternating" trains both hands side by side; "sequential" does one
-    # hand's full flow at a time (default left, ?hand= for the other).
-    if user.hand_order_pref == "sequential":
-        return [hand if hand in ("left", "right") else "left"]
-    return ["left", "right"]
-
-
 @router.get("/session/worksets")
 def worksets_page(
     request: Request,
@@ -31,40 +23,11 @@ def worksets_page(
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
-    grip = session.get(GripType, grip_type_id)
-    hands = hands_for(user, hand)
-    protocol = training_log.get_protocol(session, user)
-    saved = {
-        (ws.hand, ws.set_number): ws
-        for ws in training_log.worksets_for_combo(
-            session, user, grip_type_id, edge_mm, date
-        )
-    }
-    current_max = {
-        h: training_log.compute_current_max(session, user, h, grip_type_id, edge_mm)
-        for h in hands
-    }
-    highest_saved = max((n for _, n in saved), default=0)
-    needed_rows = max(protocol.default_work_sets, highest_saved)
-    row_count = max(needed_rows, sets or 0)
-    # Extra empty rows (from "add another set") can be dismissed again.
-    removable_to = row_count - 1 if row_count > needed_rows else None
+    view = training_log.worksets_view(
+        session, user, grip_type_id, edge_mm, date, hand, sets
+    )
     return templates.TemplateResponse(
-        request,
-        "worksets.html",
-        {
-            "user": user,
-            "grip": grip,
-            "edge_mm": edge_mm,
-            "date": date,
-            "hands": hands,
-            "set_numbers": list(range(1, row_count + 1)),
-            "saved": saved,
-            "current_max": current_max,
-            "default_reps": protocol.base_work_set_reps,
-            "more_sets": row_count + 1,
-            "removable_to": removable_to,
-        },
+        request, "worksets.html", {"user": user, **view}
     )
 
 
@@ -181,40 +144,7 @@ def warmup_page(
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
-    grip = session.get(GripType, grip_type_id)
-    # "alternating" trains both hands side by side; "sequential" does one
-    # hand's full flow at a time (default left, ?hand= for the other).
-    if user.hand_order_pref == "sequential":
-        hands = [hand if hand in ("left", "right") else "left"]
-    else:
-        hands = ["left", "right"]
-    plans = {
-        h: training_log.compute_ramp_plan(session, user, h, grip_type_id, edge_mm)
-        for h in hands
-    }
-    untested_hands = [h for h, plan in plans.items() if plan is None]
-    steps = []
-    if not untested_hands:
-        first_plan = plans[hands[0]]
-        steps = [
-            {"index": index, "percent": first_plan[index]["percent"]}
-            for index in range(len(first_plan))
-        ]
-    training_session = training_log.find_session(session, user, date)
-    checks = training_log.warmup_checks(session, training_session)
+    view = training_log.warmup_view(session, user, grip_type_id, edge_mm, date, hand)
     return templates.TemplateResponse(
-        request,
-        "warmup.html",
-        {
-            "user": user,
-            "grip": grip,
-            "edge_mm": edge_mm,
-            "date": date,
-            "untested_hands": untested_hands,
-            "plans": plans,
-            "steps": steps,
-            "hands": hands,
-            "training_session": training_session,
-            "checks": checks,
-        },
+        request, "warmup.html", {"user": user, **view}
     )
