@@ -70,6 +70,7 @@ def worksets_page(
 
 @router.post("/session/workset")
 def save_work_set(
+    request: Request,
     grip_type_id: int = Form(),
     edge_mm: int = Form(gt=0),
     date: date_type = Form(),
@@ -90,6 +91,8 @@ def save_work_set(
         session, training_session, hand, grip_type_id, edge_mm, set_number,
         weight, reps, rpe,
     )
+    if request.headers.get("HX-Request"):
+        return Response(status_code=204)
     return RedirectResponse(
         f"/session/worksets?grip_type_id={grip_type_id}&edge_mm={edge_mm}"
         f"&date={date}&hand={hand}",

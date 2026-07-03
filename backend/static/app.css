@@ -453,10 +453,12 @@ ul.plain { list-style: none; margin: 0; padding: 0; }
 
 /* ---------- work sets ---------- */
 
+.table-scroll { overflow-x: auto; }
+
 .workset-cell form {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr auto;
-  gap: .45rem;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: .4rem;
   align-items: end;
   margin: 0;
 }
@@ -465,9 +467,10 @@ ul.plain { list-style: none; margin: 0; padding: 0; }
 
 .workset-cell input {
   min-height: 2.7rem;
-  min-width: 4.2rem;
-  padding: .3rem .5rem;
-  font-size: .98rem;
+  min-width: 3.4rem;
+  width: 100%;
+  padding: .3rem .45rem;
+  font-size: .95rem;
   border-radius: 10px;
 }
 
@@ -487,7 +490,7 @@ input[type="number"]::-webkit-outer-spin-button {
   padding-right: 1.6rem;
 }
 
-.workset-cell button {
+.workset-cell noscript button {
   min-height: 2.7rem;
   width: auto;
   padding: .3rem .95rem;

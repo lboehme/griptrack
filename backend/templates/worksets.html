@@ -4,6 +4,8 @@
 <h2>Work sets</h2>
 <p class="page-sub">{{ grip.name }} · {{ edge_mm }} mm · {{ date }}{% if hands|length == 1 %} · <span class="hand-heading">{{ hands[0] }} hand</span>{% endif %}</p>
 <div class="card">
+<p class="muted" style="margin:0 0 .6rem; font-size:.82rem">Changes save automatically.</p>
+<div class="table-scroll">
 <table>
   <thead>
     <tr>
@@ -18,7 +20,8 @@
       {% for hand in hands %}
       {% set ws = saved.get((hand, set_number)) %}
       <td class="workset-cell" data-hand="{{ hand }}" data-set="{{ set_number }}">
-        <form method="post" action="/session/workset">
+        <form method="post" action="/session/workset"
+              hx-post="/session/workset" hx-trigger="change" hx-swap="none">
           <input type="hidden" name="grip_type_id" value="{{ grip.id }}">
           <input type="hidden" name="edge_mm" value="{{ edge_mm }}">
           <input type="hidden" name="date" value="{{ date }}">
@@ -33,7 +36,7 @@
           <label class="mini">RPE
             <input type="number" name="rpe" value="{{ ws.rpe if ws and ws.rpe is not none else '' }}" step="0.5" min="1" max="10" placeholder="–">
           </label>
-          <button type="submit">{% if ws %}✓{% else %}Save{% endif %}</button>
+          <noscript><button type="submit">Save</button></noscript>
         </form>
         {% if ws %}
         <form method="post" action="/session/workset/delete" class="delete-set-form">
@@ -51,6 +54,7 @@
     {% endfor %}
   </tbody>
 </table>
+</div>
 <p class="add-set">
   <a class="btn btn-secondary" href="/session/worksets?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}&amp;sets={{ more_sets }}{% if hands|length == 1 %}&amp;hand={{ hands[0] }}{% endif %}">＋ Add another set</a>
   {% if removable_to %}
