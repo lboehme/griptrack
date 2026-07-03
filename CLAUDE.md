@@ -2,6 +2,20 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs live as GitHub issues at `lboehme/griptrack` (private repo). External PRs are not a triage surface. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Standard five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), label strings unchanged from the skill defaults — not yet created in the GitHub repo. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
 ## Project context
 
 GripTrack is a mobile-first web app for logging block-pull / no-hang
