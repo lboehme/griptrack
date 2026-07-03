@@ -288,6 +288,24 @@ def last_used_combination(session: Session, user: User) -> tuple[int, int] | Non
     return (grip_type_id, edge_mm)
 
 
+def session_history(session: Session, user: User) -> list[dict]:
+    """Past TrainingSessions (newest first), each with its WorkSets."""
+    sessions = session.exec(
+        select(TrainingSession)
+        .where(TrainingSession.user_id == user.id)
+        .order_by(TrainingSession.date.desc(), TrainingSession.id.desc())
+    ).all()
+    history = []
+    for training_session in sessions:
+        work_sets = session.exec(
+            select(WorkSet)
+            .where(WorkSet.training_session_id == training_session.id)
+            .order_by(WorkSet.set_number, WorkSet.hand)
+        ).all()
+        history.append({"session": training_session, "work_sets": work_sets})
+    return history
+
+
 def tested_combinations(session: Session, user: User) -> list[dict]:
     """One entry per tested (hand, grip_type, edge_mm), with its CurrentMax."""
     tests = session.exec(

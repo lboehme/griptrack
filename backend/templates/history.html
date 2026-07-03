@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}History — GripTrack{% endblock %}
+{% block content %}
+<h2>History</h2>
+<p class="page-sub">Every session and send, newest first.</p>
+
+<div class="card">
+<h3>Training sessions</h3>
+{% if history %}
+{% for entry in history %}
+<details class="history-session" data-date="{{ entry.session.date }}">
+  <summary>
+    <strong>{{ entry.session.date }}</strong>
+    <span class="muted">· {{ entry.work_sets|length }} work set{{ "s" if entry.work_sets|length != 1 }}</span>
+  </summary>
+  <ul class="plain history-sets">
+    {% for ws in entry.work_sets %}
+    <li class="history-set" data-hand="{{ ws.hand }}" data-set="{{ ws.set_number }}" data-weight="{{ ws.weight }}" data-reps="{{ ws.reps }}">
+      <span class="hand-heading">{{ ws.hand[0]|upper }}</span>
+      <strong>{{ ws.weight }} {{ user.unit_pref }}</strong> × {{ ws.reps }}
+      <span class="muted">· set {{ ws.set_number }} · {{ grip_names[ws.grip_type_id] }} @ {{ ws.edge_mm }} mm{% if ws.rpe is not none %} · RPE {{ ws.rpe }}{% endif %}</span>
+    </li>
+    {% endfor %}
+  </ul>
+</details>
+{% endfor %}
+{% else %}
+<p class="muted" style="margin:0">No sessions logged yet.</p>
+{% endif %}
+</div>
+
+<div class="card">
+<h3>Climbs</h3>
+{% if climbs %}
+<ul class="plain">
+  {% for climb in climbs %}
+  <li class="climb" data-discipline="{{ climb.discipline }}" data-grade="{{ climb.grade }}" data-style="{{ climb.style }}" data-date="{{ climb.date }}">
+    <span class="grade">{{ climb.grade }}</span>
+    <span class="pill {{ climb.discipline }}">{{ climb.discipline }}</span>
+    <span class="pill">{{ climb.style }}</span>
+    <div class="meta">{{ climb.date }}{% if climb.notes %} — {{ climb.notes }}{% endif %}</div>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="muted" style="margin:0">No climbs logged yet.</p>
+{% endif %}
+</div>
+{% endblock %}
