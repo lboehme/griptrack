@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block content %}
+{% if user %}
+<p>Logged in as {{ user.email }}</p>
+{% else %}
+<p><a href="/login">Log in</a></p>
+{% endif %}
+{% endblock %}

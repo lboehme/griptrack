@@ -6,6 +6,7 @@ from sqlmodel import SQLModel
 
 from alembic import context
 
+import backend.models  # noqa: F401  (registers all tables on SQLModel.metadata)
 from backend.db import DATABASE_URL
 
 # this is the Alembic Config object, which provides

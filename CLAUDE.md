@@ -49,10 +49,10 @@ before earlier ones are working and tested.
 Python env is managed via conda, env name `griptrack`
 (`/Users/lukas/opt/miniconda3/envs/griptrack`) — no requirements.txt/lockfile
 exists, so install anything new into that env directly. Currently installed:
-`fastapi`, `uvicorn`, `pydantic`, `pandas`. Still to be installed as each
-phase needs them: `sqlmodel`, `alembic`, `passlib[bcrypt]`, `python-multipart`,
-`jinja2`, `itsdangerous`, `pytest`, `httpx` (Phase 0), `scikit-learn`,
-`matplotlib`/`plotly` (Phase 5).
+`fastapi`, `uvicorn`, `pydantic`, `pandas`, `sqlmodel`, `alembic`, `bcrypt`,
+`python-multipart`, `jinja2`, `itsdangerous`, `pytest`, `httpx`. Still to be
+installed when the analytics phase needs them: `scikit-learn`,
+`matplotlib`/`plotly`.
 
 Run the API from the repository root (so `backend` resolves as a namespace
 package):
@@ -105,9 +105,10 @@ unit-tested in isolation for now.
   produce non-round, unloadable numbers for lb-plate users.
 - **Auth:** Invite-only registration, no open self-signup and no email
   infrastructure (no verification emails, no email-based password reset) —
-  see `docs/adr/0004-invite-only-registration.md`. Password hashing via
-  `passlib[bcrypt]`; server-side signed session cookie (Starlette
-  `SessionMiddleware` or `itsdangerous`); a `current_user` dependency gates
+  see `docs/adr/0004-invite-only-registration.md`. Password hashing via the
+  `bcrypt` package directly (not passlib — passlib is unmaintained and
+  incompatible with bcrypt ≥ 4.1); server-side signed session cookie
+  (Starlette `SessionMiddleware`); a `current_user` dependency gates
   per-user data. A simple `is_admin` flag (first registered user, by
   default) grants two capabilities only: generating invites, and manually
   resetting another user's forgotten password — not a general role system.
