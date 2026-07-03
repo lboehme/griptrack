@@ -65,6 +65,34 @@ Once Phase 4 lands, run tests with `conda run -n griptrack pytest`.
 
 ## Architecture
 
+### Module design
+
+Backend code is organized as a small number of deep modules (see the
+`codebase-design` skill for this vocabulary), not fat routers:
+
+- **`backend.auth`** — register/authenticate/session/invite/admin-reset
+  logic; hides password hashing and session-cookie handling.
+- **`backend.plates`** — one function,
+  `round_down_to_loadable(target_weight, inventory) -> weight`; hides the
+  single-stack plate-matching search.
+- **`backend.training_log`** — the deepest module: `compute_current_max`,
+  `compute_ramp_plan`, `start_or_get_session`, `record_warmup_step`,
+  `record_work_set`, `record_max_weight_test`. Hides the `CurrentMax`
+  rolling-max rule, `TrainingProtocol` lookup, calls into `backend.plates`,
+  and autosave persistence. Most of Phase 3/4's real complexity lives here.
+- **`backend.analytics`** — `training_volume_trend`, `plateau_flag`,
+  `overtraining_warning`, `strength_grade_correlation`; hides the
+  `TrainingVolume` formula, thresholds, and boulder-only filtering.
+- **`backend.routers.*`** — deliberately shallow HTTP adapters: parse
+  request → call into one of the modules above → render template/JSON.
+  Depth belongs in the modules, not the routers.
+- **`backend.models`** — SQLModel schema; a shared type layer, not a "deep
+  module" in this vocabulary.
+
+Per the testing decision below, tests only cross the external HTTP seam
+(via `TestClient`) — these modules have potential internal seams but aren't
+unit-tested in isolation for now.
+
 - **Backend:** FastAPI.
 - **Models/ORM:** SQLModel (SQLAlchemy + Pydantic combined) — one model
   definition serves as both DB table and API schema.
