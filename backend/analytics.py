@@ -4,6 +4,7 @@ from datetime import date as date_type
 
 from sqlmodel import Session, select
 
+from backend import training_log
 from backend.models import (
     BodyWeightLog,
     Climb,
@@ -54,43 +55,22 @@ def _bodyweight_at(session: Session, user: User, date: date_type) -> float | Non
 
 
 def _best_pull_at(session: Session, user: User, date: date_type) -> float | None:
-    """The user's best CurrentMax across all combos as of a date: per combo,
-    the latest MaxWeightTest <= date, raised by any heavier WorkSet logged
-    between that test and the date (same supersede rule as CurrentMax)."""
-    tests = session.exec(
-        select(MaxWeightTest)
+    """The user's best CurrentMax across all combos as of a date — the
+    supersede rule itself lives in training_log.compute_current_max."""
+    combos = session.exec(
+        select(
+            MaxWeightTest.hand, MaxWeightTest.grip_type_id, MaxWeightTest.edge_mm
+        )
         .where(MaxWeightTest.user_id == user.id)
-        .where(MaxWeightTest.date <= date)
+        .distinct()
     ).all()
-    latest_per_combo: dict[tuple, MaxWeightTest] = {}
-    for test in tests:
-        key = (test.hand, test.grip_type_id, test.edge_mm)
-        current = latest_per_combo.get(key)
-        if current is None or (test.date, test.id) > (current.date, current.id):
-            latest_per_combo[key] = test
-
-    if not latest_per_combo:
-        return None
-
-    best = None
-    for (hand, grip_type_id, edge_mm), test in latest_per_combo.items():
-        combo_max = test.weight
-        heaviest = session.exec(
-            select(WorkSet)
-            .join(TrainingSession, WorkSet.training_session_id == TrainingSession.id)  # type: ignore[arg-type]
-            .where(TrainingSession.user_id == user.id)
-            .where(TrainingSession.date >= test.date)
-            .where(TrainingSession.date <= date)
-            .where(WorkSet.hand == hand)
-            .where(WorkSet.grip_type_id == grip_type_id)
-            .where(WorkSet.edge_mm == edge_mm)
-            .order_by(WorkSet.weight.desc())
-        ).first()
-        if heaviest is not None and heaviest.weight > combo_max:
-            combo_max = heaviest.weight
-        if best is None or combo_max > best:
-            best = combo_max
-    return best
+    values = [
+        training_log.compute_current_max(
+            session, user, hand, grip_type_id, edge_mm, as_of=date
+        )
+        for hand, grip_type_id, edge_mm in combos
+    ]
+    return max((v for v in values if v is not None), default=None)
 
 
 def strength_grade_correlation(session: Session, user: User) -> dict:

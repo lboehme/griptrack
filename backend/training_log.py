@@ -198,32 +198,47 @@ def compute_ramp_plan(
 
 
 def latest_max_test(
-    session: Session, user: User, hand: str, grip_type_id: int, edge_mm: int
+    session: Session,
+    user: User,
+    hand: str,
+    grip_type_id: int,
+    edge_mm: int,
+    as_of: date_type | None = None,
 ) -> MaxWeightTest | None:
-    return session.exec(
+    query = (
         select(MaxWeightTest)
         .where(MaxWeightTest.user_id == user.id)
         .where(MaxWeightTest.hand == hand)
         .where(MaxWeightTest.grip_type_id == grip_type_id)
         .where(MaxWeightTest.edge_mm == edge_mm)
         .order_by(MaxWeightTest.date.desc(), MaxWeightTest.id.desc())
-    ).first()
+    )
+    if as_of is not None:
+        query = query.where(MaxWeightTest.date <= as_of)
+    return session.exec(query).first()
 
 
 def compute_current_max(
-    session: Session, user: User, hand: str, grip_type_id: int, edge_mm: int
+    session: Session,
+    user: User,
+    hand: str,
+    grip_type_id: int,
+    edge_mm: int,
+    as_of: date_type | None = None,
 ) -> float | None:
     """CurrentMax: the heavier of the latest MaxWeightTest and the heaviest
     WorkSet logged since that test (see CONTEXT.md: CurrentMax).
 
     A newer test supersedes everything before it, even when lower
     (deliberate reset) — work sets predating the latest test never count.
-    Returns None when the combination has never been tested.
+    With `as_of`, the same rule evaluated as of that date (the single
+    implementation the correlation analysis uses too). Returns None when
+    the combination has never been tested.
     """
-    test = latest_max_test(session, user, hand, grip_type_id, edge_mm)
+    test = latest_max_test(session, user, hand, grip_type_id, edge_mm, as_of)
     if test is None:
         return None
-    heaviest_since = session.exec(
+    workset_query = (
         select(WorkSet)
         .join(TrainingSession, WorkSet.training_session_id == TrainingSession.id)  # type: ignore[arg-type]
         .where(TrainingSession.user_id == user.id)
@@ -232,7 +247,10 @@ def compute_current_max(
         .where(WorkSet.grip_type_id == grip_type_id)
         .where(WorkSet.edge_mm == edge_mm)
         .order_by(WorkSet.weight.desc())
-    ).first()
+    )
+    if as_of is not None:
+        workset_query = workset_query.where(TrainingSession.date <= as_of)
+    heaviest_since = session.exec(workset_query).first()
     if heaviest_since is not None and heaviest_since.weight > test.weight:
         return heaviest_since.weight
     return test.weight
