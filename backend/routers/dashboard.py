@@ -54,6 +54,7 @@ def dashboard_page(
                 "grip_name": grip_names[combo["grip_type_id"]],
                 "trend": trend,
                 "plateau": analytics.plateau_flag(trend),
+                "overtraining": analytics.overtraining_warning(trend),
             }
         )
     return templates.TemplateResponse(

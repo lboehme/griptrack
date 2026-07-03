@@ -10,6 +10,7 @@
     <span class="hand-heading">{{ combo.hand[0]|upper }}</span>
     {{ combo.grip_name }} @ {{ combo.edge_mm }} mm
     {% if combo.plateau %}<span class="pill plateau-flag" data-combo="{{ combo.hand }}|{{ combo.grip_name }}|{{ combo.edge_mm }}">plateau</span>{% endif %}
+    {% if combo.overtraining %}<span class="pill overtraining-flag" data-combo="{{ combo.hand }}|{{ combo.grip_name }}|{{ combo.edge_mm }}">⚠ load spike, short rest</span>{% endif %}
   </h3>
   {% set chart_qs = "hand=" ~ combo.hand ~ "&grip_type_id=" ~ combo.grip_type_id ~ "&edge_mm=" ~ combo.edge_mm %}
   <picture>

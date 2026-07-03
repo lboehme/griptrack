@@ -57,6 +57,40 @@ def test_plateau_flag_on_stalled_but_not_growing_history(client):
     assert plateau_flags(client) == {"left|half crimp|20"}
 
 
+def overtraining_flags(client):
+    page = client.get("/dashboard").text
+    return set(
+        re.findall(r'class="pill overtraining-flag" data-combo="([^"]+)"', page)
+    )
+
+
+def test_overtraining_needs_both_volume_spike_and_short_rest(client):
+    register(client)
+    for grip, edge in (("half crimp", 20), ("half crimp", 10),
+                       ("open hand", 20), ("open hand", 10)):
+        log_max_test(client, "left", grip, edge, "2026-05-01", "40")
+
+    def sessions(grip, edge, final_date, final_volume):
+        # Steady baseline: 400 volume every 7 days...
+        for date in ("2026-06-01", "2026-06-08", "2026-06-15", "2026-06-22"):
+            save_work_set(client, "left", 1, "400", "1", date=date,
+                          grip=grip, edge_mm=edge)
+        # ...then the final session under test.
+        save_work_set(client, "left", 1, str(final_volume), "1",
+                      date=final_date, grip=grip, edge_mm=edge)
+
+    # spike (550 >= 1.25x400) + short rest (2 days vs typical 7) -> warning
+    sessions("half crimp", 20, "2026-06-24", 550)
+    # spike + normal rest -> no warning
+    sessions("half crimp", 10, "2026-06-29", 550)
+    # normal volume + short rest -> no warning
+    sessions("open hand", 20, "2026-06-24", 410)
+    # normal volume + normal rest -> no warning
+    sessions("open hand", 10, "2026-06-29", 400)
+
+    assert overtraining_flags(client) == {"left|half crimp|20"}
+
+
 def test_dashboard_renders_a_server_side_chart_per_combo(client):
     register(client)
     log_max_test(client, "left", "half crimp", 20, "2026-06-01", "40")

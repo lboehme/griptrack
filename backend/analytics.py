@@ -4,9 +4,11 @@ from sqlmodel import Session, select
 
 from backend.models import TrainingSession, User, WorkSet
 
-# Plateau heuristic tuning (see CONTEXT.md: Plateau). Deliberately simple:
-# revisit once real data exists.
+# Heuristic tuning (see CONTEXT.md: Plateau / OvertrainingWarning).
+# Deliberately simple: revisit once real data exists.
 PLATEAU_RECENT_SESSIONS = 4
+OVERTRAINING_TRAILING_SESSIONS = 4
+OVERTRAINING_SPIKE_FACTOR = 1.25
 
 
 def training_volume_trend(
@@ -27,6 +29,26 @@ def training_volume_trend(
     for date, weight, reps in rows:
         volumes[date] = volumes.get(date, 0.0) + weight * reps
     return sorted(volumes.items())
+
+
+def overtraining_warning(trend: list[tuple[date_type, float]]) -> bool:
+    """OvertrainingWarning: the latest session is BOTH a volume spike above
+    the trailing average AND came after a shorter-than-typical rest —
+    neither signal alone fires (see CONTEXT.md: OvertrainingWarning)."""
+    if len(trend) < OVERTRAINING_TRAILING_SESSIONS + 1:
+        return False
+    window = trend[-(OVERTRAINING_TRAILING_SESSIONS + 1):]
+    dates = [date for date, _ in window]
+    volumes = [volume for _, volume in window]
+
+    trailing_average = sum(volumes[:-1]) / len(volumes[:-1])
+    volume_spike = volumes[-1] >= OVERTRAINING_SPIKE_FACTOR * trailing_average
+
+    gaps = [(b - a).days for a, b in zip(dates, dates[1:])]
+    typical_rest = sum(gaps[:-1]) / len(gaps[:-1])
+    short_rest = gaps[-1] < typical_rest
+
+    return volume_spike and short_rest
 
 
 def plateau_flag(trend: list[tuple[date_type, float]]) -> bool:
