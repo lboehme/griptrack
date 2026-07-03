@@ -1,0 +1,36 @@
+/* Mobile-first base: large touch targets, readable sizes, one-column layout. */
+:root {
+  --touch-target: 3rem;
+  --spacing: 1rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 1.125rem;
+  line-height: 1.5;
+}
+
+.app-header {
+  padding: var(--spacing);
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.app-main {
+  padding: var(--spacing);
+}
+
+button,
+input,
+select {
+  min-height: var(--touch-target);
+  font-size: 1.125rem;
+}
