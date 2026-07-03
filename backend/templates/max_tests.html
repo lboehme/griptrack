@@ -1,10 +1,13 @@
 {% extends "base.html" %}
+{% block title %}Max tests — GripTrack{% endblock %}
 {% block content %}
-<h2>Max-weight tests</h2>
+<h2>Max tests</h2>
+<p class="page-sub">Your heaviest single pull per hand, grip and edge — the basis for every warmup suggestion.</p>
 {% if combos %}
+<div class="card">
 <table>
   <thead>
-    <tr><th>Hand</th><th>Grip</th><th>Edge</th><th>Current max ({{ user.unit_pref }})</th></tr>
+    <tr><th>Hand</th><th>Grip</th><th>Edge</th><th>Current max</th></tr>
   </thead>
   <tbody>
     {% for combo in combos %}
@@ -12,39 +15,52 @@
       <td>{{ combo.hand }}</td>
       <td>{{ combo.grip_name }}</td>
       <td>{{ combo.edge_mm }} mm</td>
-      <td class="max-weight">{{ combo.current_max }}</td>
+      <td><strong class="max-weight">{{ combo.current_max }}</strong> <span class="muted">{{ user.unit_pref }}</span></td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
+</div>
 {% else %}
-<p>No max tests yet — log one below before your first training session.</p>
+<div class="notice">
+  No max tests yet — log one below before your first training session.
+</div>
 {% endif %}
+<div class="card">
+<h3>Log a max test</h3>
 <form method="post" action="/max-tests">
-  <label>Hand
-    <select name="hand">
-      <option value="left">left</option>
-      <option value="right">right</option>
-    </select>
-  </label>
-  <label>Grip type
-    <select name="grip_type_id">
-      {% for grip in grip_types %}
-      <option value="{{ grip.id }}">{{ grip.name }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Edge (mm) <input type="number" name="edge_mm" step="1" min="1" required></label>
-  <label>Date <input type="date" name="date" required></label>
+  <div class="form-row">
+    <label>Hand
+      <select name="hand">
+        <option value="left">left</option>
+        <option value="right">right</option>
+      </select>
+    </label>
+    <label>Grip type
+      <select name="grip_type_id">
+        {% for grip in grip_types %}
+        <option value="{{ grip.id }}">{{ grip.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+  <div class="form-row">
+    <label>Edge (mm) <input type="number" name="edge_mm" step="1" min="1" required></label>
+    <label>Date <input type="date" name="date" required></label>
+  </div>
   <label>Weight ({{ user.unit_pref }})
     <input type="number" name="weight" step="0.1" min="0.1" required>
   </label>
   <button type="submit">Log max test</button>
 </form>
+</div>
 {% if user.is_admin %}
+<div class="card">
+<h3>Add a grip type <span class="muted" style="font-weight:500">(admin)</span></h3>
 <form method="post" action="/grip-types">
   <label>New grip type <input type="text" name="name" required></label>
   <button type="submit">Add grip type</button>
 </form>
+</div>
 {% endif %}
 {% endblock %}

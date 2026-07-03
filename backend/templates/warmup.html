@@ -1,22 +1,25 @@
 {% extends "base.html" %}
+{% block title %}Warmup — GripTrack{% endblock %}
 {% block content %}
-<h2>Warmup — {{ grip.name }} @ {{ edge_mm }} mm</h2>
+<h2>Warmup</h2>
+<p class="page-sub">{{ grip.name }} · {{ edge_mm }} mm · {{ date }}{% if hands|length == 1 %} · <span class="hand-heading">{{ hands[0] }} hand</span>{% endif %}</p>
 {% if training_session %}
-<p class="session-started">Session {{ training_session.date }}</p>
+<p class="session-started">Session {{ training_session.date }} — in progress</p>
 {% endif %}
 {% if untested_hands %}
-<p>
+<div class="notice">
   No max-weight test yet for your
-  {{ untested_hands|join(" and ") }} hand on this grip/edge.
+  <strong>{{ untested_hands|join(" and ") }}</strong> hand on this grip/edge.
   Run a <a href="/max-tests">max test</a> first so warmup weights can be
   computed.
-</p>
+</div>
 {% else %}
-<table>
+<div class="card">
+<table class="ramp-table">
   <thead>
     <tr>
       <th>Step</th>
-      {% for hand in hands %}<th>{{ hand[0]|upper }} ({{ user.unit_pref }})</th>{% endfor %}
+      {% for hand in hands %}<th>{{ hand[0]|upper }}</th>{% endfor %}
     </tr>
   </thead>
   <tbody>
@@ -25,7 +28,8 @@
       <td>{{ step.percent }}%</td>
       {% for hand in hands %}
       <td>
-        <span class="ramp-weight" data-hand="{{ hand }}" data-step="{{ step.index }}">{{ plans[hand][step.index]["weight"] }}</span>
+        <div class="ramp-cell">
+        <span><span class="ramp-weight" data-hand="{{ hand }}" data-step="{{ step.index }}">{{ plans[hand][step.index]["weight"] }}</span> <span class="ramp-unit">{{ user.unit_pref }}</span></span>
         <form method="post" action="/session/check">
           <input type="hidden" name="grip_type_id" value="{{ grip.id }}">
           <input type="hidden" name="edge_mm" value="{{ edge_mm }}">
@@ -34,11 +38,20 @@
           <input type="hidden" name="step_index" value="{{ step.index }}">
           <input type="checkbox" class="step-check" data-hand="{{ hand }}" data-step="{{ step.index }}"{% if (hand, step.index) in checks %} checked{% endif %} onchange="this.form.submit()">
         </form>
+        </div>
       </td>
       {% endfor %}
     </tr>
     {% endfor %}
   </tbody>
 </table>
+</div>
+<div class="flow-next">
+  <a class="btn" href="/session/worksets?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}{% if hands|length == 1 %}&amp;hand={{ hands[0] }}{% endif %}">Continue to work sets →</a>
+  {% if hands|length == 1 %}
+  {% set other = "right" if hands[0] == "left" else "left" %}
+  <a class="btn btn-secondary" href="/session/warmup?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}&amp;hand={{ other }}">Switch to {{ other }} hand</a>
+  {% endif %}
+</div>
 {% endif %}
 {% endblock %}

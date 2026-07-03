@@ -1,28 +1,43 @@
 {% extends "base.html" %}
+{% block title %}Climbs — GripTrack{% endblock %}
 {% block content %}
 <h2>Climbs</h2>
+<p class="page-sub">Your sends and attempts, newest first.</p>
+<div class="card">
+<h3>Log a climb</h3>
 <form method="post" action="/climbs">
-  <label>Date <input type="date" name="date" value="{{ today }}" required></label>
-  <label>Discipline
-    <select name="discipline">
-      {% for d in disciplines %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
-    </select>
-  </label>
-  <label>Grade <input type="text" name="grade" placeholder="V5 / 7a+" required></label>
-  <label>Style
-    <select name="style">
-      {% for s in styles %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
-    </select>
-  </label>
-  <label>Notes <input type="text" name="notes"></label>
+  <div class="form-row">
+    <label>Date <input type="date" name="date" value="{{ today }}" required></label>
+    <label>Discipline
+      <select name="discipline">
+        {% for d in disciplines %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+      </select>
+    </label>
+  </div>
+  <div class="form-row">
+    <label>Grade <input type="text" name="grade" placeholder="V5 / 7a+" required></label>
+    <label>Style
+      <select name="style">
+        {% for s in styles %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+      </select>
+    </label>
+  </div>
+  <label>Notes <input type="text" name="notes" placeholder="optional"></label>
   <button type="submit">Log climb</button>
 </form>
-<ul>
+</div>
+{% if climbs %}
+<div class="card">
+<ul class="plain">
   {% for climb in climbs %}
   <li class="climb" data-discipline="{{ climb.discipline }}" data-grade="{{ climb.grade }}" data-style="{{ climb.style }}" data-date="{{ climb.date }}">
-    {{ climb.date }} — {{ climb.grade }} ({{ climb.discipline }}, {{ climb.style }})
-    {% if climb.notes %}<br><small>{{ climb.notes }}</small>{% endif %}
+    <span class="grade">{{ climb.grade }}</span>
+    <span class="pill {{ climb.discipline }}">{{ climb.discipline }}</span>
+    <span class="pill">{{ climb.style }}</span>
+    <div class="meta">{{ climb.date }}{% if climb.notes %} — {{ climb.notes }}{% endif %}</div>
   </li>
   {% endfor %}
 </ul>
+</div>
+{% endif %}
 {% endblock %}

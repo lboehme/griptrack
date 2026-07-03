@@ -1,10 +1,12 @@
 {% extends "base.html" %}
+{% block title %}Plates — GripTrack{% endblock %}
 {% block content %}
 <h2>Plate inventory</h2>
-<p>One stack, in {{ user.unit_pref }}. Suggestions only ever use weights you can actually load.</p>
+<p class="page-sub">One stack, in {{ user.unit_pref }}. Suggestions only ever use weights you can actually load.</p>
+<div class="card">
 <table>
   <thead>
-    <tr><th>Plate</th><th>Count</th></tr>
+    <tr><th>Plate ({{ user.unit_pref }})</th><th>Count</th></tr>
   </thead>
   <tbody>
     {% for item in items %}
@@ -15,13 +17,19 @@
     {% endfor %}
   </tbody>
 </table>
+</div>
+<div class="card">
+<h3>Add or change a plate</h3>
 <form method="post" action="/plates">
-  <label>Plate ({{ user.unit_pref }})
-    <input type="number" name="weight" step="0.25" min="0.25" required>
-  </label>
-  <label>Count (0 removes)
-    <input type="number" name="count" step="1" min="0" required>
-  </label>
+  <div class="form-row">
+    <label>Plate ({{ user.unit_pref }})
+      <input type="number" name="weight" step="0.25" min="0.25" required>
+    </label>
+    <label>Count <span class="muted">(0 removes)</span>
+      <input type="number" name="count" step="1" min="0" required>
+    </label>
+  </div>
   <button type="submit">Save plate</button>
 </form>
+</div>
 {% endblock %}

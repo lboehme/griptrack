@@ -17,7 +17,9 @@ def create_invite(
     session: Session = Depends(get_session),
 ):
     invite = auth.generate_invite(session, user)
-    return templates.TemplateResponse(request, "invite.html", {"invite": invite})
+    return templates.TemplateResponse(
+        request, "invite.html", {"invite": invite, "user": user}
+    )
 
 
 @router.post("/admin/reset-password")

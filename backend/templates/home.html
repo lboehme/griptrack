@@ -1,8 +1,48 @@
 {% extends "base.html" %}
 {% block content %}
 {% if user %}
-<p>Logged in as {{ user.email }}</p>
+<h2>Hey {{ user.email.split("@")[0] }} 👊</h2>
+<p class="page-sub">Ready to pull?</p>
+
+<div class="hero-action">
+  <a class="btn" href="/session/new">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>
+    Start training session
+  </a>
+</div>
+
+<div class="quick-grid">
+  <a href="/climbs">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 20 10 8l4 6 3-4 4 10H3z"/></svg>
+    Log a climb
+    <small>Sends &amp; attempts</small>
+  </a>
+  <a href="/max-tests">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17a5 5 0 0 0 5-5V4H7v8a5 5 0 0 0 5 5zM7 6H4a3 3 0 0 0 3 3M17 6h3a3 3 0 0 1-3 3"/></svg>
+    Max tests
+    <small>Your current maxes</small>
+  </a>
+  <a href="/plates">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>
+    Plates
+    <small>Your inventory</small>
+  </a>
+  <a href="/profile">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></svg>
+    Profile
+    <small>Bodyweight &amp; settings</small>
+  </a>
+</div>
+
+<p class="muted" style="font-size:.8rem; margin-top:1.2rem;">Logged in as {{ user.email }}</p>
 {% else %}
-<p><a href="/login">Log in</a></p>
+<div class="auth-wrap">
+  <p class="brand">GripTrack<span class="dot" style="color:var(--accent)">.</span></p>
+  <div class="card">
+    <p style="margin-top:0">Track your block-pull finger strength and climbing, and see them connect.</p>
+    <a class="btn" href="/login">Log in</a>
+    <p class="auth-alt">Got an invite? <a href="/register">Create an account</a></p>
+  </div>
+</div>
 {% endif %}
 {% endblock %}

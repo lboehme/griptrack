@@ -2,16 +2,47 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#e8532c">
   <title>{% block title %}GripTrack{% endblock %}</title>
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
   <header class="app-header">
-    <h1>GripTrack</h1>
+    <h1 class="wordmark"><a href="/">GripTrack<span class="dot">.</span></a></h1>
+    {% if user is defined and user %}
+    <form class="logout-form" method="post" action="/logout">
+      <button type="submit">Log out</button>
+    </form>
+    {% endif %}
   </header>
   <main class="app-main">
     {% block content %}{% endblock %}
   </main>
+  {% if user is defined and user %}
+  {% set path = request.url.path %}
+  <nav class="tabbar">
+    <a href="/" {% if path == "/" %}class="active"{% endif %}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5V21h-6v-6h-6v6H3z"/></svg>
+      Home
+    </a>
+    <a href="/session/new" {% if path.startswith("/session") %}class="active"{% endif %}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>
+      Session
+    </a>
+    <a href="/max-tests" {% if path.startswith("/max-tests") %}class="active"{% endif %}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17a5 5 0 0 0 5-5V4H7v8a5 5 0 0 0 5 5zM7 6H4a3 3 0 0 0 3 3M17 6h3a3 3 0 0 1-3 3"/></svg>
+      Maxes
+    </a>
+    <a href="/climbs" {% if path.startswith("/climbs") %}class="active"{% endif %}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 20 10 8l4 6 3-4 4 10H3z"/></svg>
+      Climbs
+    </a>
+    <a href="/profile" {% if path.startswith("/profile") or path.startswith("/plates") %}class="active"{% endif %}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></svg>
+      Profile
+    </a>
+  </nav>
+  {% endif %}
 </body>
 </html>

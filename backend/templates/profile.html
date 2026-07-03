@@ -1,30 +1,54 @@
 {% extends "base.html" %}
+{% block title %}Profile — GripTrack{% endblock %}
 {% block content %}
 <h2>Profile</h2>
-<p>Email: {{ user.email }}</p>
-<p>Units: <span class="unit-pref">{{ user.unit_pref }}</span> (fixed at signup)</p>
-<p>Current bodyweight:
+<p class="page-sub">{{ user.email }} · units: <span class="unit-pref">{{ user.unit_pref }}</span> <span class="muted">(fixed at signup)</span></p>
+
+<div class="card">
+<h3>Bodyweight</h3>
+<p style="margin-top:0">Current:
   {% if current_bodyweight %}
-  <span class="current-bodyweight">{{ current_bodyweight.weight }}</span> {{ user.unit_pref }}
-  (logged {{ current_bodyweight.date }})
+  <strong><span class="current-bodyweight">{{ current_bodyweight.weight }}</span> {{ user.unit_pref }}</strong>
+  <span class="muted">(logged {{ current_bodyweight.date }})</span>
   {% else %}
-  not logged yet
+  <span class="muted">not logged yet</span>
   {% endif %}
 </p>
 <form method="post" action="/profile/bodyweight">
-  <label>Date <input type="date" name="date" required></label>
-  <label>Bodyweight ({{ user.unit_pref }})
-    <input type="number" name="weight" step="0.1" min="1" required>
-  </label>
+  <div class="form-row">
+    <label>Date <input type="date" name="date" required></label>
+    <label>Bodyweight ({{ user.unit_pref }})
+      <input type="number" name="weight" step="0.1" min="1" required>
+    </label>
+  </div>
   <button type="submit">Log bodyweight</button>
 </form>
+</div>
+
+<div class="card">
+<h3>Hand order</h3>
 <form method="post" action="/profile">
-  <label>Hand order
+  <label>How to work through both hands in a session
     <select name="hand_order_pref">
-      <option value="alternating" {% if user.hand_order_pref == "alternating" %}selected{% endif %}>alternating</option>
-      <option value="sequential" {% if user.hand_order_pref == "sequential" %}selected{% endif %}>sequential</option>
+      <option value="alternating" {% if user.hand_order_pref == "alternating" %}selected{% endif %}>alternating — both hands side by side</option>
+      <option value="sequential" {% if user.hand_order_pref == "sequential" %}selected{% endif %}>sequential — one hand fully, then the other</option>
     </select>
   </label>
   <button type="submit">Save</button>
 </form>
+</div>
+
+<div class="card">
+<h3>Equipment</h3>
+<a class="btn btn-secondary" href="/plates">Manage plate inventory →</a>
+</div>
+
+{% if user.is_admin %}
+<div class="card">
+<h3>Invites <span class="muted" style="font-weight:500">(admin)</span></h3>
+<form method="post" action="/invites">
+  <button type="submit">Generate invite code</button>
+</form>
+</div>
+{% endif %}
 {% endblock %}

@@ -1,15 +1,22 @@
 {% extends "base.html" %}
+{% block title %}Register — GripTrack{% endblock %}
 {% block content %}
-<form method="post" action="/register">
-  <label>Email <input type="email" name="email" required></label>
-  <label>Password <input type="password" name="password" required></label>
-  <label>Invite code <input type="text" name="invite_code"></label>
-  <label>Units
-    <select name="unit_pref">
-      <option value="kg" selected>kg</option>
-      <option value="lbs">lbs</option>
-    </select>
-  </label>
-  <button type="submit">Register</button>
-</form>
+<div class="auth-wrap">
+  <p class="brand">GripTrack<span style="color:var(--accent)">.</span></p>
+  <div class="card">
+    <form method="post" action="/register">
+      <label>Email <input type="email" name="email" autocomplete="email" required></label>
+      <label>Password <input type="password" name="password" autocomplete="new-password" required></label>
+      <label>Invite code <input type="text" name="invite_code" placeholder="Not needed for the first account"></label>
+      <label>Units — <strong>fixed after signup</strong>, pick what your plates are in
+        <select name="unit_pref">
+          <option value="kg" selected>kg</option>
+          <option value="lbs">lbs</option>
+        </select>
+      </label>
+      <button type="submit">Create account</button>
+    </form>
+  </div>
+  <p class="auth-alt">Already registered? <a href="/login">Log in</a></p>
+</div>
 {% endblock %}

@@ -1,5 +1,11 @@
 {% extends "base.html" %}
+{% block title %}Invite — GripTrack{% endblock %}
 {% block content %}
-<p>Share this invite code — it can be used exactly once:</p>
-<p><code class="invite-code">{{ invite.code }}</code></p>
+<h2>Invite a friend</h2>
+<div class="card" style="text-align:center">
+  <p style="margin-top:0">Share this code — it works exactly once:</p>
+  <p><code class="invite-code">{{ invite.code }}</code></p>
+  <p class="muted" style="font-size:.85rem">They enter it on the registration page.</p>
+</div>
+<a class="btn btn-secondary" href="/profile">← Back to profile</a>
 {% endblock %}
