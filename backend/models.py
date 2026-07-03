@@ -77,6 +77,39 @@ class PlateInventoryItem(SQLModel, table=True):
     count: int
 
 
+class TrainingProtocol(SQLModel, table=True):
+    __tablename__ = "training_protocols"
+
+    id: int | None = Field(default=None, primary_key=True)
+    # NULL user_id = the single global default row (ADR-0005); per-user
+    # overrides become possible later without a schema rework.
+    user_id: int | None = Field(default=None, foreign_key="users.id")
+    ramp_percentages: str = "50,65,80,90"
+    base_work_set_reps: int = 5
+
+
+class TrainingSession(SQLModel, table=True):
+    __tablename__ = "training_sessions"
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True)
+    date: date_type
+    notes: str | None = None
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class WarmupStepCheck(SQLModel, table=True):
+    """A ticked warmup/ramp step. Progress state only — warmup weights are
+    computed, never stored (see CONTEXT.md: WorkSet)."""
+
+    __tablename__ = "warmup_step_checks"
+
+    id: int | None = Field(default=None, primary_key=True)
+    training_session_id: int = Field(foreign_key="training_sessions.id", index=True)
+    hand: str
+    step_index: int
+
+
 class Invite(SQLModel, table=True):
     __tablename__ = "invites"
 

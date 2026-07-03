@@ -16,6 +16,27 @@ def seed_default_inventory(session: Session, user: User) -> None:
     session.commit()
 
 
+def round_down_to_loadable(
+    target_weight: float, inventory: list[PlateInventoryItem]
+) -> float:
+    """Closest total <= target that the user's plates can actually make.
+
+    The inventory is a single stack on one pin (ADR-0002), so this is a
+    bounded subset-sum: work in integer hundredths to avoid float drift,
+    track every achievable total, and take the best one under the target.
+    Returns 0.0 when nothing fits (empty pin).
+    """
+    target = int(round(target_weight * 100))
+    achievable = {0}
+    for item in inventory:
+        step = int(round(item.weight * 100))
+        for _ in range(item.count):
+            achievable |= {
+                total + step for total in achievable if total + step <= target
+            }
+    return max(achievable) / 100
+
+
 def set_plate(session: Session, user: User, weight: float, count: int) -> None:
     """Set how many plates of one denomination the user owns; 0 removes it."""
     item = session.exec(

@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Warmup — {{ grip.name }} @ {{ edge_mm }} mm</h2>
+{% if training_session %}
+<p class="session-started">Session {{ training_session.date }}</p>
+{% endif %}
+{% if untested_hands %}
+<p>
+  No max-weight test yet for your
+  {{ untested_hands|join(" and ") }} hand on this grip/edge.
+  Run a <a href="/max-tests">max test</a> first so warmup weights can be
+  computed.
+</p>
+{% else %}
+<table>
+  <thead>
+    <tr>
+      <th>Step</th>
+      {% for hand in hands %}<th>{{ hand[0]|upper }} ({{ user.unit_pref }})</th>{% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for step in steps %}
+    <tr>
+      <td>{{ step.percent }}%</td>
+      {% for hand in hands %}
+      <td>
+        <span class="ramp-weight" data-hand="{{ hand }}" data-step="{{ step.index }}">{{ plans[hand][step.index]["weight"] }}</span>
+        <form method="post" action="/session/check">
+          <input type="hidden" name="grip_type_id" value="{{ grip.id }}">
+          <input type="hidden" name="edge_mm" value="{{ edge_mm }}">
+          <input type="hidden" name="date" value="{{ date }}">
+          <input type="hidden" name="hand" value="{{ hand }}">
+          <input type="hidden" name="step_index" value="{{ step.index }}">
+          <input type="checkbox" class="step-check" data-hand="{{ hand }}" data-step="{{ step.index }}"{% if (hand, step.index) in checks %} checked{% endif %} onchange="this.form.submit()">
+        </form>
+      </td>
+      {% endfor %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

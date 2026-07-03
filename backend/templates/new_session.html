@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Start a training session</h2>
+<form method="get" action="/session/warmup">
+  <label>Grip type
+    <select name="grip_type_id">
+      {% for grip in grip_types %}
+      <option value="{{ grip.id }}"{% if grip.id == default_grip_type_id %} selected{% endif %}>{{ grip.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Edge (mm)
+    <input type="number" name="edge_mm" value="{{ default_edge_mm }}" step="1" min="1" required>
+  </label>
+  <label>Date <input type="date" name="date" value="{{ today }}" required></label>
+  <button type="submit">Start warmup</button>
+</form>
+{% endblock %}

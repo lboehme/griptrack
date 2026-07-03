@@ -5,7 +5,7 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from backend.db import get_session
 from backend.main import create_app
-from backend.models import STARTER_GRIP_TYPES, GripType
+from backend.models import STARTER_GRIP_TYPES, GripType, TrainingProtocol
 
 
 @pytest.fixture
@@ -22,9 +22,11 @@ def client():
     )
     SQLModel.metadata.create_all(engine)
     with Session(engine) as seed_session:
-        # Mirrors the grip-types data migration that seeds production.
+        # Mirrors the data migrations that seed production: starter grip
+        # types and the single global TrainingProtocol row (ADR-0005).
         for name in STARTER_GRIP_TYPES:
             seed_session.add(GripType(name=name))
+        seed_session.add(TrainingProtocol(user_id=None))
         seed_session.commit()
 
     app = create_app()
