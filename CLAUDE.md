@@ -233,10 +233,41 @@ tested before starting the next.
    published methodology per the original plan's positioning notes, not
    reproducing it), `OvertrainingWarning` heuristic, a dashboard page with
    server-rendered charts; tests against fixture data.
-7. **Stretch/polish** (only once the above is solid) — progression-path
+7. Deployed to fly.io
+
+
+Above roadmap is complete, further roadmap here:
+
+## Roadmap (open)
+- **Stretch/polish** (only once the above is solid) — progression-path
    logic, per-user `TrainingProtocol` overrides, open self-signup + email
    infrastructure (verification, self-service password reset), PWA manifest
-   for "add to home screen", revisit deployment/hosting.
+   for "add to home screen", revisit deployment/hosting
+- Names: I'm greeted with lboehme since my mail is lboehme@mailbox, let Users
+    give a name when signing up so it's more customized
+- max test logic
+- Can't start session without a max test first. If no max weight test was done, let the user insert a target weight for the session on the start session page. Maybe like as a pop up above the white field there where it says: do a max weight test or insert target weight.
+- Advanced Grade System Conversion: 
+    If not already comprehensively handled, building a unified conversion matrix for climbing grades. This would allow users to log a climb in the Fontainebleau scale, whilst the backend dynamically translates and correlates it against equivalent scales for the analytics dashboard.
+- System Administration & Global Configuration
+    While the is_admin role is currently limited to basic functions, a maturing application will require better oversight tools.
+    Protocol Tuning Dashboard: A dedicated interface for the administrator to globally adjust the TrainingProtocol default ramp percentages and base repetitions.
+    System Health Analytics: Exposing aggregated, anonymised system metrics (e.g., average session logging time, active user counts) to ensure the application remains performant as the database grows.
+-  Progressive Web App (PWA) and Offline Support: Climbing gyms and outdoor crags frequently suffer from poor network connectivity.       
+    Implementing a Service Worker and local browser storage (like IndexedDB) would allow users to log a TrainingSession or Climb whilst offline, with the system automatically syncing via the FastAPI backend once connectivity is restored.
+- in-between set rest timer. Because GripTrack autosaves instantly, you wouldn't need a clunky start/stop interface. The moment you input   
+    your reps for a WorkSet row, the backend could return an HTMX Out-Of-Band (hx-swap-oob) update. This would automatically trigger a lightweight, non-blocking visual countdown
+- Asymmetry Analytics.
+    Because your work_sets table explicitly tracks the hand (left vs right) alongside weight and reps, GripTrack is sitting on a goldmine of bilateral deficit data.
+- Finger-injury risk guardian (GitHub issue #28, needs-triage) — a protective,
+    per-(grip, edge) load-management monitor (acute:chronic workload ratio +
+    asymmetry drift) that flags pulley-strain risk *before* a session, framed as
+    a heuristic guardrail not a diagnosis. Uses data GripTrack already stores and
+    no other logging app combines. Build *after* Asymmetry Analytics (which
+    becomes its first input signal); the existing `OvertrainingWarning` is a
+    crude single-grip prototype of it. Needs its own grill + real-data threshold
+    calibration first.
+
 
 ## Remaining implementation-level decisions
 
