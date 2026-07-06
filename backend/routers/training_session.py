@@ -12,6 +12,17 @@ from backend.templating import templates
 router = APIRouter()
 
 
+def combo_redirect(
+    page: str, grip_type_id: int, edge_mm: int, date: date_type, hand: str
+) -> RedirectResponse:
+    """Back to a session page for the same (grip, edge, date, hand)."""
+    return RedirectResponse(
+        f"/session/{page}?grip_type_id={grip_type_id}&edge_mm={edge_mm}"
+        f"&date={date}&hand={hand}",
+        status_code=303,
+    )
+
+
 @router.get("/session/worksets")
 def worksets_page(
     request: Request,
@@ -56,11 +67,7 @@ def save_work_set(
     )
     if request.headers.get("HX-Request"):
         return Response(status_code=204)
-    return RedirectResponse(
-        f"/session/worksets?grip_type_id={grip_type_id}&edge_mm={edge_mm}"
-        f"&date={date}&hand={hand}",
-        status_code=303,
-    )
+    return combo_redirect("worksets", grip_type_id, edge_mm, date, hand)
 
 
 @router.post("/session/workset/delete")
@@ -81,11 +88,7 @@ def delete_work_set(
         )
     if request.headers.get("HX-Request"):
         return Response(status_code=204)
-    return RedirectResponse(
-        f"/session/worksets?grip_type_id={grip_type_id}&edge_mm={edge_mm}"
-        f"&date={date}&hand={hand}",
-        status_code=303,
-    )
+    return combo_redirect("worksets", grip_type_id, edge_mm, date, hand)
 
 
 @router.post("/session/check")
@@ -104,11 +107,7 @@ def check_warmup_step(
     # htmx ticks stay on the page (no reload); plain form posts redirect.
     if request.headers.get("HX-Request"):
         return Response(status_code=204)
-    return RedirectResponse(
-        f"/session/warmup?grip_type_id={grip_type_id}&edge_mm={edge_mm}"
-        f"&date={date}&hand={hand}",
-        status_code=303,
-    )
+    return combo_redirect("warmup", grip_type_id, edge_mm, date, hand)
 
 
 @router.get("/session/new")

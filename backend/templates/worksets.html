@@ -21,10 +21,7 @@
       {% set ws = saved.get((hand, set_number)) %}
       <td class="workset-cell" data-hand="{{ hand }}" data-set="{{ set_number }}">
         <form method="post" action="/session/workset">
-          <input type="hidden" name="grip_type_id" value="{{ grip.id }}">
-          <input type="hidden" name="edge_mm" value="{{ edge_mm }}">
-          <input type="hidden" name="date" value="{{ date }}">
-          <input type="hidden" name="hand" value="{{ hand }}">
+          {% include "_combo_fields.html" %}
           <input type="hidden" name="set_number" value="{{ set_number }}">
           <label class="mini">{{ user.unit_pref }}
             <input type="number" name="weight" value="{{ ws.weight if ws else current_max[hand] }}" step="0.25" min="0.25" required>

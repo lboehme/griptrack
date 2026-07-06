@@ -31,10 +31,7 @@
         <div class="ramp-cell">
         <span><span class="ramp-weight" data-hand="{{ hand }}" data-step="{{ step.index }}">{{ plans[hand][step.index]["weight"] }}</span> <span class="ramp-unit">{{ user.unit_pref }}</span></span>
         <form method="post" action="/session/check">
-          <input type="hidden" name="grip_type_id" value="{{ grip.id }}">
-          <input type="hidden" name="edge_mm" value="{{ edge_mm }}">
-          <input type="hidden" name="date" value="{{ date }}">
-          <input type="hidden" name="hand" value="{{ hand }}">
+          {% include "_combo_fields.html" %}
           <input type="hidden" name="step_index" value="{{ step.index }}">
           <input type="checkbox" class="step-check" data-hand="{{ hand }}" data-step="{{ step.index }}"{% if (hand, step.index) in checks %} checked{% endif %} hx-post="/session/check" hx-include="closest form" hx-swap="none" hx-trigger="change">
         </form>

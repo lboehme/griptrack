@@ -1,0 +1,6 @@
+{# The (grip, edge, date, hand) a session-page form posts back — expects
+   `grip`, `edge_mm`, `date` and a loop-local `hand` in context. #}
+<input type="hidden" name="grip_type_id" value="{{ grip.id }}">
+<input type="hidden" name="edge_mm" value="{{ edge_mm }}">
+<input type="hidden" name="date" value="{{ date }}">
+<input type="hidden" name="hand" value="{{ hand }}">
