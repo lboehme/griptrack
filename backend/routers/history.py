@@ -3,7 +3,7 @@ from sqlmodel import Session, select
 
 from backend import auth, training_log
 from backend.db import get_session
-from backend.models import Climb, GripType, User
+from backend.models import Climb, User
 from backend.templating import templates
 
 router = APIRouter()
@@ -15,9 +15,6 @@ def history_page(
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
-    grip_names = {
-        grip.id: grip.name for grip in session.exec(select(GripType)).all()
-    }
     climbs = session.exec(
         select(Climb)
         .where(Climb.user_id == user.id)
@@ -29,7 +26,7 @@ def history_page(
         {
             "user": user,
             "history": training_log.session_history(session, user),
-            "grip_names": grip_names,
+            "grip_names": training_log.grip_names(session),
             "climbs": climbs,
         },
     )

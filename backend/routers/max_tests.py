@@ -19,11 +19,7 @@ def max_tests_page(
     session: Session = Depends(get_session),
 ):
     grip_types = session.exec(select(GripType).order_by(GripType.name)).all()
-    grip_names = {grip.id: grip.name for grip in grip_types}
-    combos = [
-        {**combo, "grip_name": grip_names[combo["grip_type_id"]]}
-        for combo in training_log.tested_combinations(session, user)
-    ]
+    combos = training_log.tested_combinations(session, user)
     return templates.TemplateResponse(
         request,
         "max_tests.html",

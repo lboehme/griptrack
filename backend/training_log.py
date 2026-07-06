@@ -431,16 +431,24 @@ def session_history(session: Session, user: User) -> list[dict]:
     return history
 
 
+def grip_names(session: Session) -> dict[int, str]:
+    """GripType id -> display name, for anything rendering WorkSets."""
+    return {grip.id: grip.name for grip in session.exec(select(GripType))}
+
+
 def tested_combinations(session: Session, user: User) -> list[dict]:
-    """One entry per tested (hand, grip_type, edge_mm), with its CurrentMax."""
+    """One entry per tested (hand, grip_type, edge_mm), with its CurrentMax
+    and the grip's display name — callers never join names themselves."""
     tests = session.exec(
         select(MaxWeightTest).where(MaxWeightTest.user_id == user.id)
     ).all()
     combos = sorted({(t.hand, t.grip_type_id, t.edge_mm) for t in tests})
+    names = grip_names(session)
     return [
         {
             "hand": hand,
             "grip_type_id": grip_type_id,
+            "grip_name": names[grip_type_id],
             "edge_mm": edge_mm,
             "current_max": compute_current_max(
                 session, user, hand, grip_type_id, edge_mm

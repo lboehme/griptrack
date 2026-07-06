@@ -129,7 +129,7 @@ def new_session_form(
             "default_edge_mm": last_used[1] if last_used else "",
             "today": date_type.today().isoformat(),
             "history": training_log.session_history(session, user)[:8],
-            "grip_names": {grip.id: grip.name for grip in grip_types},
+            "grip_names": training_log.grip_names(session),
         },
     )
 

@@ -4,7 +4,7 @@ from sqlmodel import Session, select
 
 from backend import analytics, auth, charts, training_log
 from backend.db import get_session
-from backend.models import GripType, User
+from backend.models import User
 from backend.templating import templates
 
 router = APIRouter()
@@ -38,9 +38,6 @@ def dashboard_page(
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
-    grip_names = {
-        grip.id: grip.name for grip in session.exec(select(GripType)).all()
-    }
     combos = []
     for combo in training_log.tested_combinations(session, user):
         trend = analytics.training_volume_trend(
@@ -51,7 +48,6 @@ def dashboard_page(
         combos.append(
             {
                 **combo,
-                "grip_name": grip_names[combo["grip_type_id"]],
                 "trend": trend,
                 "plateau": analytics.plateau_flag(trend),
                 "overtraining": analytics.overtraining_warning(trend),
