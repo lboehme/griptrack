@@ -6,7 +6,6 @@ from sqlmodel import Session, select
 
 from backend import training_log
 from backend.models import (
-    BodyWeightLog,
     Climb,
     MaxWeightTest,
     TrainingSession,
@@ -44,16 +43,6 @@ def parse_boulder_grade(grade: str) -> float | None:
     return None
 
 
-def _bodyweight_at(session: Session, user: User, date: date_type) -> float | None:
-    log = session.exec(
-        select(BodyWeightLog)
-        .where(BodyWeightLog.user_id == user.id)
-        .where(BodyWeightLog.date <= date)
-        .order_by(BodyWeightLog.date.desc(), BodyWeightLog.id.desc())
-    ).first()
-    return log.weight if log else None
-
-
 def _best_pull_at(session: Session, user: User, date: date_type) -> float | None:
     """The user's best CurrentMax across all combos as of a date — the
     supersede rule itself lives in training_log.compute_current_max."""
@@ -88,14 +77,14 @@ def strength_grade_correlation(session: Session, user: User) -> dict:
     points = []
     for climb in climbs:
         grade_value = parse_boulder_grade(climb.grade)
-        bodyweight = _bodyweight_at(session, user, climb.date)
+        bodyweight = training_log.bodyweight_at(session, user, as_of=climb.date)
         strength = _best_pull_at(session, user, climb.date)
         if grade_value is None or bodyweight is None or strength is None:
             continue
         points.append(
             {
                 "date": climb.date,
-                "pct_bodyweight": strength / bodyweight,
+                "pct_bodyweight": strength / bodyweight.weight,
                 "grade_value": grade_value,
                 "grade": climb.grade,
             }

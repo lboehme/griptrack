@@ -2,22 +2,14 @@ from datetime import date as date_type
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlmodel import Session, select
+from sqlmodel import Session
 
-from backend import auth
+from backend import auth, training_log
 from backend.db import get_session
 from backend.models import BodyWeightLog, User
 from backend.templating import templates
 
 router = APIRouter()
-
-
-def latest_bodyweight(session: Session, user: User) -> BodyWeightLog | None:
-    return session.exec(
-        select(BodyWeightLog)
-        .where(BodyWeightLog.user_id == user.id)
-        .order_by(BodyWeightLog.date.desc(), BodyWeightLog.id.desc())
-    ).first()
 
 
 @router.get("/profile")
@@ -31,7 +23,7 @@ def profile(
         "profile.html",
         {
             "user": user,
-            "current_bodyweight": latest_bodyweight(session, user),
+            "current_bodyweight": training_log.bodyweight_at(session, user),
             "today": date_type.today().isoformat(),
         },
     )

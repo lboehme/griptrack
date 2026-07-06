@@ -4,6 +4,7 @@ from sqlmodel import Session, select
 
 from backend import plates
 from backend.models import (
+    BodyWeightLog,
     GripType,
     MaxWeightTest,
     TrainingProtocol,
@@ -12,6 +13,21 @@ from backend.models import (
     WarmupStepCheck,
     WorkSet,
 )
+
+
+def bodyweight_at(
+    session: Session, user: User, as_of: date_type | None = None
+) -> BodyWeightLog | None:
+    """The user's bodyweight entry closest at-or-before a date (see
+    CONTEXT.md: BodyWeightLog); as_of=None means the current bodyweight."""
+    query = (
+        select(BodyWeightLog)
+        .where(BodyWeightLog.user_id == user.id)
+        .order_by(BodyWeightLog.date.desc(), BodyWeightLog.id.desc())
+    )
+    if as_of is not None:
+        query = query.where(BodyWeightLog.date <= as_of)
+    return session.exec(query).first()
 
 
 def hands_for(user: User, hand: str | None) -> list[str]:
