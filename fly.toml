@@ -17,7 +17,7 @@ primary_region = 'fra'
   processes = ['app']
 
 [mounts]
-  source = "griptrack_data"
+  source = "griptrack"
   destination = "/data"
 
 [[vm]]
