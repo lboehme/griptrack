@@ -1,4 +1,4 @@
-# fly.toml app configuration file generated for griptrack on 2026-07-06T09:37:21Z
+# fly.toml app configuration file generated for griptrack on 2026-07-06T09:50:39Z
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
@@ -9,7 +9,7 @@ primary_region = 'fra'
 [build]
 
 [http_service]
-  internal_port = 8080
+  internal_port = 8000
   force_https = true
   auto_stop_machines = 'stop'
   auto_start_machines = true
