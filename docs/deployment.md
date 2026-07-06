@@ -51,17 +51,44 @@ The first account ever registered becomes admin and needs no invite (it has to
 while it's set, even the first registration must present it. Set it before the
 first deploy, register, then remove it.
 
+## Migrations on boot
+
+`docker-entrypoint.sh` runs schema migrations before starting the server, but
+guards the risky moment (the first boot after a schema-changing deploy):
+
+- It **only migrates when a revision is actually pending** — an idle-wake boot
+  with the schema already at head is a no-op, not a blind `alembic upgrade head`.
+- Before migrating a populated DB it writes an **app-consistent pre-migration
+  backup** next to the DB file, named `griptrack.db.pre-<revision>.bak`, using
+  SQLite's online-backup API. The name is keyed to the pre-migration revision
+  and never overwritten, so a crash-looping bad migration can't replace the
+  clean snapshot; the 10 most recent are retained. If a migration fails, restore
+  by copying that `.bak` back over `griptrack.db`.
+- A failed migration **stops the boot** (the container exits rather than serving
+  the app against a half-migrated schema) — so a bad migration shows up as an
+  outage/failed health check, not silent data errors.
+- `GRIPTRACK_MIGRATE_ONLY=1` runs the migration step and exits without starting
+  the server — handy for applying a migration manually.
+
+**Test each new migration against a copy of the production DB**, not just a
+fresh local one — SQLite's batch/table-rebuild migrations can pass on an empty
+schema and fail on real data.
+
 ## Backups
 
-The entire dataset is the one SQLite file. Back it up regularly — a scheduled
-copy is enough at this scale:
+The pre-migration `.bak` files above are an on-box safety net for the migration
+path only. They are **not** a substitute for a real off-box backup — the entire
+dataset is still the one SQLite file on one volume. Back it up regularly to
+somewhere off the volume:
 
 ```sh
 sqlite3 /data/griptrack.db ".backup '/data/backup-$(date +%F).db'"
 ```
 
 Prefer `.backup` (or `VACUUM INTO`) over a raw `cp` so you never copy a file
-mid-write. Keep a few days' worth off-box.
+mid-write. Keep a few days' worth off-box. Fly's automatic volume snapshots
+help, but they're single-region, block-level, and not SQLite-consistent — see
+issue #29 for the planned app-consistent (Litestream) hardening.
 
 ## Security posture (what's already handled)
 
