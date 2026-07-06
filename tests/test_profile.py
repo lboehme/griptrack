@@ -2,7 +2,7 @@ from tests.helpers import log_bodyweight, register, register_second_user
 
 
 def test_unit_preference_is_chosen_at_registration(client):
-    register(client, "lifter@example.com", "pw-123", unit_pref="lbs")
+    register(client, "lifter@example.com", "test-pw-1234", unit_pref="lbs")
 
     profile = client.get("/profile")
 
@@ -11,7 +11,7 @@ def test_unit_preference_is_chosen_at_registration(client):
 
 
 def test_unit_preference_defaults_to_kg(client):
-    register(client, "lifter@example.com", "pw-123")
+    register(client, "lifter@example.com", "test-pw-1234")
 
     profile = client.get("/profile")
 
@@ -28,7 +28,7 @@ def current_bodyweight(client):
 
 
 def test_latest_bodyweight_entry_is_current(client):
-    register(client, "lifter@example.com", "pw-123")
+    register(client, "lifter@example.com", "test-pw-1234")
 
     log_bodyweight(client, "2026-07-01", "71.4")
     assert current_bodyweight(client) == "71.4"
@@ -42,7 +42,7 @@ def test_latest_bodyweight_entry_is_current(client):
 
 
 def test_bodyweight_is_scoped_to_the_logged_in_user(client):
-    register(client, "founder@example.com", "pw-123")
+    register(client, "founder@example.com", "test-pw-1234")
     log_bodyweight(client, "2026-07-01", "71.4")
 
     register_second_user(client)
@@ -54,12 +54,12 @@ def test_bodyweight_is_scoped_to_the_logged_in_user(client):
     assert current_bodyweight(client) == "88.0"
 
     client.post("/logout")
-    client.post("/login", data={"email": "founder@example.com", "password": "pw-123"})
+    client.post("/login", data={"email": "founder@example.com", "password": "test-pw-1234"})
     assert current_bodyweight(client) == "71.4"
 
 
 def test_unit_preference_cannot_be_changed_after_signup(client):
-    register(client, "lifter@example.com", "pw-123", unit_pref="kg")
+    register(client, "lifter@example.com", "test-pw-1234", unit_pref="kg")
 
     client.post(
         "/profile",
@@ -72,7 +72,7 @@ def test_unit_preference_cannot_be_changed_after_signup(client):
 
 
 def test_hand_order_preference_defaults_and_is_editable(client):
-    register(client, "lifter@example.com", "pw-123")
+    register(client, "lifter@example.com", "test-pw-1234")
 
     assert "alternating" in client.get("/profile").text
 

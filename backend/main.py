@@ -1,11 +1,14 @@
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 from fastapi import Depends, FastAPI, Request
+from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session, text
 from starlette.middleware.sessions import SessionMiddleware
 
+from backend.auth import LoginRateLimiter
 from backend.db import get_session
 from backend.routers import auth as auth_router
 from backend.routers import climbs as climbs_router
@@ -20,13 +23,57 @@ from backend.templating import templates
 
 BACKEND_DIR = Path(__file__).parent
 
-SESSION_SECRET = os.environ.get("GRIPTRACK_SESSION_SECRET", "dev-only-secret")
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "same-origin",
+    # 'unsafe-inline' script-src is needed for the small inline handlers
+    # (worksets glue, form autosubmits); everything else is same-origin only.
+    "Content-Security-Policy": (
+        "default-src 'self'; script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+    ),
+}
 
 
 def create_app() -> FastAPI:
+    production = os.environ.get("GRIPTRACK_ENV", "dev") == "production"
+    secret = os.environ.get("GRIPTRACK_SESSION_SECRET")
+    if production and not secret:
+        raise RuntimeError(
+            "GRIPTRACK_SESSION_SECRET must be set when GRIPTRACK_ENV=production"
+        )
+
     app = FastAPI(title="GripTrack")
-    app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
+    app.state.login_limiter = LoginRateLimiter()
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key=secret or "dev-only-secret",
+        same_site="lax",
+        https_only=production,
+    )
     app.mount("/static", StaticFiles(directory=BACKEND_DIR / "static"), name="static")
+
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next):
+        response = await call_next(request)
+        for header, value in SECURITY_HEADERS.items():
+            response.headers.setdefault(header, value)
+        return response
+
+    @app.middleware("http")
+    async def reject_cross_origin_posts(request: Request, call_next):
+        # CSRF backstop on top of the SameSite=Lax cookie: browsers send an
+        # Origin header on form posts — if it names a different host than
+        # the one being posted to, refuse. Requests without an Origin
+        # (curl, tests, same-site GET navigations) pass through.
+        if request.method == "POST":
+            origin = request.headers.get("origin")
+            if origin and urlparse(origin).netloc != request.headers.get("host"):
+                return PlainTextResponse(
+                    "Cross-origin request rejected.", status_code=403
+                )
+        return await call_next(request)
 
     app.include_router(home_router.router)
     app.include_router(auth_router.router)

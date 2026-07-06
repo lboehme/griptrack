@@ -9,16 +9,19 @@ import re
 def register(
     client,
     email="lifter@example.com",
-    password="pw-123",
+    password="test-pw-1234",
     unit_pref=None,
     invite_code=None,
+    headers=None,
 ):
     data = {"email": email, "password": password}
     if unit_pref is not None:
         data["unit_pref"] = unit_pref
     if invite_code is not None:
         data["invite_code"] = invite_code
-    return client.post("/register", data=data, follow_redirects=False)
+    return client.post(
+        "/register", data=data, follow_redirects=False, headers=headers
+    )
 
 
 def login(client, email, password):
@@ -38,7 +41,7 @@ def generate_invite(client):
     return match.group(1)
 
 
-def register_second_user(client, email="friend@example.com", password="pw-456"):
+def register_second_user(client, email="friend@example.com", password="test-pw-4567"):
     """Invite + register a second account; the client ends up logged in as it."""
     code = generate_invite(client)
     return register(client, email, password, invite_code=code)

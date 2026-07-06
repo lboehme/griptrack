@@ -47,8 +47,15 @@ def login(
     password: str = Form(),
     session: Session = Depends(get_session),
 ):
-    user = auth.authenticate(session, email, password)
+    limiter = request.app.state.login_limiter
+    client_key = request.client.host if request.client else "unknown"
+    if limiter.blocked(client_key):
+        return HTMLResponse(
+            "Too many attempts. Wait a minute and try again.", status_code=429
+        )
+    user = auth.authenticate(session, email.strip().lower(), password)
     if user is None:
+        limiter.record_failure(client_key)
         return HTMLResponse("Wrong email or password.", status_code=401)
     request.session["user_id"] = user.id
     return RedirectResponse("/", status_code=303)

@@ -4,6 +4,7 @@ from sqlmodel import Session, select
 
 from backend import analytics, auth, charts, training_log
 from backend.db import get_session
+from backend.limits import MAX_EDGE_MM
 from backend.models import User
 from backend.templating import templates
 
@@ -14,7 +15,7 @@ router = APIRouter()
 def volume_chart(
     hand: str = Query(),
     grip_type_id: int = Query(),
-    edge_mm: int = Query(gt=0),
+    edge_mm: int = Query(gt=0, le=MAX_EDGE_MM),
     theme: str = Query(default="light"),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),

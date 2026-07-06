@@ -6,6 +6,7 @@ from sqlmodel import Session
 
 from backend import auth, training_log
 from backend.db import get_session
+from backend.limits import MAX_WEIGHT
 from backend.models import BodyWeightLog, User
 from backend.templating import templates
 
@@ -32,7 +33,7 @@ def profile(
 @router.post("/profile/bodyweight")
 def log_bodyweight(
     date: date_type = Form(),
-    weight: float = Form(gt=0),
+    weight: float = Form(gt=0, le=MAX_WEIGHT),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):

@@ -50,13 +50,11 @@ changes.
 
 ## Environment & running
 
-Python env is managed via conda, env name `griptrack`
-(`/Users/lukas/opt/miniconda3/envs/griptrack`) — no requirements.txt/lockfile
-exists, so install anything new into that env directly. Currently installed:
-`fastapi`, `uvicorn`, `pydantic`, `pandas`, `sqlmodel`, `alembic`, `bcrypt`,
-`python-multipart`, `jinja2`, `itsdangerous`, `pytest`, `httpx`. Still to be
-installed when the analytics phase needs them: `scikit-learn`,
-`matplotlib`/`plotly`.
+Local dev uses a conda env named `griptrack`
+(`/Users/lukas/opt/miniconda3/envs/griptrack`). Runtime deps are now pinned in
+`requirements.txt` (test extras in `requirements-dev.txt`) — keep those in
+lockstep with the conda env when adding a package. `matplotlib`/`pandas` power
+the analytics charts and are installed.
 
 Run the API from the repository root (so `backend` resolves as a namespace
 package):
@@ -65,7 +63,24 @@ package):
 conda run -n griptrack fastapi dev backend/main.py
 ```
 
-Once Phase 4 lands, run tests with `conda run -n griptrack pytest`.
+Run tests with `conda run -n griptrack pytest` (68 tests, all at the HTTP seam).
+
+## Deployment & security
+
+Deployment is containerized and host-agnostic — see `docs/deployment.md` for
+the full guide and `Dockerfile` / `docker-entrypoint.sh` / `.env.example`.
+Config is via env vars: `GRIPTRACK_ENV=production` (enables Secure cookies +
+fail-fast on a missing secret), `GRIPTRACK_SESSION_SECRET` (required in prod),
+`GRIPTRACK_DATABASE_URL` (point at a persistent volume), and
+`GRIPTRACK_BOOTSTRAP_TOKEN` (gates the first-admin registration).
+
+Security is enforced in code and covered by `tests/test_security.py`: bcrypt
+hashing with 8–72-char passwords, per-IP login rate limiting with
+timing-equalized auth, `SameSite=Lax` + Origin-check CSRF defense, a security-
+header middleware (CSP/XFO/nosniff/Referrer-Policy), and upper bounds on every
+numeric input (the plate subset-sum is the DoS-sensitive path). Numeric input
+limits live in `backend/limits.py`. When adding a route that takes numbers or
+user text, bound it and add a security test.
 
 ## Architecture
 

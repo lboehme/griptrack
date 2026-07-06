@@ -4,6 +4,7 @@ from sqlmodel import Session
 
 from backend import auth, plates
 from backend.db import get_session
+from backend.limits import MAX_PLATE_COUNT, MAX_PLATE_WEIGHT
 from backend.models import User
 from backend.templating import templates
 
@@ -12,8 +13,8 @@ router = APIRouter()
 
 @router.post("/plates")
 def set_plate(
-    weight: float = Form(gt=0),
-    count: int = Form(ge=0),
+    weight: float = Form(gt=0, le=MAX_PLATE_WEIGHT),
+    count: int = Form(ge=0, le=MAX_PLATE_COUNT),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):

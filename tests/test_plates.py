@@ -51,7 +51,7 @@ def test_plate_inventory_is_scoped_to_the_logged_in_user(client):
     client.post("/plates", data={"weight": "5", "count": "0"}, follow_redirects=True)
 
     client.post("/logout")
-    login(client, "founder@example.com", "pw-123")
+    login(client, "founder@example.com", "test-pw-1234")
     rows = inventory_rows(client)
     assert rows[7.5] == 2
     assert 5.0 in rows

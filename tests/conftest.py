@@ -8,11 +8,10 @@ from backend.main import create_app
 from backend.models import STARTER_GRIP_TYPES, GripType, TrainingProtocol
 
 
-@pytest.fixture
-def client():
+def build_client() -> TestClient:
     """A TestClient wired to a fresh, isolated in-memory SQLite DB.
 
-    Every test gets its own engine, so no state leaks between tests.
+    Every call gets its own engine, so no state leaks between tests.
     All tests drive the app through this HTTP seam only.
     """
     engine = create_engine(
@@ -36,6 +35,16 @@ def client():
             yield session
 
     app.dependency_overrides[get_session] = override_get_session
+    return TestClient(app)
 
-    with TestClient(app) as test_client:
+
+@pytest.fixture
+def client():
+    with build_client() as test_client:
         yield test_client
+
+
+@pytest.fixture
+def client_factory():
+    """For tests that must set env vars before the app is constructed."""
+    return build_client

@@ -6,6 +6,7 @@ from sqlmodel import Session, select
 
 from backend import auth, training_log
 from backend.db import get_session
+from backend.limits import MAX_EDGE_MM, MAX_WEIGHT
 from backend.models import GripType, User
 from backend.templating import templates
 
@@ -36,9 +37,9 @@ def max_tests_page(
 def log_max_test(
     hand: str = Form(),
     grip_type_id: int = Form(),
-    edge_mm: int = Form(gt=0),
+    edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
     date: date_type = Form(),
-    weight: float = Form(gt=0),
+    weight: float = Form(gt=0, le=MAX_WEIGHT),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
@@ -54,10 +55,13 @@ def log_max_test(
 
 @router.post("/grip-types")
 def add_grip_type(
-    name: str = Form(min_length=1),
+    name: str = Form(min_length=1, max_length=60),
     admin: User = Depends(auth.require_admin),
     session: Session = Depends(get_session),
 ):
+    name = name.strip()
+    if not name:
+        return RedirectResponse("/profile", status_code=303)
     existing = session.exec(select(GripType).where(GripType.name == name)).first()
     if existing is None:
         session.add(GripType(name=name))

@@ -1,11 +1,12 @@
 from datetime import date as date_type
 
-from fastapi import APIRouter, Depends, Form, Query, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlmodel import Session, select
 
 from backend import auth, training_log
 from backend.db import get_session
+from backend.limits import MAX_EDGE_MM, MAX_REPS, MAX_SET_NUMBER, MAX_WEIGHT
 from backend.models import GripType, User
 from backend.templating import templates
 
@@ -23,17 +24,23 @@ def combo_redirect(
     )
 
 
+def require_grip_type(session: Session, grip_type_id: int) -> None:
+    if session.get(GripType, grip_type_id) is None:
+        raise HTTPException(status_code=404, detail="Unknown grip type")
+
+
 @router.get("/session/worksets")
 def worksets_page(
     request: Request,
     grip_type_id: int = Query(),
-    edge_mm: int = Query(gt=0),
+    edge_mm: int = Query(gt=0, le=MAX_EDGE_MM),
     date: date_type = Query(),
     hand: str | None = Query(default=None),
-    sets: int | None = Query(default=None, ge=1),
+    sets: int | None = Query(default=None, ge=1, le=MAX_SET_NUMBER),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
+    require_grip_type(session, grip_type_id)
     view = training_log.worksets_view(
         session, user, grip_type_id, edge_mm, date, hand, sets
     )
@@ -46,12 +53,12 @@ def worksets_page(
 def save_work_set(
     request: Request,
     grip_type_id: int = Form(),
-    edge_mm: int = Form(gt=0),
+    edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
     date: date_type = Form(),
     hand: str = Form(),
-    set_number: int = Form(ge=1),
-    weight: float = Form(gt=0),
-    reps: int = Form(ge=1),
+    set_number: int = Form(ge=1, le=MAX_SET_NUMBER),
+    weight: float = Form(gt=0, le=MAX_WEIGHT),
+    reps: int = Form(ge=1, le=MAX_REPS),
     rpe: float | None = Form(default=None),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
@@ -74,10 +81,10 @@ def save_work_set(
 def delete_work_set(
     request: Request,
     grip_type_id: int = Form(),
-    edge_mm: int = Form(gt=0),
+    edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
     date: date_type = Form(),
     hand: str = Form(),
-    set_number: int = Form(ge=1),
+    set_number: int = Form(ge=1, le=MAX_SET_NUMBER),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
@@ -95,10 +102,10 @@ def delete_work_set(
 def check_warmup_step(
     request: Request,
     grip_type_id: int = Form(),
-    edge_mm: int = Form(gt=0),
+    edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
     date: date_type = Form(),
     hand: str = Form(),
-    step_index: int = Form(ge=0),
+    step_index: int = Form(ge=0, le=MAX_SET_NUMBER),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
@@ -137,12 +144,13 @@ def new_session_form(
 def warmup_page(
     request: Request,
     grip_type_id: int = Query(),
-    edge_mm: int = Query(gt=0),
+    edge_mm: int = Query(gt=0, le=MAX_EDGE_MM),
     date: date_type = Query(),
     hand: str | None = Query(default=None),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
+    require_grip_type(session, grip_type_id)
     view = training_log.warmup_view(session, user, grip_type_id, edge_mm, date, hand)
     return templates.TemplateResponse(
         request, "warmup.html", {"user": user, **view}
