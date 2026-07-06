@@ -1,20 +1,4 @@
-import re
-
-
-def register(client, email, password, invite_code=None):
-    data = {"email": email, "password": password}
-    if invite_code is not None:
-        data["invite_code"] = invite_code
-    return client.post("/register", data=data, follow_redirects=False)
-
-
-def generate_invite(client):
-    """Generate an invite as the currently logged-in user and return its code."""
-    response = client.post("/invites", follow_redirects=True)
-    assert response.status_code == 200
-    match = re.search(r'class="invite-code">([^<]+)<', response.text)
-    assert match, "no invite code found on the page"
-    return match.group(1)
+from tests.helpers import generate_invite, login, register
 
 
 def test_first_user_registers_without_invite_and_is_logged_in(client):
@@ -84,14 +68,6 @@ def test_bogus_invite_code_is_rejected(client):
     )
 
     assert response.status_code == 400
-
-
-def login(client, email, password):
-    return client.post(
-        "/login",
-        data={"email": email, "password": password},
-        follow_redirects=False,
-    )
 
 
 def test_admin_resets_a_users_forgotten_password(client):

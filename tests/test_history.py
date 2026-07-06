@@ -1,21 +1,12 @@
 import re
 
-from tests.helpers import grip_type_id, log_max_test, register
-
-
-def save_work_set(client, hand, set_number, weight, reps, date, rpe=None):
-    data = {
-        "grip_type_id": grip_type_id(client, "half crimp"),
-        "edge_mm": 20,
-        "date": date,
-        "hand": hand,
-        "set_number": set_number,
-        "weight": weight,
-        "reps": reps,
-    }
-    if rpe is not None:
-        data["rpe"] = rpe
-    return client.post("/session/workset", data=data, follow_redirects=True)
+from tests.helpers import (
+    log_climb,
+    log_max_test,
+    register,
+    register_second_user,
+    save_work_set,
+)
 
 
 def history_sessions(client):
@@ -59,19 +50,9 @@ def test_history_never_shows_another_users_data(client):
     register(client, email="founder@example.com")
     log_max_test(client, "left", "half crimp", 20, "2026-07-01", "42.5")
     save_work_set(client, "left", 1, "42.5", "5", date="2026-07-04")
-    client.post(
-        "/climbs",
-        data={"date": "2026-07-03", "discipline": "boulder", "grade": "V5",
-              "style": "flash"},
-    )
+    log_climb(client, date="2026-07-03", grade="V5")
 
-    invite = client.post("/invites", follow_redirects=True)
-    code = re.search(r'class="invite-code">([^<]+)<', invite.text).group(1)
-    client.post(
-        "/register",
-        data={"email": "friend@example.com", "password": "pw-456",
-              "invite_code": code},
-    )
+    register_second_user(client)
 
     # Logged in as friend: founder's history is invisible.
     assert history_sessions(client) == {}

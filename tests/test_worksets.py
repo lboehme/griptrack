@@ -1,6 +1,12 @@
 import re
 
-from tests.helpers import current_maxes, grip_type_id, log_max_test, register
+from tests.helpers import (
+    current_maxes,
+    grip_type_id,
+    log_max_test,
+    register,
+    save_work_set,
+)
 
 
 def worksets_page(client, grip="half crimp", edge_mm=20, date="2026-07-04", hand=None):
@@ -33,24 +39,6 @@ def setup_tested_user(client):
     register(client)
     log_max_test(client, "left", "half crimp", 20, "2026-07-01", "42.5")
     log_max_test(client, "right", "half crimp", 20, "2026-07-01", "40")
-
-
-def save_work_set(
-    client, hand, set_number, weight, reps, rpe=None,
-    grip="half crimp", edge_mm=20, date="2026-07-04",
-):
-    data = {
-        "grip_type_id": grip_type_id(client, grip),
-        "edge_mm": edge_mm,
-        "date": date,
-        "hand": hand,
-        "set_number": set_number,
-        "weight": weight,
-        "reps": reps,
-    }
-    if rpe is not None:
-        data["rpe"] = rpe
-    return client.post("/session/workset", data=data, follow_redirects=True)
 
 
 def test_each_saved_work_set_persists_and_can_be_edited(client):

@@ -1,51 +1,9 @@
-import re
-
-
-def register(client, email="lifter@example.com", password="pw-123"):
-    return client.post(
-        "/register", data={"email": email, "password": password}, follow_redirects=False
-    )
-
-
-def register_second_user(client, email="friend@example.com", password="pw-456"):
-    invite = client.post("/invites", follow_redirects=True)
-    code = re.search(r'class="invite-code">([^<]+)<', invite.text).group(1)
-    client.post(
-        "/register",
-        data={"email": email, "password": password, "invite_code": code},
-    )
-
-
-def grip_type_id(client, name):
-    page = client.get("/max-tests").text
-    return re.search(rf'value="(\d+)">{name}<', page).group(1)
-
-
-def log_max_test(client, hand, grip, edge_mm, date, weight):
-    return client.post(
-        "/max-tests",
-        data={
-            "hand": hand,
-            "grip_type_id": grip_type_id(client, grip),
-            "edge_mm": edge_mm,
-            "date": date,
-            "weight": weight,
-        },
-        follow_redirects=True,
-    )
-
-
-def current_maxes(client):
-    """Parse the max-tests page into {(hand, grip, edge): weight}."""
-    page = client.get("/max-tests").text
-    return {
-        (h, g, int(e)): float(w)
-        for h, g, e, w in re.findall(
-            r'data-combo="(\w+)\|([^|]+)\|(\d+)".*?class="max-weight">([\d.]+)<',
-            page,
-            re.DOTALL,
-        )
-    }
+from tests.helpers import (
+    current_maxes,
+    log_max_test,
+    register,
+    register_second_user,
+)
 
 
 def test_current_max_per_combination_latest_test_supersedes(client):

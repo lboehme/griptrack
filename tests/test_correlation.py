@@ -1,18 +1,6 @@
 import re
 
-from tests.helpers import log_max_test, register
-
-
-def log_climb(client, date, grade, discipline="boulder", style="redpoint"):
-    return client.post(
-        "/climbs",
-        data={"date": date, "discipline": discipline, "grade": grade,
-              "style": style},
-    )
-
-
-def log_bodyweight(client, date, weight):
-    return client.post("/profile/bodyweight", data={"date": date, "weight": weight})
+from tests.helpers import log_bodyweight, log_climb, log_max_test, register
 
 
 def correlation_stat(client):

@@ -1,23 +1,6 @@
 import re
 
-from tests.helpers import grip_type_id, log_max_test, register
-
-
-def save_work_set(client, hand, set_number, weight, reps, date,
-                  grip="half crimp", edge_mm=20):
-    return client.post(
-        "/session/workset",
-        data={
-            "grip_type_id": grip_type_id(client, grip),
-            "edge_mm": edge_mm,
-            "date": date,
-            "hand": hand,
-            "set_number": set_number,
-            "weight": weight,
-            "reps": reps,
-        },
-        follow_redirects=True,
-    )
+from tests.helpers import log_max_test, register, save_work_set
 
 
 def volume_points(client):

@@ -1,23 +1,6 @@
 import re
 
-from tests.helpers import register
-
-
-def register_second_user(client, email="friend@example.com", password="pw-456"):
-    invite = client.post("/invites", follow_redirects=True)
-    code = re.search(r'class="invite-code">([^<]+)<', invite.text).group(1)
-    client.post(
-        "/register",
-        data={"email": email, "password": password, "invite_code": code},
-    )
-
-
-def log_climb(client, date="2026-07-04", discipline="boulder", grade="V5",
-              style="flash", notes=None):
-    data = {"date": date, "discipline": discipline, "grade": grade, "style": style}
-    if notes is not None:
-        data["notes"] = notes
-    return client.post("/climbs", data=data, follow_redirects=True)
+from tests.helpers import log_climb, register, register_second_user
 
 
 def climb_rows(client):

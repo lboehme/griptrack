@@ -1,11 +1,6 @@
 import re
 
-
-def register(client, email="lifter@example.com", password="pw-123", unit_pref=None):
-    data = {"email": email, "password": password}
-    if unit_pref is not None:
-        data["unit_pref"] = unit_pref
-    return client.post("/register", data=data, follow_redirects=False)
+from tests.helpers import login, register, register_second_user
 
 
 def inventory_rows(client):
@@ -48,12 +43,7 @@ def test_plate_inventory_is_scoped_to_the_logged_in_user(client):
     register(client, email="founder@example.com")
     client.post("/plates", data={"weight": "7.5", "count": "2"}, follow_redirects=True)
 
-    invite = client.post("/invites", follow_redirects=True)
-    code = re.search(r'class="invite-code">([^<]+)<', invite.text).group(1)
-    client.post(
-        "/register",
-        data={"email": "friend@example.com", "password": "pw-456", "invite_code": code},
-    )
+    register_second_user(client)
 
     # Logged in as friend: founder's custom 7.5 plate must not be there,
     # and removing a plate must not touch the founder's stack.
@@ -61,7 +51,7 @@ def test_plate_inventory_is_scoped_to_the_logged_in_user(client):
     client.post("/plates", data={"weight": "5", "count": "0"}, follow_redirects=True)
 
     client.post("/logout")
-    client.post("/login", data={"email": "founder@example.com", "password": "pw-123"})
+    login(client, "founder@example.com", "pw-123")
     rows = inventory_rows(client)
     assert rows[7.5] == 2
     assert 5.0 in rows
