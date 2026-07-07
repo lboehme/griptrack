@@ -13,10 +13,13 @@ def register(
     unit_pref=None,
     invite_code=None,
     headers=None,
+    name=None,
 ):
     data = {"email": email, "password": password}
     if unit_pref is not None:
         data["unit_pref"] = unit_pref
+    if name is not None:
+        data["name"] = name
     if invite_code is not None:
         data["invite_code"] = invite_code
     return client.post(

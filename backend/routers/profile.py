@@ -6,7 +6,7 @@ from sqlmodel import Session
 
 from backend import auth, training_log
 from backend.db import get_session
-from backend.limits import MAX_WEIGHT
+from backend.limits import MAX_NAME_LENGTH, MAX_WEIGHT
 from backend.models import BodyWeightLog, User
 from backend.templating import templates
 
@@ -38,6 +38,18 @@ def log_bodyweight(
     session: Session = Depends(get_session),
 ):
     session.add(BodyWeightLog(user_id=user.id, date=date, weight=weight))
+    session.commit()
+    return RedirectResponse("/profile", status_code=303)
+
+
+@router.post("/profile/name")
+def update_name(
+    name: str | None = Form(default=None, max_length=MAX_NAME_LENGTH),
+    user: User = Depends(auth.current_user),
+    session: Session = Depends(get_session),
+):
+    user.name = auth.normalize_name(name)
+    session.add(user)
     session.commit()
     return RedirectResponse("/profile", status_code=303)
 

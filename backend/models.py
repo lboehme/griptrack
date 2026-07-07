@@ -14,6 +14,8 @@ class User(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     email: str = Field(unique=True, index=True)
     hashed_password: str
+    # Optional display name; greeting falls back to the email's local part.
+    name: str | None = None
     is_admin: bool = False
     # Fixed at signup; determines the storage unit for all of this user's
     # weight values (ADR-0003: native-unit storage).

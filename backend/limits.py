@@ -1,4 +1,4 @@
-"""Upper bounds on numeric form/query inputs.
+"""Upper bounds on form/query inputs.
 
 Generous enough that no real finger-training value ever hits them, tight
 enough to keep absurd inputs from becoming a DoS — notably the plate
@@ -7,6 +7,7 @@ count and target weight.
 """
 
 MAX_WEIGHT = 1000        # kg or lbs; covers any bodyweight or block-pull load
+MAX_NAME_LENGTH = 60     # display name (user text, not numeric)
 MAX_REPS = 1000
 MAX_SET_NUMBER = 100
 MAX_EDGE_MM = 1000
