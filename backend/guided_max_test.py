@@ -57,6 +57,61 @@ def warmup_suggestion(
     return round_down_to_loadable(estimate * WARMUP_PERCENT / 100, inventory)
 
 
+def done_column(hand: str, weight: float) -> dict:
+    """A hand that already recorded its MaxWeightTest in this routine run —
+    the two-hand template shows this as a plain notice, not a live form."""
+    return {"hand": hand, "status": "done", "weight": weight}
+
+
+def active_column(
+    hand: str,
+    kind: str,
+    set_number: int,
+    reps: int,
+    suggested: float,
+    needs_rating: bool,
+    rest_hint: bool,
+    estimate: float,
+) -> dict:
+    """A hand still mid-ladder — either the hand just advanced by this
+    request, or the other hand's state, echoed back unchanged."""
+    return {
+        "hand": hand,
+        "status": "active",
+        "kind": kind,
+        "set_number": set_number,
+        "reps": reps,
+        "suggested": suggested,
+        "needs_rating": needs_rating,
+        "rest_hint": rest_hint,
+        "estimate": estimate,
+    }
+
+
+def ordered_columns(hand: str, this_column: dict, other_column: dict) -> list[dict]:
+    """Left/right in a stable, predictable order regardless of which hand's
+    form was just submitted — the two-hand template always renders left
+    before right."""
+    return [this_column, other_column] if hand == "left" else [other_column, this_column]
+
+
+def warmup_column(hand: str, estimate: float, inventory: list[PlateInventoryItem]) -> dict:
+    """A hand's initial rendered state (warmup set 1) for the two-hand
+    alternating routine (#22) — each hand's ladder starts independently
+    from its own entered estimate."""
+    return {
+        "hand": hand,
+        "status": "active",
+        "kind": "warmup",
+        "set_number": 1,
+        "reps": WARMUP_REPS,
+        "suggested": warmup_suggestion(estimate, inventory),
+        "needs_rating": False,
+        "rest_hint": False,
+        "estimate": estimate,
+    }
+
+
 def advance(
     kind: str,
     set_number: int,

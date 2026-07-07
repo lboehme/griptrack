@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Guided max test — GripTrack{% endblock %}
+{% block content %}
+<h2>Guided max test</h2>
+<p class="page-sub">Both hands, alternating</p>
+<div class="card">
+<form method="post" action="/max-tests/guided/both">
+  <input type="hidden" name="grip_type_id" value="{{ grip_type_id }}">
+  <input type="hidden" name="edge_mm" value="{{ edge_mm }}">
+  <input type="hidden" name="date" value="{{ date }}">
+  <label>Left hand estimated max ({{ user.unit_pref }})
+    <input type="number" name="left_estimate" step="0.25" min="0.25" value="{{ default_estimate }}" required>
+  </label>
+  <label>Right hand estimated max ({{ user.unit_pref }})
+    <input type="number" name="right_estimate" step="0.25" min="0.25" value="{{ default_estimate }}" required>
+  </label>
+  <p class="muted">Not sure? Up to half your bodyweight is a reasonable starting guess.</p>
+  <button type="submit">Start warmup</button>
+</form>
+</div>
+{% endblock %}
