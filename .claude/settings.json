@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pytest)",
+      "Bash(pytest *)",
+      "Bash(conda run -n griptrack pytest *)",
+      "Bash(alembic check*)",
+      "Bash(alembic current*)",
+      "Bash(alembic history*)",
+      "Bash(alembic heads*)"
+    ]
+  }
+}
