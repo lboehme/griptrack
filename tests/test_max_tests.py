@@ -41,6 +41,15 @@ def test_starter_grip_types_are_offered(client):
         assert name in page.text
 
 
+def test_max_tests_page_offers_a_run_guided_test_action(client):
+    register(client)
+
+    page = client.get("/max-tests")
+
+    assert page.status_code == 200
+    assert 'action="/max-tests/guided"' in page.text
+
+
 def test_max_test_date_defaults_to_today(client):
     from datetime import date
 

@@ -10,11 +10,12 @@
 <div class="notice">
   No max-weight test yet for your
   <strong>{{ untested_hands|join(" and ") }}</strong> hand on this grip/edge.
-  Run a <a href="/max-tests">max test</a> — or enter an estimated max below
-  to warm up with for this session only.
+  Run a guided max test below — or enter an estimated max to warm up with
+  for this session only.
 </div>
 {% for hand in untested_hands %}
 <div class="card">
+  <a class="btn btn-secondary" href="/max-tests/guided?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}&amp;hand={{ hand }}">Run guided max test — {{ hand }} hand</a>
   <form method="post" action="/session/estimate" class="estimate-form" data-hand="{{ hand }}">
     {% include "_combo_fields.html" %}
     <label class="mini">Estimated max for this session — {{ hand }} hand ({{ user.unit_pref }})
