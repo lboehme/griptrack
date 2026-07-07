@@ -1,6 +1,7 @@
 from datetime import date as date_type
 from datetime import datetime, timezone
 
+from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
@@ -120,6 +121,14 @@ class SessionMaxEstimate(SQLModel, table=True):
     TrainingSession — never reused across sessions, never an analytics input."""
 
     __tablename__ = "session_max_estimates"
+    # One row per (session, hand, grip, edge) — the upsert's invariant,
+    # backed at the schema level against concurrent submissions.
+    __table_args__ = (
+        UniqueConstraint(
+            "training_session_id", "hand", "grip_type_id", "edge_mm",
+            name="uq_session_max_estimates_combo",
+        ),
+    )
 
     id: int | None = Field(default=None, primary_key=True)
     training_session_id: int = Field(foreign_key="training_sessions.id", index=True)

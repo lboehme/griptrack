@@ -1,8 +1,8 @@
 """add session_max_estimates
 
-Revision ID: f9d21fcf9d25
+Revision ID: 2d4a056193f4
 Revises: b41f0a7e2d19
-Create Date: 2026-07-07 11:32:00.955017
+Create Date: 2026-07-07 12:08:31.395357
 
 """
 from typing import Sequence, Union
@@ -13,7 +13,7 @@ import sqlmodel
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'f9d21fcf9d25'
+revision: str = '2d4a056193f4'
 down_revision: Union[str, Sequence[str], None] = 'b41f0a7e2d19'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -31,7 +31,8 @@ def upgrade() -> None:
     sa.Column('weight', sa.Float(), nullable=False),
     sa.ForeignKeyConstraint(['grip_type_id'], ['grip_types.id'], ),
     sa.ForeignKeyConstraint(['training_session_id'], ['training_sessions.id'], ),
-    sa.PrimaryKeyConstraint('id')
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('training_session_id', 'hand', 'grip_type_id', 'edge_mm', name='uq_session_max_estimates_combo')
     )
     op.create_index(op.f('ix_session_max_estimates_training_session_id'), 'session_max_estimates', ['training_session_id'], unique=False)
     # ### end Alembic commands ###
