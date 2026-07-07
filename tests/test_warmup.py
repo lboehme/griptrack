@@ -188,7 +188,7 @@ def test_session_start_form_defaults_to_the_last_used_combination(client):
     assert 'name="edge_mm" value="10"' in page.text
 
 
-def test_untested_combination_prompts_for_a_max_test_first(client):
+def test_one_untested_hand_still_renders_the_tested_hands_ramp(client):
     register(client)
     # Only the left hand is tested; the right hand has no max for this combo.
     log_max_test(client, "left", "half crimp", 20, "2026-07-01", "42.5")
@@ -196,5 +196,8 @@ def test_untested_combination_prompts_for_a_max_test_first(client):
     page = warmup_page(client)
 
     assert page.status_code == 200
-    assert "max" in page.text.lower() and "test" in page.text.lower()
-    assert 'class="ramp-weight"' not in page.text
+    # The untested hand is prompted (max test or a session estimate) ...
+    assert 'href="/max-tests"' in page.text
+    assert 'class="estimate-form" data-hand="right"' in page.text
+    # ... while the tested hand's ramp renders normally, not blanked.
+    assert {hand for hand, step in ramp_weights(page.text)} == {"left"}

@@ -7,6 +7,7 @@ from backend.models import (
     BodyWeightLog,
     GripType,
     MaxWeightTest,
+    SessionMaxEstimate,
     TrainingProtocol,
     TrainingSession,
     User,
@@ -47,23 +48,27 @@ def warmup_view(
     date: date_type,
     hand: str | None = None,
 ) -> dict:
-    """Everything the warmup page shows, assembled in one call: ramp plans
-    per hand (or which hands still need a MaxWeightTest), the step list,
-    and the TrainingSession's persisted checks."""
+    """Everything the warmup page shows, assembled in one call. Each hand's
+    ramp is sourced independently: CurrentMax, else this session's
+    SessionMaxEstimate, else the hand lands in untested_hands and gets an
+    inline estimate-entry form."""
     hands = hands_for(user, hand)
+    training_session = find_session(session, user, date)
     plans = {
-        h: compute_ramp_plan(session, user, h, grip_type_id, edge_mm)
+        h: compute_ramp_plan(
+            session, user, h, grip_type_id, edge_mm, training_session
+        )
         for h in hands
     }
     untested_hands = [h for h, plan in plans.items() if plan is None]
+    planned_hands = [h for h in hands if plans[h] is not None]
     steps = []
-    if not untested_hands:
-        first_plan = plans[hands[0]]
+    if planned_hands:
+        first_plan = plans[planned_hands[0]]
         steps = [
             {"index": index, "percent": first_plan[index]["percent"]}
             for index in range(len(first_plan))
         ]
-    training_session = find_session(session, user, date)
     return {
         "grip": session.get(GripType, grip_type_id),
         "edge_mm": edge_mm,
@@ -71,6 +76,7 @@ def warmup_view(
         "hands": hands,
         "plans": plans,
         "untested_hands": untested_hands,
+        "planned_hands": planned_hands,
         "steps": steps,
         "training_session": training_session,
         "checks": warmup_checks(session, training_session),
@@ -91,12 +97,13 @@ def worksets_view(
     (default rows, add-another-set hint, dismissable empty rows)."""
     hands = hands_for(user, hand)
     protocol = get_protocol(session, user)
+    training_session = find_session(session, user, date)
     saved = {
         (ws.hand, ws.set_number): ws
         for ws in worksets_for_combo(session, user, grip_type_id, edge_mm, date)
     }
     current_max = {
-        h: compute_current_max(session, user, h, grip_type_id, edge_mm)
+        h: effective_max(session, user, h, grip_type_id, edge_mm, training_session)
         for h in hands
     }
     highest_saved = max((n for _, n in saved), default=0)
@@ -281,10 +288,20 @@ def get_protocol(session: Session, user: User) -> TrainingProtocol:
 
 
 def compute_ramp_plan(
-    session: Session, user: User, hand: str, grip_type_id: int, edge_mm: int
+    session: Session,
+    user: User,
+    hand: str,
+    grip_type_id: int,
+    edge_mm: int,
+    training_session: TrainingSession | None = None,
 ) -> list[dict] | None:
-    """Plate-rounded warmup/ramp steps for one hand, or None if untested."""
-    current_max = compute_current_max(session, user, hand, grip_type_id, edge_mm)
+    """Plate-rounded warmup/ramp steps for one hand, or None if untested.
+
+    With a training_session, an untested hand falls back to that session's
+    SessionMaxEstimate — CurrentMax itself is never affected."""
+    current_max = effective_max(
+        session, user, hand, grip_type_id, edge_mm, training_session
+    )
     if current_max is None:
         return None
     protocol = get_protocol(session, user)
@@ -299,6 +316,73 @@ def compute_ramp_plan(
         }
         for percent in (int(p) for p in protocol.ramp_percentages.split(","))
     ]
+
+
+def effective_max(
+    session: Session,
+    user: User,
+    hand: str,
+    grip_type_id: int,
+    edge_mm: int,
+    training_session: TrainingSession | None,
+) -> float | None:
+    """The max the warmup ramp and work-set prefills work from: CurrentMax,
+    else this session's SessionMaxEstimate, else None. Analytics never use
+    this — they read compute_current_max directly."""
+    current_max = compute_current_max(session, user, hand, grip_type_id, edge_mm)
+    if current_max is not None:
+        return current_max
+    if training_session is None:
+        return None
+    estimate = session_estimate(
+        session, training_session, hand, grip_type_id, edge_mm
+    )
+    return estimate.weight if estimate is not None else None
+
+
+def session_estimate(
+    session: Session,
+    training_session: TrainingSession,
+    hand: str,
+    grip_type_id: int,
+    edge_mm: int,
+) -> SessionMaxEstimate | None:
+    return session.exec(
+        select(SessionMaxEstimate)
+        .where(SessionMaxEstimate.training_session_id == training_session.id)
+        .where(SessionMaxEstimate.hand == hand)
+        .where(SessionMaxEstimate.grip_type_id == grip_type_id)
+        .where(SessionMaxEstimate.edge_mm == edge_mm)
+    ).first()
+
+
+def record_session_estimate(
+    session: Session,
+    training_session: TrainingSession,
+    hand: str,
+    grip_type_id: int,
+    edge_mm: int,
+    weight: float,
+) -> SessionMaxEstimate:
+    """Upsert this session's estimate for one (hand, grip, edge) — like every
+    session-page interaction, resubmission overwrites in place."""
+    estimate = session_estimate(
+        session, training_session, hand, grip_type_id, edge_mm
+    )
+    if estimate is None:
+        estimate = SessionMaxEstimate(
+            training_session_id=training_session.id,
+            hand=hand,
+            grip_type_id=grip_type_id,
+            edge_mm=edge_mm,
+            weight=weight,
+        )
+    else:
+        estimate.weight = weight
+    session.add(estimate)
+    session.commit()
+    session.refresh(estimate)
+    return estimate
 
 
 def latest_max_test(
@@ -434,6 +518,37 @@ def session_history(session: Session, user: User) -> list[dict]:
 def grip_names(session: Session) -> dict[int, str]:
     """GripType id -> display name, for anything rendering WorkSets."""
     return {grip.id: grip.name for grip in session.exec(select(GripType))}
+
+
+def trained_combinations(session: Session, user: User) -> list[dict]:
+    """One entry per (hand, grip_type, edge_mm) with any WorkSet or
+    MaxWeightTest — what the dashboard iterates. A combo trained only under
+    a SessionMaxEstimate appears too; its current_max is simply None."""
+    tests = session.exec(
+        select(MaxWeightTest).where(MaxWeightTest.user_id == user.id)
+    ).all()
+    work_sets = session.exec(
+        select(WorkSet)
+        .join(TrainingSession, WorkSet.training_session_id == TrainingSession.id)  # type: ignore[arg-type]
+        .where(TrainingSession.user_id == user.id)
+    ).all()
+    combos = sorted(
+        {(t.hand, t.grip_type_id, t.edge_mm) for t in tests}
+        | {(ws.hand, ws.grip_type_id, ws.edge_mm) for ws in work_sets}
+    )
+    names = grip_names(session)
+    return [
+        {
+            "hand": hand,
+            "grip_type_id": grip_type_id,
+            "grip_name": names[grip_type_id],
+            "edge_mm": edge_mm,
+            "current_max": compute_current_max(
+                session, user, hand, grip_type_id, edge_mm
+            ),
+        }
+        for hand, grip_type_id, edge_mm in combos
+    ]
 
 
 def tested_combinations(session: Session, user: User) -> list[dict]:

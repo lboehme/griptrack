@@ -1,6 +1,7 @@
 from datetime import date as date_type
 from datetime import datetime, timezone
 
+from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
@@ -112,6 +113,30 @@ class WarmupStepCheck(SQLModel, table=True):
     training_session_id: int = Field(foreign_key="training_sessions.id", index=True)
     hand: str
     step_index: int
+
+
+class SessionMaxEstimate(SQLModel, table=True):
+    """An ephemeral, per-session stand-in for CurrentMax for a combo with no
+    MaxWeightTest yet (see CONTEXT.md: SessionMaxEstimate). Scoped to one
+    TrainingSession — never reused across sessions, never an analytics input."""
+
+    __tablename__ = "session_max_estimates"
+    # One row per (session, hand, grip, edge) — the upsert's invariant,
+    # backed at the schema level against concurrent submissions.
+    __table_args__ = (
+        UniqueConstraint(
+            "training_session_id", "hand", "grip_type_id", "edge_mm",
+            name="uq_session_max_estimates_combo",
+        ),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    training_session_id: int = Field(foreign_key="training_sessions.id", index=True)
+    hand: str
+    grip_type_id: int = Field(foreign_key="grip_types.id")
+    edge_mm: int
+    # Stored in the owning user's unit_pref (ADR-0003).
+    weight: float
 
 
 class WorkSet(SQLModel, table=True):
