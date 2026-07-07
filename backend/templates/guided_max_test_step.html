@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Guided max test — GripTrack{% endblock %}
+{% block content %}
+<h2>Guided max test</h2>
+<p class="page-sub">{{ hand }} hand</p>
+<div class="card" data-kind="{{ kind }}" data-set="{{ set_number }}">
+  <p>{{ kind|capitalize }} set {{ set_number }} — {{ reps }} reps</p>
+  <p>Suggested: <span class="suggested-weight">{{ suggested }}</span> <span class="muted">{{ user.unit_pref }}</span></p>
+  {% if rest_hint %}
+  <p class="rest-hint">Rest 3–5 min before this set.</p>
+  {% endif %}
+  <form method="post" action="/max-tests/guided/step">
+    <input type="hidden" name="grip_type_id" value="{{ grip_type_id }}">
+    <input type="hidden" name="edge_mm" value="{{ edge_mm }}">
+    <input type="hidden" name="date" value="{{ date }}">
+    <input type="hidden" name="hand" value="{{ hand }}">
+    <input type="hidden" name="estimate" value="{{ estimate }}">
+    <input type="hidden" name="kind" value="{{ kind }}">
+    <input type="hidden" name="set_number" value="{{ set_number }}">
+    <label>Actual weight loaded ({{ user.unit_pref }})
+      <input type="number" name="actual" step="0.25" min="0.25" value="{{ suggested }}" required>
+    </label>
+    {% if needs_rating %}
+    <div class="rating-buttons">
+      <button type="submit" name="rating" value="effortless" class="rating">Effortless</button>
+      <button type="submit" name="rating" value="fairly_easy" class="rating">Fairly easy</button>
+      <button type="submit" name="rating" value="moderate" class="rating">Moderate</button>
+      <button type="submit" name="rating" value="hard" class="rating">Hard</button>
+      <button type="submit" name="rating" value="enough" class="rating rating-enough">That's enough</button>
+    </div>
+    {% else %}
+    <button type="submit">Continue</button>
+    {% endif %}
+  </form>
+</div>
+{% endblock %}

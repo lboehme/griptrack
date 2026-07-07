@@ -135,6 +135,36 @@ def test_absurd_numeric_inputs_are_rejected(client):
     )
     assert razor_blade.status_code == 422
 
+    huge_estimate = client.post(
+        "/max-tests/guided",
+        data={
+            "grip_type_id": grip_type_id(client, "half crimp"),
+            "edge_mm": "20",
+            "date": "2026-07-01",
+            "hand": "left",
+            "estimate": "1000001",
+        },
+        follow_redirects=False,
+    )
+    assert huge_estimate.status_code == 422
+
+    huge_actual = client.post(
+        "/max-tests/guided/step",
+        data={
+            "grip_type_id": grip_type_id(client, "half crimp"),
+            "edge_mm": "20",
+            "date": "2026-07-01",
+            "hand": "left",
+            "estimate": "40",
+            "kind": "warmup",
+            "set_number": "2",
+            "actual": "1000001",
+            "rating": "enough",
+        },
+        follow_redirects=False,
+    )
+    assert huge_actual.status_code == 422
+
 
 def test_bootstrap_token_gates_the_first_admin(monkeypatch, client_factory):
     monkeypatch.setenv("GRIPTRACK_BOOTSTRAP_TOKEN", "let-me-in")
