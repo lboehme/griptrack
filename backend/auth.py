@@ -116,12 +116,21 @@ def validate_password(password: str) -> None:
         raise RegistrationError("Password is too long.")
 
 
+def normalize_name(name: str | None) -> str | None:
+    """Trimmed display name; blank collapses to None (no name set)."""
+    if name is None:
+        return None
+    name = name.strip()
+    return name or None
+
+
 def register_user(
     session: Session,
     email: str,
     password: str,
     invite_code: str | None = None,
     unit_pref: str = "kg",
+    name: str | None = None,
 ) -> User:
     email = email.strip().lower()
     validate_password(password)
@@ -153,6 +162,7 @@ def register_user(
     user = User(
         email=email,
         hashed_password=hash_password(password),
+        name=normalize_name(name),
         is_admin=no_users_yet,
         unit_pref=unit_pref,
     )

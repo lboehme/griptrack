@@ -26,6 +26,16 @@
 </div>
 
 <div class="card">
+<h3>Display name</h3>
+<form method="post" action="/profile/name">
+  <label>How the app greets you
+    <input type="text" name="name" value="{{ user.name or "" }}" maxlength="60" placeholder="{{ user.email.split("@")[0] }}">
+  </label>
+  <button type="submit">Save</button>
+</form>
+</div>
+
+<div class="card">
 <h3>Hand order</h3>
 <form method="post" action="/profile">
   <label>How to work through both hands in a session

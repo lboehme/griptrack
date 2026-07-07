@@ -4,6 +4,7 @@ from sqlmodel import Session
 
 from backend import auth
 from backend.db import get_session
+from backend.limits import MAX_NAME_LENGTH
 from backend.models import User
 from backend.templating import templates
 
@@ -79,10 +80,13 @@ def register(
     password: str = Form(),
     invite_code: str | None = Form(default=None),
     unit_pref: str = Form(default="kg"),
+    name: str | None = Form(default=None, max_length=MAX_NAME_LENGTH),
     session: Session = Depends(get_session),
 ):
     try:
-        user = auth.register_user(session, email, password, invite_code, unit_pref)
+        user = auth.register_user(
+            session, email, password, invite_code, unit_pref, name
+        )
     except auth.RegistrationError as error:
         return HTMLResponse(str(error), status_code=400)
     request.session["user_id"] = user.id
