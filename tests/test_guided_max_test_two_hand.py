@@ -3,6 +3,7 @@ Builds on #21's single-hand ladder mechanics (tests/test_guided_max_test.py)
 without changing them — this only covers running two independent ladders
 within one routine, per the user's existing hand_order_pref."""
 
+import html
 import re
 
 from tests.helpers import current_maxes, grip_type_id, login, register, register_second_user
@@ -70,7 +71,12 @@ def hand_block(response, hand):
 
 
 def hidden_fields_for(response, hand):
-    return dict(HIDDEN_FIELD_RE.findall(hand_block(response, hand)))
+    # Unescape attribute values as a browser parsing the page would — the
+    # other hand's ladder-state token is JSON, so it arrives entity-escaped.
+    return {
+        name: html.unescape(value)
+        for name, value in HIDDEN_FIELD_RE.findall(hand_block(response, hand))
+    }
 
 
 def advance_hand(client, response, hand, actual, rating=None):
@@ -225,6 +231,31 @@ def advance_single(client, response, actual, rating=None):
 def single_suggested_weight(response):
     match = re.search(r'<span class="suggested-weight">([\d.]+)</span>', response.text)
     return match.group(1)
+
+
+def test_a_tampered_other_column_token_is_rejected(client):
+    register(client)
+    page = start_both(client, "42.5", "40")
+
+    data = hidden_fields_for(page, "left")
+    data["other_column"] = "not json at all"
+    data["actual"] = "21.25"
+    response = client.post("/max-tests/guided/step", data=data)
+
+    assert response.status_code == 400
+
+
+def test_an_absurd_weight_inside_the_other_column_token_is_rejected(client):
+    register(client)
+    page = start_both(client, "42.5", "40")
+
+    data = hidden_fields_for(page, "left")
+    # Re-encode the passive hand's state with a weight above the ceiling.
+    data["other_column"] = data["other_column"].replace("20.0", "1000001")
+    data["actual"] = "21.25"
+    response = client.post("/max-tests/guided/step", data=data)
+
+    assert response.status_code == 400
 
 
 def test_sequential_done_page_links_to_start_the_other_hand(client):

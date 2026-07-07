@@ -177,13 +177,13 @@ def test_absurd_numeric_inputs_are_rejected(client):
             "set_number": "2",
             "actual": "22",
             "rating": "enough",
-            "other_hand": "right",
-            "other_status": "done",
-            "other_weight": "1000001",
+            # The other hand's ladder-state token, with a weight past the
+            # ceiling — rejected by the module's decode validation.
+            "other_column": '{"hand": "right", "status": "done", "weight": 1000001}',
         },
         follow_redirects=False,
     )
-    assert huge_other_weight.status_code == 422
+    assert huge_other_weight.status_code == 400
 
     huge_both_estimate = client.post(
         "/max-tests/guided/both",
