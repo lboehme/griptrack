@@ -1,0 +1,19 @@
+#!/bin/sh
+# Deploy to fly.io and prove it came up: wake the machine, require a healthy
+# /health, and show the entrypoint's migration/backup log lines.
+set -e
+cd "$(dirname "$0")/.."
+
+fly deploy --app griptrack
+
+echo "--- waking machine + health check ---"
+code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 https://griptrack.fly.dev/health)
+echo "GET /health -> $code"
+[ "$code" = "200" ] || { echo "deploy verification FAILED: /health returned $code" >&2; exit 1; }
+curl -s --max-time 30 https://griptrack.fly.dev/health | grep -q "ok" \
+    || { echo "deploy verification FAILED: /health did not report ok" >&2; exit 1; }
+
+echo "--- entrypoint log (migration + backup) ---"
+fly logs --app griptrack --no-tail 2>/dev/null \
+    | grep -E "\[entrypoint\]|Running upgrade|ERROR" | tail -10 || true
+echo "deploy verified"

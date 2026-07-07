@@ -63,7 +63,13 @@ package):
 conda run -n griptrack fastapi dev backend/main.py
 ```
 
-Run tests with `conda run -n griptrack pytest` (68 tests, all at the HTTP seam).
+Run tests with `scripts/test` (wraps the conda env; pass pytest args through).
+The full dev loop lives in `scripts/`: `scripts/check-migrations` (the two CI
+migration gates, runnable locally), `scripts/new-migration "msg"` (autogenerate
+a revision against a temp DB at head — never hand-write revision files), and
+`scripts/deploy` (fly deploy + health check + migration-log verification).
+CI calls the same `scripts/test` / `scripts/check-migrations`, so local and CI
+behavior can't drift. All tests sit at the HTTP seam.
 
 ## Deployment & security
 

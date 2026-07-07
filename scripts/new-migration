@@ -1,0 +1,21 @@
+#!/bin/sh
+# Autogenerate an Alembic revision by diffing the models against a
+# throwaway DB migrated to head — no hand-written revision files.
+#   scripts/new-migration "add foo column"
+set -e
+[ -n "$1" ] || { echo "usage: scripts/new-migration \"message\"" >&2; exit 1; }
+cd "$(dirname "$0")/.."
+
+WORK=$(mktemp -d)
+trap 'rm -rf "$WORK"' EXIT
+export GRIPTRACK_DATABASE_URL="sqlite:///$WORK/autogen.db"
+
+if command -v conda >/dev/null 2>&1 && conda env list 2>/dev/null | grep -q "^griptrack "; then
+    run() { conda run --no-capture-output -n griptrack "$@"; }
+else
+    run() { "$@"; }
+fi
+
+run alembic upgrade head
+run alembic revision --autogenerate -m "$1"
+echo "review the generated file in migrations/versions/ (autogenerate is a draft, not gospel)"

@@ -23,20 +23,11 @@ jobs:
         run: pip install -r requirements.txt -r requirements-dev.txt
 
       # The suite builds its schema from SQLModel.metadata.create_all, so it
-      # does NOT exercise the Alembic migrations — the two gates below do.
+      # does NOT exercise the Alembic migrations — the migration gates do.
+      # Both steps run the same scripts used locally, so CI and dev can't drift.
       - name: Run tests
-        run: pytest
+        run: scripts/test
 
-      # Gate 1: every migration applies cleanly against a fresh SQLite DB
-      # (catches broken/half-written migrations before they hit the prod volume).
-      - name: Migrations apply from scratch
-        env:
-          GRIPTRACK_DATABASE_URL: sqlite:///./ci-migrations.db
-        run: alembic upgrade head
-
-      # Gate 2: models and migrations are in lockstep — fails if a model changed
-      # without a matching migration (the discipline CLAUDE.md calls for).
-      - name: Models & migrations in sync
-        env:
-          GRIPTRACK_DATABASE_URL: sqlite:///./ci-migrations.db
-        run: alembic check
+      # Gate 1 (upgrade from scratch) + gate 2 (models/migrations lockstep).
+      - name: Migration gates
+        run: scripts/check-migrations

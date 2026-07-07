@@ -1,0 +1,22 @@
+#!/bin/sh
+# Migration gates against a throwaway DB (the same two checks CI runs):
+#   1. every migration applies cleanly from scratch (alembic upgrade head)
+#   2. models and migrations are in lockstep (alembic check)
+set -e
+cd "$(dirname "$0")/.."
+
+WORK=$(mktemp -d)
+trap 'rm -rf "$WORK"' EXIT
+export GRIPTRACK_DATABASE_URL="sqlite:///$WORK/check.db"
+
+if command -v conda >/dev/null 2>&1 && conda env list 2>/dev/null | grep -q "^griptrack "; then
+    run() { conda run --no-capture-output -n griptrack "$@"; }
+else
+    run() { "$@"; }
+fi
+
+echo "gate 1: migrations apply from scratch"
+run alembic upgrade head
+echo "gate 2: models & migrations in sync"
+run alembic check
+echo "migrations OK"
