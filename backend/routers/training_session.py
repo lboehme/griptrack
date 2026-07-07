@@ -98,6 +98,26 @@ def delete_work_set(
     return combo_redirect("worksets", grip_type_id, edge_mm, date, hand)
 
 
+@router.post("/session/estimate")
+def save_session_estimate(
+    request: Request,
+    grip_type_id: int = Form(),
+    edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
+    date: date_type = Form(),
+    hand: str = Form(),
+    weight: float = Form(gt=0, le=MAX_WEIGHT),
+    user: User = Depends(auth.current_user),
+    session: Session = Depends(get_session),
+):
+    training_session = training_log.start_or_get_session(session, user, date)
+    training_log.record_session_estimate(
+        session, training_session, hand, grip_type_id, edge_mm, weight
+    )
+    if request.headers.get("HX-Request"):
+        return Response(status_code=204)
+    return combo_redirect("warmup", grip_type_id, edge_mm, date, hand)
+
+
 @router.post("/session/check")
 def check_warmup_step(
     request: Request,

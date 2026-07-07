@@ -40,7 +40,7 @@ def dashboard_page(
     session: Session = Depends(get_session),
 ):
     combos = []
-    for combo in training_log.tested_combinations(session, user):
+    for combo in training_log.trained_combinations(session, user):
         trend = analytics.training_volume_trend(
             session, user, combo["hand"], combo["grip_type_id"], combo["edge_mm"]
         )

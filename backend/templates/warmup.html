@@ -10,23 +10,35 @@
 <div class="notice">
   No max-weight test yet for your
   <strong>{{ untested_hands|join(" and ") }}</strong> hand on this grip/edge.
-  Run a <a href="/max-tests">max test</a> first so warmup weights can be
-  computed.
+  Run a <a href="/max-tests">max test</a> — or enter an estimated max below
+  to warm up with for this session only.
 </div>
-{% else %}
+{% for hand in untested_hands %}
+<div class="card">
+  <form method="post" action="/session/estimate" class="estimate-form" data-hand="{{ hand }}">
+    {% include "_combo_fields.html" %}
+    <label class="mini">Estimated max for this session — {{ hand }} hand ({{ user.unit_pref }})
+      <input type="number" name="weight" step="0.25" min="0.25" required>
+    </label>
+    <button type="submit">Use estimate</button>
+  </form>
+</div>
+{% endfor %}
+{% endif %}
+{% if planned_hands %}
 <div class="card">
 <table class="ramp-table">
   <thead>
     <tr>
       <th>Step</th>
-      {% for hand in hands %}<th>{{ hand[0]|upper }}</th>{% endfor %}
+      {% for hand in planned_hands %}<th>{{ hand[0]|upper }}</th>{% endfor %}
     </tr>
   </thead>
   <tbody>
     {% for step in steps %}
     <tr>
       <td>{{ step.percent }}%</td>
-      {% for hand in hands %}
+      {% for hand in planned_hands %}
       <td>
         <div class="ramp-cell">
         <span><span class="ramp-weight" data-hand="{{ hand }}" data-step="{{ step.index }}">{{ plans[hand][step.index]["weight"] }}</span> <span class="ramp-unit">{{ user.unit_pref }}</span></span>

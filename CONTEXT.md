@@ -26,8 +26,9 @@ A dated record of the heaviest weight a user pulled for one specific
 protocol (not inferred from WorkSets). Expected to be rare in practice
 (mainly run when switching grip/edge) — see CurrentMax for the number
 actually used day-to-day. Logging a TrainingSession for a combination with
-no prior MaxWeightTest requires running a test first. Never edited in
-place; a new test simply supersedes the old one as input to CurrentMax.
+no prior MaxWeightTest prompts for a test first (or a SessionMaxEstimate as
+a per-session stand-in). Never edited in place; a new test simply
+supersedes the old one as input to CurrentMax.
 _Avoid_: Max weight (as a mutable profile field), 1RM
 
 **CurrentMax**:
@@ -38,6 +39,17 @@ real max increased, without waiting for a retest. This is the number
 actually used for ramp/warmup % suggestions, the %bodyweight-vs-grade
 correlation, and any "current max" display.
 _Avoid_: Max (bare), 1RM
+
+**SessionMaxEstimate**:
+An ephemeral, per-TrainingSession stand-in for CurrentMax, entered by the
+user on the warmup page when a (hand, grip_type, edge_mm) combination has
+no MaxWeightTest yet. Feeds that session's ramp suggestions and work-set
+prefills only. Never a MaxWeightTest, never an input to CurrentMax, and
+never feeds the %bodyweight-vs-grade correlation — a combo trained only
+under an estimate stays excluded from that analysis exactly like an
+untested one. Scoped to one TrainingSession: a new session for a
+still-untested combo prompts again from scratch.
+_Avoid_: Estimated max (as a stored strength record), target weight
 
 **GripType**:
 A named hand position used for a WorkSet or MaxWeightTest (e.g. half_crimp,

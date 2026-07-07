@@ -114,6 +114,22 @@ class WarmupStepCheck(SQLModel, table=True):
     step_index: int
 
 
+class SessionMaxEstimate(SQLModel, table=True):
+    """An ephemeral, per-session stand-in for CurrentMax for a combo with no
+    MaxWeightTest yet (see CONTEXT.md: SessionMaxEstimate). Scoped to one
+    TrainingSession — never reused across sessions, never an analytics input."""
+
+    __tablename__ = "session_max_estimates"
+
+    id: int | None = Field(default=None, primary_key=True)
+    training_session_id: int = Field(foreign_key="training_sessions.id", index=True)
+    hand: str
+    grip_type_id: int = Field(foreign_key="grip_types.id")
+    edge_mm: int
+    # Stored in the owning user's unit_pref (ADR-0003).
+    weight: float
+
+
 class WorkSet(SQLModel, table=True):
     __tablename__ = "work_sets"
 
