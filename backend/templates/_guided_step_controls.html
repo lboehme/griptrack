@@ -1,0 +1,16 @@
+{# The actual-weight input + rating/continue controls one guided-test form
+   shows — expects `suggested` and `needs_rating` in context. #}
+<label>Actual weight loaded ({{ user.unit_pref }})
+  <input type="number" name="actual" step="0.25" min="0.25" value="{{ suggested }}" required>
+</label>
+{% if needs_rating %}
+<div class="rating-buttons">
+  <button type="submit" name="rating" value="effortless" class="rating">Effortless</button>
+  <button type="submit" name="rating" value="fairly_easy" class="rating">Fairly easy</button>
+  <button type="submit" name="rating" value="moderate" class="rating">Moderate</button>
+  <button type="submit" name="rating" value="hard" class="rating">Hard</button>
+  <button type="submit" name="rating" value="enough" class="rating rating-enough">That's enough</button>
+</div>
+{% else %}
+<button type="submit">Continue</button>
+{% endif %}

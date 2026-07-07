@@ -24,33 +24,10 @@
     <input type="hidden" name="estimate" value="{{ column.estimate }}">
     <input type="hidden" name="kind" value="{{ column.kind }}">
     <input type="hidden" name="set_number" value="{{ column.set_number }}">
-    <input type="hidden" name="other_hand" value="{{ other.hand }}">
-    <input type="hidden" name="other_status" value="{{ other.status }}">
-    {% if other.status == "active" %}
-    <input type="hidden" name="other_kind" value="{{ other.kind }}">
-    <input type="hidden" name="other_set_number" value="{{ other.set_number }}">
-    <input type="hidden" name="other_reps" value="{{ other.reps }}">
-    <input type="hidden" name="other_suggested" value="{{ other.suggested }}">
-    <input type="hidden" name="other_needs_rating" value="{{ other.needs_rating }}">
-    <input type="hidden" name="other_rest_hint" value="{{ other.rest_hint }}">
-    <input type="hidden" name="other_estimate" value="{{ other.estimate }}">
-    {% else %}
-    <input type="hidden" name="other_weight" value="{{ other.weight }}">
-    {% endif %}
-    <label>Actual weight loaded ({{ user.unit_pref }})
-      <input type="number" name="actual" step="0.25" min="0.25" value="{{ column.suggested }}" required>
-    </label>
-    {% if column.needs_rating %}
-    <div class="rating-buttons">
-      <button type="submit" name="rating" value="effortless" class="rating">Effortless</button>
-      <button type="submit" name="rating" value="fairly_easy" class="rating">Fairly easy</button>
-      <button type="submit" name="rating" value="moderate" class="rating">Moderate</button>
-      <button type="submit" name="rating" value="hard" class="rating">Hard</button>
-      <button type="submit" name="rating" value="enough" class="rating rating-enough">That's enough</button>
-    </div>
-    {% else %}
-    <button type="submit">Continue</button>
-    {% endif %}
+    <input type="hidden" name="other_column" value="{{ other.token }}">
+    {% with suggested = column.suggested, needs_rating = column.needs_rating %}
+    {% include "_guided_step_controls.html" %}
+    {% endwith %}
   </form>
   {% endif %}
 </div>

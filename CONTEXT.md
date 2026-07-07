@@ -47,9 +47,13 @@ plain-text "rest 3-5 min" hint on the following set (no timer). Tapping
 MaxWeightTest; abandoning the routine at any point writes nothing, because
 all running state (current actual weight, next suggestion) is threaded
 across requests via the page itself and never persisted until that one
-terminal action. Entirely independent of SessionMaxEstimate: the up-front
-estimated max here is a transient, one-shot seed for this routine only,
-sharing no storage or code path with it.
+terminal action. In the two-hand alternating flow, the passive hand's
+running state travels as a single opaque ladder-state token (one hidden
+field, encoded/decoded and re-validated only by the guided-max-test
+module — never as loose per-field form params). Entirely independent of
+SessionMaxEstimate: the up-front estimated max here is a transient,
+one-shot seed for this routine only, sharing no storage or code path
+with it.
 _Avoid_: Max test wizard, 1RM calculator
 
 **CurrentMax**:
