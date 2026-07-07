@@ -19,6 +19,15 @@ def default_estimate_value(page_text):
     return match.group(1)
 
 
+def register_sequential(client, **kwargs):
+    """Register and switch to sequential hand order — for tests that assert
+    on the single-hand GET start-form shape, which alternating (#22) now
+    renders differently (two estimate fields, not one)."""
+    response = register(client, **kwargs)
+    client.post("/profile", data={"hand_order_pref": "sequential"})
+    return response
+
+
 HIDDEN_FIELD_RE = re.compile(r'<input type="hidden" name="(\w+)" value="([^"]*)">')
 
 
@@ -91,7 +100,7 @@ def test_starting_the_routine_renders_warmup_set_one_at_half_the_estimate(client
 
 
 def test_start_form_prefills_estimate_from_bodyweight_when_logged(client):
-    register(client)
+    register_sequential(client)
     log_bodyweight(client, "2026-07-01", "80")
 
     page = guided_test_form(client).text
@@ -101,7 +110,7 @@ def test_start_form_prefills_estimate_from_bodyweight_when_logged(client):
 
 
 def test_start_form_falls_back_to_a_flat_estimate_with_no_bodyweight_on_file(client):
-    register(client)
+    register_sequential(client)
 
     page = guided_test_form(client).text
 
@@ -110,7 +119,7 @@ def test_start_form_falls_back_to_a_flat_estimate_with_no_bodyweight_on_file(cli
 
 
 def test_start_form_falls_back_to_the_lbs_flat_estimate_for_lbs_users(client):
-    register(client, unit_pref="lbs")
+    register_sequential(client, unit_pref="lbs")
 
     page = guided_test_form(client).text
 
@@ -264,7 +273,7 @@ def test_guided_routine_writes_nothing_to_session_max_estimate(client):
 
 
 def test_guided_default_estimate_ignores_any_existing_session_max_estimate(client):
-    register(client)
+    register_sequential(client)
     client.post(
         "/session/estimate",
         data={

@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Guided max test — GripTrack{% endblock %}
+{% block content %}
+<h2>Guided max test</h2>
+<p class="page-sub">Both hands, alternating</p>
+<div class="columns">
+{% for column in columns %}
+{% set other = columns[1] if loop.index0 == 0 else columns[0] %}
+<div class="card" data-hand="{{ column.hand }}"{% if column.status == "active" %} data-kind="{{ column.kind }}" data-set="{{ column.set_number }}"{% endif %}>
+  <h3>{{ column.hand|capitalize }} hand</h3>
+  {% if column.status == "done" %}
+  <p class="notice">Recorded: <strong>{{ column.weight }}</strong> {{ user.unit_pref }}</p>
+  {% else %}
+  <p>{{ column.kind|capitalize }} set {{ column.set_number }} — {{ column.reps }} reps</p>
+  <p>Suggested: <span class="suggested-weight" data-hand="{{ column.hand }}">{{ column.suggested }}</span> <span class="muted">{{ user.unit_pref }}</span></p>
+  {% if column.rest_hint %}
+  <p class="rest-hint">Rest 3–5 min before this set.</p>
+  {% endif %}
+  <form method="post" action="/max-tests/guided/step">
+    <input type="hidden" name="grip_type_id" value="{{ grip_type_id }}">
+    <input type="hidden" name="edge_mm" value="{{ edge_mm }}">
+    <input type="hidden" name="date" value="{{ date }}">
+    <input type="hidden" name="hand" value="{{ column.hand }}">
+    <input type="hidden" name="estimate" value="{{ column.estimate }}">
+    <input type="hidden" name="kind" value="{{ column.kind }}">
+    <input type="hidden" name="set_number" value="{{ column.set_number }}">
+    <input type="hidden" name="other_hand" value="{{ other.hand }}">
+    <input type="hidden" name="other_status" value="{{ other.status }}">
+    {% if other.status == "active" %}
+    <input type="hidden" name="other_kind" value="{{ other.kind }}">
+    <input type="hidden" name="other_set_number" value="{{ other.set_number }}">
+    <input type="hidden" name="other_reps" value="{{ other.reps }}">
+    <input type="hidden" name="other_suggested" value="{{ other.suggested }}">
+    <input type="hidden" name="other_needs_rating" value="{{ other.needs_rating }}">
+    <input type="hidden" name="other_rest_hint" value="{{ other.rest_hint }}">
+    <input type="hidden" name="other_estimate" value="{{ other.estimate }}">
+    {% else %}
+    <input type="hidden" name="other_weight" value="{{ other.weight }}">
+    {% endif %}
+    <label>Actual weight loaded ({{ user.unit_pref }})
+      <input type="number" name="actual" step="0.25" min="0.25" value="{{ column.suggested }}" required>
+    </label>
+    {% if column.needs_rating %}
+    <div class="rating-buttons">
+      <button type="submit" name="rating" value="effortless" class="rating">Effortless</button>
+      <button type="submit" name="rating" value="fairly_easy" class="rating">Fairly easy</button>
+      <button type="submit" name="rating" value="moderate" class="rating">Moderate</button>
+      <button type="submit" name="rating" value="hard" class="rating">Hard</button>
+      <button type="submit" name="rating" value="enough" class="rating rating-enough">That's enough</button>
+    </div>
+    {% else %}
+    <button type="submit">Continue</button>
+    {% endif %}
+  </form>
+  {% endif %}
+</div>
+{% endfor %}
+</div>
+{% endblock %}

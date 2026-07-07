@@ -165,6 +165,39 @@ def test_absurd_numeric_inputs_are_rejected(client):
     )
     assert huge_actual.status_code == 422
 
+    huge_other_weight = client.post(
+        "/max-tests/guided/step",
+        data={
+            "grip_type_id": grip_type_id(client, "half crimp"),
+            "edge_mm": "20",
+            "date": "2026-07-01",
+            "hand": "left",
+            "estimate": "40",
+            "kind": "warmup",
+            "set_number": "2",
+            "actual": "22",
+            "rating": "enough",
+            "other_hand": "right",
+            "other_status": "done",
+            "other_weight": "1000001",
+        },
+        follow_redirects=False,
+    )
+    assert huge_other_weight.status_code == 422
+
+    huge_both_estimate = client.post(
+        "/max-tests/guided/both",
+        data={
+            "grip_type_id": grip_type_id(client, "half crimp"),
+            "edge_mm": "20",
+            "date": "2026-07-01",
+            "left_estimate": "1000001",
+            "right_estimate": "40",
+        },
+        follow_redirects=False,
+    )
+    assert huge_both_estimate.status_code == 422
+
 
 def test_bootstrap_token_gates_the_first_admin(monkeypatch, client_factory):
     monkeypatch.setenv("GRIPTRACK_BOOTSTRAP_TOKEN", "let-me-in")

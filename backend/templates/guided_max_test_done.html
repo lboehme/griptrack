@@ -5,5 +5,8 @@
 <div class="card notice">
   <p>Max test recorded for your {{ hand }} hand: <strong>{{ weight }}</strong> {{ user.unit_pref }}.</p>
   <a class="btn" href="/max-tests">Back to max tests</a>
+  {% if other_hand %}
+  <a class="btn btn-secondary" href="/max-tests/guided?grip_type_id={{ grip_type_id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}&amp;hand={{ other_hand }}">Test {{ other_hand }} hand</a>
+  {% endif %}
 </div>
 {% endblock %}
