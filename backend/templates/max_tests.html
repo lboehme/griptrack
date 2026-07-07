@@ -27,6 +27,32 @@
 </div>
 {% endif %}
 <div class="card">
+<h3>Run guided test</h3>
+<p class="page-sub">A guided warmup and effort-rated ladder that walks you to a real max.</p>
+<form method="get" action="/max-tests/guided">
+  <div class="form-row">
+    <label>Hand
+      <select name="hand">
+        <option value="left">left</option>
+        <option value="right">right</option>
+      </select>
+    </label>
+    <label>Grip type
+      <select name="grip_type_id">
+        {% for grip in grip_types %}
+        <option value="{{ grip.id }}">{{ grip.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+  <div class="form-row">
+    <label>Edge (mm) <input type="number" name="edge_mm" step="1" min="1" required></label>
+    <label>Date <input type="date" name="date" value="{{ today }}" required></label>
+  </div>
+  <button type="submit">Run guided test</button>
+</form>
+</div>
+<div class="card">
 <h3>Log a max test</h3>
 <form method="post" action="/max-tests">
   <div class="form-row">

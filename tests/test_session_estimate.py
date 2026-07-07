@@ -66,8 +66,13 @@ def test_fully_untested_combo_shows_an_estimate_form_per_hand_and_no_ramp(client
     assert page.status_code == 200
     assert estimate_form_hands(page.text) == {"left", "right"}
     assert 'class="ramp-weight"' not in page.text
-    # The "run a max test" guidance stays visible alongside the forms.
-    assert 'href="/max-tests"' in page.text
+    # The guided-test link is pre-filled per hand with this page's context.
+    grip_id = grip_type_id(client, "half crimp")
+    for hand in ("left", "right"):
+        assert (
+            f'href="/max-tests/guided?grip_type_id={grip_id}&amp;edge_mm=20'
+            f'&amp;date=2026-07-04&amp;hand={hand}"' in page.text
+        )
 
 
 def test_submitted_estimate_drives_that_hands_ramp_through_plate_rounding(client):

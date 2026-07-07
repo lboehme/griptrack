@@ -196,8 +196,12 @@ def test_one_untested_hand_still_renders_the_tested_hands_ramp(client):
     page = warmup_page(client)
 
     assert page.status_code == 200
-    # The untested hand is prompted (max test or a session estimate) ...
-    assert 'href="/max-tests"' in page.text
+    # The untested hand is prompted (guided test or a session estimate) ...
+    grip_id = grip_type_id(client, "half crimp")
+    assert (
+        f'href="/max-tests/guided?grip_type_id={grip_id}&amp;edge_mm=20'
+        f'&amp;date=2026-07-04&amp;hand=right"' in page.text
+    )
     assert 'class="estimate-form" data-hand="right"' in page.text
     # ... while the tested hand's ramp renders normally, not blanked.
     assert {hand for hand, step in ramp_weights(page.text)} == {"left"}
