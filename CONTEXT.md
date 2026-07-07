@@ -31,6 +31,27 @@ a per-session stand-in). Never edited in place; a new test simply
 supersedes the old one as input to CurrentMax.
 _Avoid_: Max weight (as a mutable profile field), 1RM
 
+**Guided max test**:
+The "deliberate testing protocol" that produces a MaxWeightTest (issue
+#21/#14): a stateless, single-hand routine, run per (hand, grip_type,
+edge_mm). The user enters a rough estimated max, then does a warmup of 2
+sets x 8 reps, both fixed at 50% of that estimate (never chained off each
+other). Every set from warmup set 2 onward is rated for effort
+(Effortless/Fairly easy/Moderate/Hard/That's enough); a rating drives the
+next suggested weight via a per-unit effort-increment ladder (kg:
++10/+5/+2/+1; lbs: +20/+10/+5/+2.5 — mirroring ADR-0003's native-unit
+precedent, never a raw conversion) applied to the just-confirmed actual
+weight, never the suggestion shown. A Moderate/Hard rating shows a
+plain-text "rest 3-5 min" hint on the following set (no timer). Tapping
+"That's enough" writes that final set's actual weight as the hand's
+MaxWeightTest; abandoning the routine at any point writes nothing, because
+all running state (current actual weight, next suggestion) is threaded
+across requests via the page itself and never persisted until that one
+terminal action. Entirely independent of SessionMaxEstimate: the up-front
+estimated max here is a transient, one-shot seed for this routine only,
+sharing no storage or code path with it.
+_Avoid_: Max test wizard, 1RM calculator
+
 **CurrentMax**:
 For a given (hand, grip_type, edge_mm), the heavier of (a) the most recent
 MaxWeightTest, or (b) the heaviest single WorkSet weight logged since that
