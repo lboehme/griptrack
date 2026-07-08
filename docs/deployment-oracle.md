@@ -59,6 +59,33 @@ Caddy needs a domain to get a certificate for — an IP alone won't do. Either:
 Oracle's public IP survives instance reboots (it's only released if you
 terminate the instance), so this is genuinely one-time.
 
+## 2b. Create the backup bucket (one time, strongly recommended)
+
+The container runs Litestream for continuous off-box backup (see the
+"Backups" section of `docs/deployment.md`). Oracle Object Storage's
+always-free 20 GB is plenty. In the console:
+
+1. **Object Storage → Buckets → Create bucket** — name it e.g.
+   `griptrack-backup`, leave it private (default). Note your **namespace**
+   (shown on the bucket page, or Tenancy details).
+2. **Your user icon → My profile → Customer secret keys → Generate key** —
+   this is OCI's name for S3-compatible credentials. Save the access key
+   and the secret (the secret is shown once).
+3. Fill the backup block in `/opt/griptrack/.env` (setup-server writes the
+   placeholders):
+
+   ```sh
+   GRIPTRACK_REPLICA_BUCKET=griptrack-backup
+   GRIPTRACK_REPLICA_ENDPOINT=https://<namespace>.compat.objectstorage.<region>.oraclecloud.com
+   GRIPTRACK_REPLICA_REGION=<region>            # e.g. eu-frankfurt-1
+   LITESTREAM_ACCESS_KEY_ID=<access key>
+   LITESTREAM_SECRET_ACCESS_KEY=<secret>
+   ```
+
+The next deploy picks it up; `docker compose logs app` should show
+"Serving under Litestream replication." Run the restore drill from
+`docs/deployment.md` once to prove the backup is real.
+
 ## 3. Prepare the server (one time)
 
 ```sh
@@ -80,9 +107,17 @@ effect.
 
 ### Migrating existing data from Fly (optional, before first deploy)
 
-To move an existing dataset instead of starting fresh, copy the SQLite file
-across **before** the first `oracle-deploy` (or with the app stopped —
-never copy under a running writer; see the backup notes in
+**Preferred path — through the backup bucket.** Enable Litestream on the
+Fly deployment first (`fly secrets set GRIPTRACK_REPLICA_BUCKET=...` etc.,
+same five values as section 2b) and let it replicate. Then put the same
+five values in `/opt/griptrack/.env` on the VM. On the first
+`oracle-deploy`, the entrypoint finds an empty volume and **auto-restores
+the database from the replica** before starting. Once you've verified the
+Oracle side, scale the Fly app to zero — two live writers replicating into
+one bucket path is the situation to avoid, not a merge.
+
+**Alternative — copy the file directly**, with the Fly app not running
+(never copy under a live writer; see the backup notes in
 `docs/deployment.md`):
 
 ```sh
@@ -92,8 +127,8 @@ ssh ubuntu@<vm-ip> sudo mv /tmp/griptrack.db /opt/griptrack/data/griptrack.db
 rm ./griptrack.db  # don't leave a production DB on your laptop
 ```
 
-The entrypoint will detect the schema is already at head and skip migration.
-With existing users, also blank `GRIPTRACK_BOOTSTRAP_TOKEN` in
+Either way the entrypoint detects the schema is already at head and skips
+migration. With existing users, also blank `GRIPTRACK_BOOTSTRAP_TOKEN` in
 `/opt/griptrack/.env` — the first-registration window it guards doesn't
 exist anymore.
 
