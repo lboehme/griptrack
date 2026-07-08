@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+"""Generate the PWA icon set: a hangboard-edge glyph (a bar with four
+gripping fingers) in white on the brand-orange field, at every size the
+manifest and iOS need. Output is committed to backend/static/icons/ — this
+script is a one-off build tool, not something the running app calls, so
+Pillow (its only special dependency) stays out of requirements.txt and
+lives in requirements-dev.txt instead.
+
+Re-run after any brand-color or glyph change:
+    conda run -n griptrack python scripts/generate-icons
+"""
+
+from pathlib import Path
+
+from PIL import Image, ImageDraw
+
+BRAND_ORANGE = (232, 83, 44)
+WHITE = (255, 255, 255)
+
+OUT_DIR = Path(__file__).parent.parent / "backend" / "static" / "icons"
+
+# (filename, canvas size, glyph width/height as a fraction of canvas size).
+# The maskable icon uses a smaller glyph so it survives Android's
+# adaptive-icon mask, which can crop down to a circle inscribed in the
+# canvas (a safe zone of roughly the inner 66-80% diameter). The chosen
+# fractions keep the glyph's bounding-box diagonal within ~63% of the
+# canvas diameter, comfortably inside even the tighter 66% safe zone.
+ICON_SPECS = [
+    ("icon-192.png", 192, (0.72, 0.40)),
+    ("icon-512.png", 512, (0.72, 0.40)),
+    ("icon-512-maskable.png", 512, (0.55, 0.30)),
+    ("apple-touch-icon.png", 180, (0.72, 0.40)),
+]
+
+
+def draw_glyph(draw: ImageDraw.ImageDraw, cx: float, cy: float, w: float, h: float) -> None:
+    """A hangboard edge (thick bar) with four fingers curling under it."""
+    bar_h = h * 0.32
+    bar_top = cy - h * 0.5
+    bar_bottom = bar_top + bar_h
+    bar_left = cx - w * 0.5
+    bar_right = cx + w * 0.5
+    bar_radius = bar_h * 0.35
+
+    finger_count = 4
+    finger_w = w / (finger_count * 2.2)
+    finger_gap = (w - finger_count * finger_w) / (finger_count + 1)
+    finger_top = bar_top + bar_h * 0.55
+    finger_bottom = cy + h * 0.5
+    finger_radius = finger_w * 0.5
+
+    x = bar_left + finger_gap
+    for _ in range(finger_count):
+        draw.rounded_rectangle(
+            [x, finger_top, x + finger_w, finger_bottom],
+            radius=finger_radius,
+            fill=WHITE,
+        )
+        x += finger_w + finger_gap
+
+    draw.rounded_rectangle(
+        [bar_left, bar_top, bar_right, bar_bottom],
+        radius=bar_radius,
+        fill=WHITE,
+    )
+
+
+def make_icon(size: int, glyph_fraction: tuple[float, float]) -> Image.Image:
+    image = Image.new("RGB", (size, size), BRAND_ORANGE)
+    draw = ImageDraw.Draw(image)
+    w_frac, h_frac = glyph_fraction
+    draw_glyph(draw, size / 2, size / 2, size * w_frac, size * h_frac)
+    return image
+
+
+def main() -> None:
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    for filename, size, glyph_fraction in ICON_SPECS:
+        image = make_icon(size, glyph_fraction)
+        path = OUT_DIR / filename
+        image.save(path)
+        print(f"wrote {path} ({size}x{size})")
+
+
+if __name__ == "__main__":
+    main()
