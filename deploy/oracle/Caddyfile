@@ -1,0 +1,9 @@
+# TLS terminator in front of the app container. Caddy obtains and renews
+# the Let's Encrypt certificate for GRIPTRACK_DOMAIN automatically, redirects
+# HTTP -> HTTPS, and sets X-Forwarded-Proto/For — which uvicorn trusts
+# (--proxy-headers in docker-entrypoint.sh), so Secure session cookies and
+# per-IP login rate limiting see the real scheme and client address.
+{$GRIPTRACK_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:8000
+}

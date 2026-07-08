@@ -6,6 +6,10 @@ process) with a mounted volume works — Fly.io, Railway, Render, a small VPS.
 Avoid pure-serverless/edge hosts: SQLite needs a real persistent filesystem,
 not ephemeral or read-only storage.
 
+Host-specific walkthroughs: Fly.io is the current production host
+(`fly.toml` + `scripts/deploy`); for Oracle Cloud Always Free Tier see
+`docs/deployment-oracle.md` (`deploy/oracle/` + `scripts/oracle-deploy`).
+
 ## What the container does
 
 `Dockerfile` + `docker-entrypoint.sh` build a Python 3.12 image that, on every
