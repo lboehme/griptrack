@@ -1,0 +1,78 @@
+#!/bin/sh
+# One-time setup of an Oracle Always Free Tier VM (Ubuntu) for GripTrack.
+# Run ON the VM, as root:
+#   scp deploy/oracle/setup-server ubuntu@<vm-ip>:
+#   ssh ubuntu@<vm-ip> sudo ./setup-server griptrack.example.com
+#
+# Installs Docker + Compose, opens ports 80/443 in the instance firewall
+# (Oracle's Ubuntu images ship an iptables ruleset that rejects everything
+# but SSH — the cloud-console security list alone is NOT enough), creates
+# /opt/griptrack/{src,data}, and writes /opt/griptrack/.env with generated
+# secrets. Idempotent: an existing .env is never overwritten.
+set -e
+
+DOMAIN="$1"
+[ -n "$DOMAIN" ] || { echo "usage: sudo ./setup-server <domain>" >&2; exit 1; }
+[ "$(id -u)" = "0" ] || { echo "run with sudo (needs apt, iptables, /opt)" >&2; exit 1; }
+
+echo "--- installing Docker + Compose ---"
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -q
+apt-get install -yq docker.io docker-compose-v2
+systemctl enable --now docker
+# Let the default login user run docker without sudo (takes effect on the
+# next SSH login — scripts/oracle-deploy relies on this).
+login_user="${SUDO_USER:-ubuntu}"
+usermod -aG docker "$login_user"
+
+echo "--- opening ports 80/443 in the instance firewall ---"
+# Oracle Ubuntu images end the INPUT chain with a REJECT rule; new ACCEPTs
+# must be inserted before it, hence -I at the REJECT's position rather
+# than -A. (The VCN security list must allow 80/443 too — console step.)
+reject_pos=$(iptables -L INPUT --line-numbers -n | awk '/REJECT/ {print $1; exit}')
+for rule in "-p tcp --dport 80" "-p tcp --dport 443" "-p udp --dport 443"; do
+    # shellcheck disable=SC2086  # $rule is deliberately word-split
+    if ! iptables -C INPUT $rule -j ACCEPT 2>/dev/null; then
+        iptables -I INPUT "${reject_pos:-1}" $rule -j ACCEPT
+    fi
+done
+if command -v netfilter-persistent >/dev/null 2>&1; then
+    netfilter-persistent save
+else
+    echo "WARNING: netfilter-persistent not found; firewall rules won't survive a reboot" >&2
+fi
+
+echo "--- creating /opt/griptrack ---"
+mkdir -p /opt/griptrack/src /opt/griptrack/data
+
+if [ -f /opt/griptrack/.env ]; then
+    echo "--- /opt/griptrack/.env already exists; leaving it untouched ---"
+else
+    echo "--- writing /opt/griptrack/.env with generated secrets ---"
+    session_secret=$(python3 -c "import secrets; print(secrets.token_urlsafe(48))")
+    bootstrap_token=$(python3 -c "import secrets; print(secrets.token_urlsafe(16))")
+    cat > /opt/griptrack/.env <<EOF
+# GripTrack production config — see .env.example in the repo for what each
+# value does. GRIPTRACK_DOMAIN additionally drives Caddy's TLS certificate.
+GRIPTRACK_ENV=production
+GRIPTRACK_SESSION_SECRET=${session_secret}
+GRIPTRACK_DATABASE_URL=sqlite:////data/griptrack.db
+GRIPTRACK_BOOTSTRAP_TOKEN=${bootstrap_token}
+GRIPTRACK_DOMAIN=${DOMAIN}
+EOF
+    chmod 600 /opt/griptrack/.env
+    echo
+    echo "First-registration invite code (GRIPTRACK_BOOTSTRAP_TOKEN):"
+    echo
+    echo "    ${bootstrap_token}"
+    echo
+    echo "Register with it at https://${DOMAIN}/register to claim the admin"
+    echo "account, then blank the token in /opt/griptrack/.env and re-run"
+    echo "scripts/oracle-deploy."
+fi
+
+echo
+echo "Server ready. Next, from your machine:"
+echo "  1. reconnect SSH once (docker group membership) if this was the first run"
+echo "  2. point ${DOMAIN}'s A record at this VM's public IP"
+echo "  3. scripts/oracle-deploy ${login_user}@<vm-ip>"
