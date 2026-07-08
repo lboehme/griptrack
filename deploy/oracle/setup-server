@@ -79,6 +79,15 @@ EOF
     echo "scripts/oracle-deploy."
 fi
 
+# scripts/oracle-deploy runs over SSH as the login user, not root: it
+# recreates /opt/griptrack/src, reads the .env (docker compose --env-file
+# and the domain lookup), so both must be owned by that user. Keeping .env
+# at 600 still shuts out every other account; the login user is in the
+# docker group and therefore root-equivalent anyway, so this grants nothing
+# it doesn't already have. Runs on every invocation so a rerun also repairs
+# ownership from an older setup.
+chown "$login_user" /opt/griptrack /opt/griptrack/src /opt/griptrack/.env
+
 echo
 echo "Server ready. Next, from your machine:"
 echo "  1. reconnect SSH once (docker group membership) if this was the first run"

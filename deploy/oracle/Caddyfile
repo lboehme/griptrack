@@ -5,5 +5,9 @@
 # per-IP login rate limiting see the real scheme and client address.
 {$GRIPTRACK_DOMAIN} {
 	encode zstd gzip
+	# The app's security-header middleware covers CSP/XFO/nosniff/Referrer
+	# but not HSTS — that belongs to whoever terminates TLS, i.e. here.
+	# One year, no includeSubDomains: the DuckDNS parent isn't ours to pin.
+	header Strict-Transport-Security "max-age=31536000"
 	reverse_proxy app:8000
 }
