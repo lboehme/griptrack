@@ -16,6 +16,13 @@ services:
       # Empty is valid: set it for the first deploy, blank it after the
       # admin account exists (see docs/deployment.md).
       GRIPTRACK_BOOTSTRAP_TOKEN: ${GRIPTRACK_BOOTSTRAP_TOKEN:-}
+      # Litestream off-box backup — all empty means replication is off
+      # (see docs/deployment.md and .env.example).
+      GRIPTRACK_REPLICA_BUCKET: ${GRIPTRACK_REPLICA_BUCKET:-}
+      GRIPTRACK_REPLICA_ENDPOINT: ${GRIPTRACK_REPLICA_ENDPOINT:-}
+      GRIPTRACK_REPLICA_REGION: ${GRIPTRACK_REPLICA_REGION:-}
+      LITESTREAM_ACCESS_KEY_ID: ${LITESTREAM_ACCESS_KEY_ID:-}
+      LITESTREAM_SECRET_ACCESS_KEY: ${LITESTREAM_SECRET_ACCESS_KEY:-}
     volumes:
       # The whole dataset is this one directory (SQLite file + pre-migration
       # backups). A bind mount, not a named volume, so backup/restore is

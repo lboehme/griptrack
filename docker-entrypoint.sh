@@ -31,6 +31,29 @@ case "$DB_URL" in
     *)        DB_PATH="" ;;  # non-SQLite backend: no file to back up
 esac
 
+# ---------------------------------------------------------------------------
+# Off-box replication (issue #29). When GRIPTRACK_REPLICA_BUCKET is set,
+# Litestream continuously replicates the SQLite file to S3-compatible object
+# storage (config: /etc/litestream.yml, values env-expanded) and supervises
+# the server process. Without it, this container behaves exactly as before.
+#
+# The restore step must run BEFORE the migration block: on a fresh volume
+# (host switch, volume loss) the DB is pulled back from the replica; if
+# alembic ran first it would build an empty schema, and replicating that
+# empty DB would bury the real data under a newer generation.
+# ---------------------------------------------------------------------------
+LITESTREAM_CONFIG="${LITESTREAM_CONFIG:-/etc/litestream.yml}"
+replicate=""
+if [ -n "${GRIPTRACK_REPLICA_BUCKET:-}" ] && [ -n "$DB_PATH" ]; then
+    replicate=1
+    export GRIPTRACK_DB_PATH="$DB_PATH"  # referenced by the litestream config
+    if [ ! -f "$DB_PATH" ]; then
+        echo "[entrypoint] No local DB; restoring from replica if one exists..."
+        litestream restore -config "$LITESTREAM_CONFIG" \
+            -if-db-not-exists -if-replica-exists "$DB_PATH"
+    fi
+fi
+
 current_line=$(alembic current 2>/dev/null || true)
 current_rev=$(printf '%s' "$current_line" | awk 'NR==1 {print $1}')
 
@@ -81,8 +104,19 @@ fi
 # --proxy-headers + trusting the platform's forwarded IPs so request.url is
 # https (Secure cookies) and request.client.host is the real client (login
 # rate limiting), not the reverse proxy.
-exec uvicorn backend.main:app \
+SERVE="uvicorn backend.main:app \
     --host 0.0.0.0 \
-    --port "${PORT:-8000}" \
+    --port ${PORT:-8000} \
     --proxy-headers \
-    --forwarded-allow-ips "*"
+    --forwarded-allow-ips *"
+
+if [ -n "$replicate" ]; then
+    # Litestream supervises the server: replication runs for exactly as long
+    # as the app does, and a misconfigured replica fails the boot loudly
+    # instead of silently running without backups.
+    echo "[entrypoint] Serving under Litestream replication."
+    exec litestream replicate -config "$LITESTREAM_CONFIG" -exec "$SERVE"
+fi
+# set -f: $SERVE must word-split but its literal * must not glob-expand.
+set -f
+exec $SERVE

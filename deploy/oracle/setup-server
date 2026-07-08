@@ -59,6 +59,14 @@ GRIPTRACK_SESSION_SECRET=${session_secret}
 GRIPTRACK_DATABASE_URL=sqlite:////data/griptrack.db
 GRIPTRACK_BOOTSTRAP_TOKEN=${bootstrap_token}
 GRIPTRACK_DOMAIN=${DOMAIN}
+
+# Litestream off-box backup — strongly recommended; fill in and redeploy.
+# See docs/deployment.md ("Backups") for creating the bucket + credentials.
+#GRIPTRACK_REPLICA_BUCKET=griptrack-backup
+#GRIPTRACK_REPLICA_ENDPOINT=https://<namespace>.compat.objectstorage.<region>.oraclecloud.com
+#GRIPTRACK_REPLICA_REGION=<region>
+#LITESTREAM_ACCESS_KEY_ID=
+#LITESTREAM_SECRET_ACCESS_KEY=
 EOF
     chmod 600 /opt/griptrack/.env
     echo

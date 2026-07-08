@@ -29,6 +29,7 @@ Set these as the platform's environment variables / secrets (see
 | `GRIPTRACK_SESSION_SECRET` | yes | Signs the session cookie. Long random string: `python -c "import secrets; print(secrets.token_urlsafe(48))"`. The app refuses to start in production without it. |
 | `GRIPTRACK_DATABASE_URL` | yes | Path to the SQLite file **on the persistent volume**, e.g. `sqlite:////data/griptrack.db`. If this points at the container filesystem, all data is lost on redeploy. |
 | `GRIPTRACK_BOOTSTRAP_TOKEN` | strongly recommended | Gates the first-admin registration (see below). |
+| `GRIPTRACK_REPLICA_BUCKET` + `GRIPTRACK_REPLICA_ENDPOINT` + `GRIPTRACK_REPLICA_REGION` + `LITESTREAM_ACCESS_KEY_ID` + `LITESTREAM_SECRET_ACCESS_KEY` | strongly recommended | Continuous off-box backup via Litestream (see "Backups"). Setting the bucket switches replication on; all five belong together. |
 
 ## Deploy checklist
 
@@ -80,19 +81,38 @@ schema and fail on real data.
 
 ## Backups
 
-The pre-migration `.bak` files above are an on-box safety net for the migration
-path only. They are **not** a substitute for a real off-box backup — the entire
-dataset is still the one SQLite file on one volume. Back it up regularly to
-somewhere off the volume:
+Three layers, from first line of defense to last resort:
 
-```sh
-sqlite3 /data/griptrack.db ".backup '/data/backup-$(date +%F).db'"
-```
+1. **Litestream replication (the real backup — enable it).** When
+   `GRIPTRACK_REPLICA_BUCKET` (+ endpoint, region, credentials) is set, the
+   container continuously replicates the SQLite WAL to S3-compatible object
+   storage and can restore to seconds before a failure. On boot with an
+   empty volume it **auto-restores from the replica first** — which makes it
+   double as the host-migration mechanism: point the new host at the same
+   bucket and boot. Litestream supervises the server process, so a
+   misconfigured replica fails the boot loudly rather than silently running
+   unprotected. Config template: `deploy/litestream.yml` (baked into the
+   image); values come from the env vars in `.env.example`. On Fly, set them
+   with `fly secrets set ...`; on the Oracle VM, in `/opt/griptrack/.env`.
 
-Prefer `.backup` (or `VACUUM INTO`) over a raw `cp` so you never copy a file
-mid-write. Keep a few days' worth off-box. Fly's automatic volume snapshots
-help, but they're single-region, block-level, and not SQLite-consistent — see
-issue #29 for the planned app-consistent (Litestream) hardening.
+   **Run a restore drill before trusting it** (and occasionally after):
+
+   ```sh
+   litestream restore -config deploy/litestream.yml -o /tmp/drill.db "$GRIPTRACK_DB_PATH"
+   sqlite3 /tmp/drill.db "PRAGMA integrity_check; SELECT count(*) FROM users;"
+   ```
+
+2. **Pre-migration `.bak` files** (automatic, on-box): written by the
+   entrypoint before any pending migration runs — a safety net for the
+   migration path only; they live on the same volume as the DB.
+
+3. **Platform volume snapshots** (Fly: automatic daily, ~5-day retention;
+   Oracle: boot-volume backups configurable in the console): block-level and
+   not SQLite-consistent — a last resort, not a substitute for layer 1.
+
+Without Litestream enabled, at minimum run a manual app-consistent copy off
+the volume now and then: `sqlite3 /data/griptrack.db ".backup '/data/backup-$(date +%F).db'"`
+and download it (`.backup`/`VACUUM INTO`, never a raw `cp` of a live file).
 
 ## Security posture (what's already handled)
 
