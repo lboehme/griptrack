@@ -1,3 +1,48 @@
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+# Alembic revision files import sqlalchemy/sqlmodel as a fixed convention
+# even when a given migration doesn't end up using them (autogenerate
+# always emits the imports) — noise, not a real lint signal.
+exclude = ["migrations/versions"]
+
+[tool.ruff.lint]
+# Pyflakes (unused imports/names, undefined names, ...) + pycodestyle,
+# pyupgrade, isort, and bugbear. Deliberately not the exhaustive "ALL" —
+# this is a first-run gate, not a strictness contest.
+select = ["E", "F", "I", "UP", "B"]
+ignore = [
+    "B008", # FastAPI's Depends()/Query() *as* a default argument is the framework's idiom.
+]
+
+[tool.mypy]
+python_version = "3.12"
+# Pragmatic, not strict: catches real type errors without demanding
+# exhaustive annotations across a codebase that predates this gate.
+ignore_missing_imports = true
+check_untyped_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+exclude = ["migrations/versions/", "^build/"]
+
+# SQLModel has no mypy plugin: a Field-based class attribute (e.g.
+# `MaxWeightTest.date`) is typed as its plain Python value type, not
+# SQLAlchemy's InstrumentedAttribute, so every column-level query
+# expression built from one (`.desc()`, the generic `select(...)`
+# overloads, `Session.exec(text(...))`) trips mypy even though it's
+# correct and exercised by the test suite at runtime. Disable those
+# false-positive codes ONLY for the modules that build such query
+# expressions — everywhere else (including all None-safety via
+# `union-attr`) the codes stay on.
+[[tool.mypy.overrides]]
+module = [
+    "backend.analytics",
+    "backend.main",
+    "backend.routers.climbs",
+    "backend.routers.history",
+    "backend.training_log",
+]
+disable_error_code = ["attr-defined", "union-attr", "call-overload"]

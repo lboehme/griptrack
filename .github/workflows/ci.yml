@@ -31,3 +31,8 @@ jobs:
       # Gate 1 (upgrade from scratch) + gate 2 (models/migrations lockstep).
       - name: Migration gates
         run: scripts/check-migrations
+
+      # ruff (lint) + mypy (types) + pip-audit (dependency vulnerabilities),
+      # same script used locally, so CI and dev can't drift.
+      - name: Lint, type-check, and dependency audit
+        run: scripts/lint

@@ -65,6 +65,8 @@ def warmup_view(
     steps = []
     if planned_hands:
         first_plan = plans[planned_hands[0]]
+        # planned_hands is exactly the hands whose plan isn't None.
+        assert first_plan is not None
         steps = [
             {"index": index, "percent": first_plan[index]["percent"]}
             for index in range(len(first_plan))
@@ -509,7 +511,7 @@ def session_history(session: Session, user: User) -> list[dict]:
         work_sets = session.exec(
             select(WorkSet)
             .where(WorkSet.training_session_id == training_session.id)
-            .order_by(WorkSet.set_number, WorkSet.hand)
+            .order_by(WorkSet.set_number, WorkSet.hand)  # type: ignore[arg-type]  # SQLModel columns typed as int/str, not Column
         ).all()
         history.append({"session": training_session, "work_sets": work_sets})
     return history
@@ -517,7 +519,9 @@ def session_history(session: Session, user: User) -> list[dict]:
 
 def grip_names(session: Session) -> dict[int, str]:
     """GripType id -> display name, for anything rendering WorkSets."""
-    return {grip.id: grip.name for grip in session.exec(select(GripType))}
+    # grip.id is None only for a transient, unpersisted GripType; every row
+    # returned by a query has already been assigned a primary key.
+    return {grip.id: grip.name for grip in session.exec(select(GripType))}  # type: ignore[misc]
 
 
 def trained_combinations(session: Session, user: User) -> list[dict]:

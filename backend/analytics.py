@@ -71,7 +71,7 @@ def strength_grade_correlation(session: Session, user: User) -> dict:
         select(Climb)
         .where(Climb.user_id == user.id)
         .where(Climb.discipline == "boulder")
-        .order_by(Climb.date)
+        .order_by(Climb.date)  # type: ignore[arg-type]  # SQLModel column typed as date, not Column
     ).all()
 
     points = []
@@ -91,8 +91,11 @@ def strength_grade_correlation(session: Session, user: User) -> dict:
         )
 
     result = {"points": points, "n": len(points), "r": None}
-    pcts = [point["pct_bodyweight"] for point in points]
-    grades = [point["grade_value"] for point in points]
+    # points is list[dict[str, object]] (mixed-type dict) so the comprehension
+    # can't statically prove the values back out as float — they are, by
+    # construction just above.
+    pcts: list[float] = [point["pct_bodyweight"] for point in points]  # type: ignore[misc]
+    grades: list[float] = [point["grade_value"] for point in points]  # type: ignore[misc]
     if len(points) >= 3 and len(set(pcts)) > 1 and len(set(grades)) > 1:
         result["r"] = statistics.correlation(pcts, grades)
     return result
@@ -105,7 +108,7 @@ def training_volume_trend(
     oldest first."""
     rows = session.exec(
         select(TrainingSession.date, WorkSet.weight, WorkSet.reps)
-        .join(WorkSet, WorkSet.training_session_id == TrainingSession.id)  # type: ignore[arg-type]
+        .join(WorkSet, WorkSet.training_session_id == TrainingSession.id)
         .where(TrainingSession.user_id == user.id)
         .where(WorkSet.hand == hand)
         .where(WorkSet.grip_type_id == grip_type_id)
@@ -131,7 +134,7 @@ def overtraining_warning(trend: list[tuple[date_type, float]]) -> bool:
     trailing_average = sum(volumes[:-1]) / len(volumes[:-1])
     volume_spike = volumes[-1] >= OVERTRAINING_SPIKE_FACTOR * trailing_average
 
-    gaps = [(b - a).days for a, b in zip(dates, dates[1:])]
+    gaps = [(b - a).days for a, b in zip(dates, dates[1:], strict=False)]
     typical_rest = sum(gaps[:-1]) / len(gaps[:-1])
     short_rest = gaps[-1] < typical_rest
 
