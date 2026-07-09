@@ -27,11 +27,13 @@ GRADE_NOT_RECOGNIZED_MESSAGE = (
 def climbs_newest_first(session: Session, user: User) -> list[Climb]:
     """A user's climbs, newest first — the one query both the climbs page
     and the history page render from, so their ordering can't drift."""
-    return session.exec(
-        select(Climb)
-        .where(Climb.user_id == user.id)
-        .order_by(Climb.date.desc(), Climb.id.desc())
-    ).all()
+    return list(
+        session.exec(
+            select(Climb)
+            .where(Climb.user_id == user.id)
+            .order_by(Climb.date.desc(), Climb.id.desc())
+        ).all()
+    )
 
 
 @router.get("/climbs")
