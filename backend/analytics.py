@@ -133,7 +133,7 @@ def training_volume_trend(
             WorkSet.weight,
             WorkSet.reps,
         )
-        .join(WorkSet, WorkSet.training_session_id == TrainingSession.id)  # type: ignore[arg-type]
+        .join(WorkSet, WorkSet.training_session_id == TrainingSession.id)
         .where(TrainingSession.user_id == user.id)
         .where(WorkSet.hand == hand)
         .where(WorkSet.grip_type_id == grip_type_id)
