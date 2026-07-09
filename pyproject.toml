@@ -42,6 +42,7 @@ module = [
     "backend.analytics",
     "backend.main",
     "backend.routers.climbs",
+    "backend.routers.max_tests",
     "backend.routers.history",
     "backend.training_log",
 ]

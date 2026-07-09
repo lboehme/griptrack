@@ -462,6 +462,7 @@ def latest_max_test(
     query = (
         select(MaxWeightTest)
         .where(MaxWeightTest.user_id == user.id)
+        .where(MaxWeightTest.voided_at.is_(None))
         .where(MaxWeightTest.hand == hand)
         .where(MaxWeightTest.grip_type_id == grip_type_id)
         .where(MaxWeightTest.edge_mm == edge_mm)
@@ -548,6 +549,7 @@ def last_used_combination(session: Session, user: User) -> tuple[int, int] | Non
     test = session.exec(
         select(MaxWeightTest)
         .where(MaxWeightTest.user_id == user.id)
+        .where(MaxWeightTest.voided_at.is_(None))
         .order_by(MaxWeightTest.date.desc(), MaxWeightTest.id.desc())
     ).first()
 
@@ -598,7 +600,7 @@ def trained_combinations(session: Session, user: User) -> list[dict]:
     MaxWeightTest — what the dashboard iterates. A combo trained only under
     a SessionMaxEstimate appears too; its current_max is simply None."""
     tests = session.exec(
-        select(MaxWeightTest).where(MaxWeightTest.user_id == user.id)
+        select(MaxWeightTest).where(MaxWeightTest.user_id == user.id).where(MaxWeightTest.voided_at.is_(None))
     ).all()
     work_sets = session.exec(
         select(WorkSet)
@@ -628,7 +630,7 @@ def tested_combinations(session: Session, user: User) -> list[dict]:
     """One entry per tested (hand, grip_type, edge_mm), with its CurrentMax
     and the grip's display name — callers never join names themselves."""
     tests = session.exec(
-        select(MaxWeightTest).where(MaxWeightTest.user_id == user.id)
+        select(MaxWeightTest).where(MaxWeightTest.user_id == user.id).where(MaxWeightTest.voided_at.is_(None))
     ).all()
     combos = sorted({(t.hand, t.grip_type_id, t.edge_mm) for t in tests})
     names = grip_names(session)

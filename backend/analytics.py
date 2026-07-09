@@ -46,11 +46,13 @@ def parse_boulder_grade(grade: str) -> float | None:
 def _best_pull_at(session: Session, user: User, date: date_type) -> float | None:
     """The user's best CurrentMax across all combos as of a date — the
     supersede rule itself lives in training_log.compute_current_max."""
+    # Combos the user has tested (voided tests are excluded from the strength signal).
     combos = session.exec(
         select(
             MaxWeightTest.hand, MaxWeightTest.grip_type_id, MaxWeightTest.edge_mm
         )
         .where(MaxWeightTest.user_id == user.id)
+        .where(MaxWeightTest.voided_at.is_(None))
         .distinct()
     ).all()
     values = [
