@@ -162,11 +162,9 @@ def test_session_is_revoked_after_admin_password_reset(client):
     # test that only checks page text pass for the wrong reason) so this
     # genuinely exercises the stale cookie against the live app.
     #
-    # Asserted against a route that requires login via auth.current_user
-    # (which checks session_version), not "/" — the home route reads
-    # user_id straight off the session without going through
-    # current_user, so it doesn't observe revocation and isn't a suitable
-    # probe for this behavior.
+    # Asserted against a route that 401s via auth.current_user (which
+    # checks session_version); the home route degrades to anonymous
+    # instead (see test_home_page_treats_revoked_session_as_anonymous).
     stale_headers = {"Cookie": f"session={friend_session}"}
     protected = client.get("/dashboard", headers=stale_headers)
     assert protected.status_code == 401
@@ -203,3 +201,24 @@ def test_other_users_session_survives_admin_password_reset(client):
         "/dashboard", headers={"Cookie": f"session={bystander_session}"}
     )
     assert response.status_code == 200
+
+
+def test_home_page_treats_revoked_session_as_anonymous(client):
+    register(client, "founder@example.com", "s3cret-pw")
+    code = generate_invite(client)
+    register(client, "friend@example.com", "friend-pw", invite_code=code)
+    friend_session = client.cookies.get("session")
+
+    client.post("/logout")
+    login(client, "founder@example.com", "s3cret-pw")
+    client.post(
+        "/admin/reset-password",
+        data={"email": "friend@example.com", "new_password": "fresh-pw"},
+        follow_redirects=True,
+    )
+    client.post("/logout")
+
+    response = client.get("/", headers={"Cookie": f"session={friend_session}"})
+
+    assert response.status_code == 200
+    assert "friend" not in response.text  # greeted as anonymous, not by name
