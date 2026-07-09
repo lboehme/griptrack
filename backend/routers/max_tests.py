@@ -7,7 +7,7 @@ from sqlmodel import Session, select
 from backend import auth, training_log
 from backend.db import get_session
 from backend.limits import MAX_EDGE_MM, MAX_WEIGHT
-from backend.models import GripType, User
+from backend.models import GripType, MaxWeightTest, User
 from backend.templating import templates
 
 router = APIRouter()
@@ -21,6 +21,14 @@ def max_tests_page(
 ):
     grip_types = session.exec(select(GripType).order_by(GripType.name)).all()
     combos = training_log.tested_combinations(session, user)
+    # Fetch all max tests (unvoided) to show history
+    tests = session.exec(
+        select(MaxWeightTest, GripType)
+        .join(GripType)
+        .where(MaxWeightTest.user_id == user.id)
+        .order_by(MaxWeightTest.date.desc(), MaxWeightTest.id.desc())
+    ).all()
+    
     return templates.TemplateResponse(
         request,
         "max_tests.html",
@@ -28,6 +36,7 @@ def max_tests_page(
             "user": user,
             "grip_types": grip_types,
             "combos": combos,
+            "test_history": tests,
             "today": date_type.today().isoformat(),
         },
     )
@@ -67,3 +76,24 @@ def add_grip_type(
         session.add(GripType(name=name))
         session.commit()
     return RedirectResponse("/profile", status_code=303)
+
+
+@router.post("/max-tests/{test_id}/void")
+def void_max_test(
+    test_id: int,
+    user: User = Depends(auth.current_user),
+    session: Session = Depends(get_session),
+):
+    from backend.models import utcnow
+    
+    test = session.get(MaxWeightTest, test_id)
+    if test is None or test.user_id != user.id:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Cannot void this test")
+    
+    if test.voided_at is None:
+        test.voided_at = utcnow()
+        session.add(test)
+        session.commit()
+        
+    return RedirectResponse("/max-tests", status_code=303)

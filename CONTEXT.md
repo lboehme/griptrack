@@ -11,7 +11,15 @@ One logged workout visit: a date plus the work sets performed in it. Owns
 many WorkSets. Exists in the database from the moment its first
 warmup/ramp step is checked off — every interaction autosaves immediately,
 there is no final "submit" step, so a TrainingSession can be, and often
-briefly is, incomplete.
+briefly is, incomplete. A (user, date) can hold more than one
+TrainingSession — e.g. a morning and evening pull — distinguished by
+`session_number` (1, 2, ...; default 1). `(user_id, date, session_number)`
+is the identity key and must stay stable (future offline sync relies on
+idempotent upserts against it). Default flows (start page, session-page
+redirects) always resolve to the day's *latest* session_number; starting a
+second session on today is an explicit affordance, and navigating to a
+past date with no session at all requires an explicit "create one?"
+confirmation rather than instantiating silently (issue #51).
 _Avoid_: Session (ambiguous with the auth/login session), Workout, Training Log
 
 **WorkSet**:
@@ -168,3 +176,6 @@ A dated bodyweight entry. The most recent entry is the user's "current"
 bodyweight; the full history is what strength-vs-bodyweight analysis uses,
 matched to the closest entry at or before each TrainingSession/test date.
 _Avoid_: Bodyweight (as a mutable profile field)
+
+**edge_mm**:
+Stores the grip's characteristic dimension in mm; for pinch that's block width, for most other grips it's edge depth. The DB column keeps the name `edge_mm` across all grips for stability, but the UI labels it dynamically based on the selected GripType's `dimension_name`.

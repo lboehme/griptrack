@@ -6,19 +6,22 @@
 <div class="card">
   <form method="get" action="/session/warmup">
     <label>Grip type
-      <select name="grip_type_id">
+      <select name="grip_type_id" class="grip-select">
         {% for grip in grip_types %}
-        <option value="{{ grip.id }}"{% if grip.id == default_grip_type_id %} selected{% endif %}>{{ grip.name }}</option>
+        <option value="{{ grip.id }}"{% if grip.id == default_grip_type_id %} selected{% endif %} data-dimension-name="{{ grip.dimension_name }}">{{ grip.name }}</option>
         {% endfor %}
       </select>
     </label>
     <div class="form-row">
-      <label>Edge (mm)
+      <label><span class="dimension-label">Edge depth (mm)</span>
         <input type="number" name="edge_mm" value="{{ default_edge_mm }}" step="1" min="1" required>
       </label>
-      <label>Date <input type="date" name="date" value="{{ today }}" required></label>
+      <label>Date <input type="date" name="date" value="{{ today }}" class="local-date-default" required></label>
     </div>
     <button type="submit">Start warmup →</button>
+    {% if next_session_number_today %}
+    <button type="submit" name="session_number" value="{{ next_session_number_today }}" class="btn-secondary start-second-session">Start a second session today →</button>
+    {% endif %}
   </form>
 </div>
 {% if history %}
@@ -28,4 +31,24 @@
   <p style="margin:.6rem 0 0"><a class="muted" href="/history">Full history →</a></p>
 </div>
 {% endif %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll('select.grip-select').forEach(select => {
+    const updateLabel = () => {
+      const option = select.options[select.selectedIndex];
+      if (!option) return;
+      const dimName = option.getAttribute('data-dimension-name');
+      if (!dimName) return;
+      const form = select.closest('form');
+      const labelSpan = form.querySelector('.dimension-label');
+      if (labelSpan) {
+        labelSpan.textContent = dimName + " (mm)";
+      }
+    };
+    select.addEventListener('change', updateLabel);
+    // Use setTimeout to ensure DOM is fully ready if other scripts modify it
+    setTimeout(updateLabel, 0);
+  });
+});
+</script>
 {% endblock %}

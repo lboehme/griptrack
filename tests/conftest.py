@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
-from backend.db import get_session
+from backend.db import configure_sqlite_pragmas, get_session
 from backend.main import create_app
 from backend.models import STARTER_GRIP_TYPES, GripType, TrainingProtocol
 
@@ -14,17 +14,20 @@ def build_client() -> TestClient:
     Every call gets its own engine, so no state leaks between tests.
     All tests drive the app through this HTTP seam only.
     """
-    engine = create_engine(
-        "sqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
+    engine = configure_sqlite_pragmas(
+        create_engine(
+            "sqlite://",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
     )
     SQLModel.metadata.create_all(engine)
     with Session(engine) as seed_session:
         # Mirrors the data migrations that seed production: starter grip
         # types and the single global TrainingProtocol row (ADR-0005).
         for name in STARTER_GRIP_TYPES:
-            seed_session.add(GripType(name=name))
+            dimension = "block width" if name == "pinch" else "edge depth"
+            seed_session.add(GripType(name=name, dimension_name=dimension))
         seed_session.add(TrainingProtocol(user_id=None))
         seed_session.commit()
 

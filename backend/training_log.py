@@ -7,6 +7,7 @@ from backend.models import (
     BodyWeightLog,
     GripType,
     MaxWeightTest,
+    PainReport,
     SessionMaxEstimate,
     TrainingProtocol,
     TrainingSession,
@@ -47,13 +48,18 @@ def warmup_view(
     edge_mm: int,
     date: date_type,
     hand: str | None = None,
+    session_number: int | None = None,
 ) -> dict:
     """Everything the warmup page shows, assembled in one call. Each hand's
     ramp is sourced independently: CurrentMax, else this session's
     SessionMaxEstimate, else the hand lands in untested_hands and gets an
-    inline estimate-entry form."""
+    inline estimate-entry form.
+
+    session_number=None resolves to the day's latest session (see
+    find_session) — the default flow every page uses unless the user
+    explicitly started a second session today."""
     hands = hands_for(user, hand)
-    training_session = find_session(session, user, date)
+    training_session = find_session(session, user, date, session_number)
     plans = {
         h: compute_ramp_plan(
             session, user, h, grip_type_id, edge_mm, training_session
@@ -65,6 +71,8 @@ def warmup_view(
     steps = []
     if planned_hands:
         first_plan = plans[planned_hands[0]]
+        # planned_hands is exactly the hands whose plan isn't None.
+        assert first_plan is not None
         steps = [
             {"index": index, "percent": first_plan[index]["percent"]}
             for index in range(len(first_plan))
@@ -73,6 +81,9 @@ def warmup_view(
         "grip": session.get(GripType, grip_type_id),
         "edge_mm": edge_mm,
         "date": date,
+        "session_number": training_session.session_number
+        if training_session is not None
+        else session_number,
         "hands": hands,
         "plans": plans,
         "untested_hands": untested_hands,
@@ -91,16 +102,22 @@ def worksets_view(
     date: date_type,
     hand: str | None = None,
     sets_hint: int | None = None,
+    session_number: int | None = None,
 ) -> dict:
     """Everything the work-sets page shows: saved sets by (hand, set),
     prefills from CurrentMax and the TrainingProtocol, and the row math
-    (default rows, add-another-set hint, dismissable empty rows)."""
+    (default rows, add-another-set hint, dismissable empty rows).
+
+    session_number=None resolves to the day's latest session, same as
+    warmup_view."""
     hands = hands_for(user, hand)
     protocol = get_protocol(session, user)
-    training_session = find_session(session, user, date)
+    training_session = find_session(session, user, date, session_number)
     saved = {
         (ws.hand, ws.set_number): ws
-        for ws in worksets_for_combo(session, user, grip_type_id, edge_mm, date)
+        for ws in worksets_for_combo(
+            session, user, grip_type_id, edge_mm, date, session_number
+        )
     }
     current_max = {
         h: effective_max(session, user, h, grip_type_id, edge_mm, training_session)
@@ -113,6 +130,9 @@ def worksets_view(
         "grip": session.get(GripType, grip_type_id),
         "edge_mm": edge_mm,
         "date": date,
+        "session_number": training_session.session_number
+        if training_session is not None
+        else session_number,
         "hands": hands,
         "set_numbers": list(range(1, row_count + 1)),
         "saved": saved,
@@ -121,6 +141,10 @@ def worksets_view(
         "more_sets": row_count + 1,
         # Extra empty rows (from "add another set") can be dismissed again.
         "removable_to": row_count - 1 if row_count > needed_rows else None,
+        "training_session": training_session,
+        "pain_reports": session.exec(
+            select(PainReport).where(PainReport.training_session_id == training_session.id)
+        ).all() if training_session else [],
     }
 
 
@@ -153,8 +177,9 @@ def worksets_for_combo(
     grip_type_id: int,
     edge_mm: int,
     date: date_type,
+    session_number: int | None = None,
 ) -> list[WorkSet]:
-    training_session = find_session(session, user, date)
+    training_session = find_session(session, user, date, session_number)
     if training_session is None:
         return []
     return list(
@@ -210,31 +235,72 @@ def record_work_set(
 
 
 def start_or_get_session(
-    session: Session, user: User, date: date_type
+    session: Session,
+    user: User,
+    date: date_type,
+    session_number: int | None = None,
 ) -> TrainingSession:
-    """The TrainingSession for this user+date, created on first use — a
-    session exists from the first checkbox tap, there is no submit step."""
-    training_session = session.exec(
-        select(TrainingSession)
-        .where(TrainingSession.user_id == user.id)
-        .where(TrainingSession.date == date)
-    ).first()
-    if training_session is None:
-        training_session = TrainingSession(user_id=user.id, date=date)
-        session.add(training_session)
-        session.commit()
-        session.refresh(training_session)
+    """The TrainingSession for this user+date(+session_number), created on
+    first use — a session exists from the first checkbox tap, there is no
+    submit step.
+
+    session_number=None (the default flow) means "the day's latest
+    session" — create session_number 1 if none exists yet for that date,
+    otherwise reuse the highest-numbered one. An explicit session_number
+    (the "start a second session today" affordance) gets or creates that
+    exact slot instead."""
+    training_session = find_session(session, user, date, session_number)
+    if training_session is not None:
+        return training_session
+    next_number = session_number if session_number is not None else (
+        (latest_session_number(session, user, date) or 0) + 1
+    )
+    training_session = TrainingSession(
+        user_id=user.id, date=date, session_number=next_number
+    )
+    session.add(training_session)
+    session.commit()
+    session.refresh(training_session)
     return training_session
 
 
 def find_session(
-    session: Session, user: User, date: date_type
+    session: Session,
+    user: User,
+    date: date_type,
+    session_number: int | None = None,
 ) -> TrainingSession | None:
-    return session.exec(
+    """The session for this user+date. With session_number=None (the
+    default flow), resolves to the day's latest session."""
+    query = (
         select(TrainingSession)
         .where(TrainingSession.user_id == user.id)
         .where(TrainingSession.date == date)
-    ).first()
+    )
+    if session_number is not None:
+        query = query.where(TrainingSession.session_number == session_number)
+    else:
+        query = query.order_by(TrainingSession.session_number.desc())
+    return session.exec(query).first()
+
+
+def latest_session_number(
+    session: Session, user: User, date: date_type
+) -> int | None:
+    """The highest session_number logged on this date, or None if the user
+    has no session on that date yet — what the "start a second session
+    today" affordance and start_or_get_session's auto-numbering key off."""
+    existing = find_session(session, user, date)
+    return existing.session_number if existing is not None else None
+
+
+def is_past_date(date: date_type, today: date_type | None = None) -> bool:
+    """Whether `date` is strictly before today — the server-side heuristic
+    that gates *creating* a session (see CLAUDE.md: explicit past-session
+    creation). The client-local "today" used for the on-page warning
+    banner is a separate, JS-side comparison; this one only needs to be
+    right to the day, not the client's timezone."""
+    return date < (today if today is not None else date_type.today())
 
 
 def toggle_warmup_check(
@@ -396,6 +462,7 @@ def latest_max_test(
     query = (
         select(MaxWeightTest)
         .where(MaxWeightTest.user_id == user.id)
+        .where(MaxWeightTest.voided_at.is_(None))
         .where(MaxWeightTest.hand == hand)
         .where(MaxWeightTest.grip_type_id == grip_type_id)
         .where(MaxWeightTest.edge_mm == edge_mm)
@@ -482,6 +549,7 @@ def last_used_combination(session: Session, user: User) -> tuple[int, int] | Non
     test = session.exec(
         select(MaxWeightTest)
         .where(MaxWeightTest.user_id == user.id)
+        .where(MaxWeightTest.voided_at.is_(None))
         .order_by(MaxWeightTest.date.desc(), MaxWeightTest.id.desc())
     ).first()
 
@@ -498,18 +566,23 @@ def last_used_combination(session: Session, user: User) -> tuple[int, int] | Non
 
 
 def session_history(session: Session, user: User) -> list[dict]:
-    """Past TrainingSessions (newest first), each with its WorkSets."""
+    """Past TrainingSessions (newest first, latest session_number first
+    within a date), each with its WorkSets."""
     sessions = session.exec(
         select(TrainingSession)
         .where(TrainingSession.user_id == user.id)
-        .order_by(TrainingSession.date.desc(), TrainingSession.id.desc())
+        .order_by(
+            TrainingSession.date.desc(),
+            TrainingSession.session_number.desc(),
+            TrainingSession.id.desc(),
+        )
     ).all()
     history = []
     for training_session in sessions:
         work_sets = session.exec(
             select(WorkSet)
             .where(WorkSet.training_session_id == training_session.id)
-            .order_by(WorkSet.set_number, WorkSet.hand)
+            .order_by(WorkSet.set_number, WorkSet.hand)  # type: ignore[arg-type]  # SQLModel columns typed as int/str, not Column
         ).all()
         history.append({"session": training_session, "work_sets": work_sets})
     return history
@@ -517,7 +590,9 @@ def session_history(session: Session, user: User) -> list[dict]:
 
 def grip_names(session: Session) -> dict[int, str]:
     """GripType id -> display name, for anything rendering WorkSets."""
-    return {grip.id: grip.name for grip in session.exec(select(GripType))}
+    # grip.id is None only for a transient, unpersisted GripType; every row
+    # returned by a query has already been assigned a primary key.
+    return {grip.id: grip.name for grip in session.exec(select(GripType))}  # type: ignore[misc]
 
 
 def trained_combinations(session: Session, user: User) -> list[dict]:
@@ -525,7 +600,7 @@ def trained_combinations(session: Session, user: User) -> list[dict]:
     MaxWeightTest — what the dashboard iterates. A combo trained only under
     a SessionMaxEstimate appears too; its current_max is simply None."""
     tests = session.exec(
-        select(MaxWeightTest).where(MaxWeightTest.user_id == user.id)
+        select(MaxWeightTest).where(MaxWeightTest.user_id == user.id).where(MaxWeightTest.voided_at.is_(None))
     ).all()
     work_sets = session.exec(
         select(WorkSet)
@@ -555,7 +630,7 @@ def tested_combinations(session: Session, user: User) -> list[dict]:
     """One entry per tested (hand, grip_type, edge_mm), with its CurrentMax
     and the grip's display name — callers never join names themselves."""
     tests = session.exec(
-        select(MaxWeightTest).where(MaxWeightTest.user_id == user.id)
+        select(MaxWeightTest).where(MaxWeightTest.user_id == user.id).where(MaxWeightTest.voided_at.is_(None))
     ).all()
     combos = sorted({(t.hand, t.grip_type_id, t.edge_mm) for t in tests})
     names = grip_names(session)

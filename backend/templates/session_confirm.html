@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}No session yet — GripTrack{% endblock %}
+{% block content %}
+<h2>No session on {{ date }}</h2>
+<p class="page-sub">You haven't logged a session on this date yet — confirm before it's created, so a stray past date doesn't quietly add history.</p>
+<div class="card session-confirm-card">
+  <form method="post" action="/session/create">
+    <input type="hidden" name="page" value="{{ page }}">
+    <input type="hidden" name="grip_type_id" value="{{ grip_type_id }}">
+    <input type="hidden" name="edge_mm" value="{{ edge_mm }}">
+    <input type="hidden" name="date" value="{{ date }}">
+    {% if hand %}<input type="hidden" name="hand" value="{{ hand }}">{% endif %}
+    {% if session_number %}<input type="hidden" name="session_number" value="{{ session_number }}">{% endif %}
+    <button type="submit" class="session-confirm-create">No session on this date — create one?</button>
+  </form>
+  <a class="btn btn-secondary" href="/session/new">Cancel</a>
+</div>
+{% endblock %}

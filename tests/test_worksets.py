@@ -2,9 +2,12 @@ import re
 
 from tests.helpers import (
     current_maxes,
+    get_session_page,
     grip_type_id,
     log_max_test,
+    login,
     register,
+    register_second_user,
     save_work_set,
 )
 
@@ -17,7 +20,7 @@ def worksets_page(client, grip="half crimp", edge_mm=20, date="2026-07-04", hand
     }
     if hand is not None:
         params["hand"] = hand
-    return client.get("/session/worksets", params=params)
+    return get_session_page(client, "/session/worksets", params)
 
 
 def workset_rows(page_text):
@@ -182,3 +185,187 @@ def test_worksets_table_defaults_to_three_sets_with_protocol_reps(client):
     # Empty rows prefill the protocol's rep target and the hand's CurrentMax.
     assert rows[("left", 1)] == ("42.5", "5", "")
     assert rows[("right", 1)] == ("40.0", "5", "")
+
+
+def test_session_notes_over_the_length_ceiling_are_rejected(client):
+    setup_tested_user(client)
+    save_work_set(client, "left", 1, "40", "5", date="2026-07-04")
+
+    response = client.post(
+        "/session/update",
+        data={"date": "2026-07-04", "notes": "x" * 2001},
+        headers={"HX-Request": "true"},
+    )
+    assert response.status_code == 422
+
+
+def test_pain_report_note_over_the_length_ceiling_is_rejected(client):
+    setup_tested_user(client)
+    save_work_set(client, "left", 1, "40", "5", date="2026-07-04")
+
+    response = client.post(
+        "/session/pain-report",
+        data={
+            "date": "2026-07-04",
+            "hand": "left",
+            "severity": "2",
+            "note": "x" * 2001,
+        },
+        headers={"HX-Request": "true"},
+    )
+    assert response.status_code == 422
+
+
+def test_pain_report_with_an_invalid_hand_is_rejected(client):
+    setup_tested_user(client)
+    save_work_set(client, "left", 1, "40", "5", date="2026-07-04")
+
+    response = client.post(
+        "/session/pain-report",
+        data={
+            "date": "2026-07-04",
+            "hand": "left'; DROP TABLE users;--",
+            "severity": "2",
+        },
+        headers={"HX-Request": "true"},
+    )
+    assert response.status_code in (400, 422)
+
+
+def test_session_notes_and_deload_autosave(client):
+    setup_tested_user(client)
+    # Save a workset to ensure session is created
+    save_work_set(client, "left", 1, "40", "5", date="2026-07-04")
+
+    response = client.post(
+        "/session/update",
+        data={
+            "date": "2026-07-04",
+            "notes": "Felt tired today.",
+            "is_deload": "on",
+        },
+        headers={"HX-Request": "true"}
+    )
+    assert response.status_code == 204
+
+    page = worksets_page(client, date="2026-07-04").text
+    assert "Felt tired today." in page
+    assert 'name="is_deload" checked' in page or 'checked name="is_deload"' in page
+
+
+def test_pain_report_autosaves_and_displays(client):
+    setup_tested_user(client)
+    save_work_set(client, "left", 1, "40", "5", date="2026-07-04")
+
+    response = client.post(
+        "/session/pain-report",
+        data={
+            "date": "2026-07-04",
+            "hand": "left",
+            "severity": "2",
+            "note": "Tweaked a pulley",
+        },
+        headers={"HX-Request": "true"}
+    )
+    assert response.status_code == 204
+
+    page = worksets_page(client, date="2026-07-04").text
+    # Assert on values that only appear once the report actually exists —
+    # not on strings like "left" or "2" that show up unconditionally
+    # elsewhere on the page (hand dropdown, set numbers, etc.).
+    assert "Tweaked a pulley" in page
+    assert re.search(r"<td>left</td>\s*<td>2</td>", page)
+
+
+def test_pain_report_save_is_an_upsert_keyed_on_hand(client):
+    """The severity select and the note field each fire their own change
+    event; one logical "tweak" report must still be one row, not two."""
+    setup_tested_user(client)
+    save_work_set(client, "left", 1, "40", "5", date="2026-07-04")
+
+    # Severity posted first (as the severity-select's own change event would).
+    client.post(
+        "/session/pain-report",
+        data={"date": "2026-07-04", "hand": "left", "severity": "2"},
+        headers={"HX-Request": "true"},
+    )
+    # Then the note posted separately (as the note field's own change event
+    # would), same hand.
+    response = client.post(
+        "/session/pain-report",
+        data={
+            "date": "2026-07-04",
+            "hand": "left",
+            "severity": "2",
+            "note": "Tweaked a pulley",
+        },
+        headers={"HX-Request": "true"},
+    )
+    assert response.status_code == 204
+
+    page = worksets_page(client, date="2026-07-04").text
+    assert page.count("Tweaked a pulley") == 1
+    assert page.count("<td>left</td>") == 1
+
+    # A different hand still creates its own, independent row.
+    client.post(
+        "/session/pain-report",
+        data={"date": "2026-07-04", "hand": "right", "severity": "1"},
+        headers={"HX-Request": "true"},
+    )
+    page = worksets_page(client, date="2026-07-04").text
+    assert page.count("<td>left</td>") == 1
+    assert page.count("<td>right</td>") == 1
+
+
+def test_pain_reports_and_session_meta_are_isolated_per_user(client):
+    setup_tested_user(client)
+    save_work_set(client, "left", 1, "40", "5", date="2026-07-04")
+    client.post(
+        "/session/pain-report",
+        data={
+            "date": "2026-07-04",
+            "hand": "left",
+            "severity": "2",
+            "note": "User A pulley tweak",
+        },
+        headers={"HX-Request": "true"},
+    )
+    client.post(
+        "/session/update",
+        data={"date": "2026-07-04", "notes": "User A notes", "is_deload": "on"},
+        headers={"HX-Request": "true"},
+    )
+
+    register_second_user(client)  # now logged in as user B
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "35")
+    save_work_set(client, "left", 1, "35", "5", date="2026-07-04")
+    # Same date, from user B's client: user B's own session on this date
+    # must not touch or expose user A's row.
+    client.post(
+        "/session/pain-report",
+        data={
+            "date": "2026-07-04",
+            "hand": "left",
+            "severity": "3",
+            "note": "User B own tweak",
+        },
+        headers={"HX-Request": "true"},
+    )
+    client.post(
+        "/session/update",
+        data={"date": "2026-07-04", "notes": "User B notes"},
+        headers={"HX-Request": "true"},
+    )
+    b_page = worksets_page(client, date="2026-07-04").text
+    assert "User B own tweak" in b_page
+    assert "User A pulley tweak" not in b_page
+    assert "User A notes" not in b_page
+
+    login(client, "lifter@example.com", "test-pw-1234")
+    a_page = worksets_page(client, date="2026-07-04").text
+    assert "User A pulley tweak" in a_page
+    assert "User A notes" in a_page
+    assert 'name="is_deload" checked' in a_page or 'checked name="is_deload"' in a_page
+    assert "User B own tweak" not in a_page
+    assert "User B notes" not in a_page

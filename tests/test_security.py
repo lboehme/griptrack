@@ -199,6 +199,28 @@ def test_absurd_numeric_inputs_are_rejected(client):
     assert huge_both_estimate.status_code == 422
 
 
+def test_oversized_climb_text_inputs_are_rejected(client):
+    register(client, password="long-enough-pw")
+
+    novel_grade = client.post(
+        "/climbs",
+        data={"date": "2026-07-04", "grade": "V" * 5000, "style": "flash"},
+        follow_redirects=False,
+    )
+    assert novel_grade.status_code == 422
+
+    novel_notes = client.post(
+        "/climbs",
+        data={"date": "2026-07-04", "grade": "V5", "style": "flash",
+              "notes": "x" * 100_000},
+        follow_redirects=False,
+    )
+    assert novel_notes.status_code == 422
+
+    # Nothing was saved.
+    assert 'data-grade=' not in client.get("/climbs").text
+
+
 def test_bootstrap_token_gates_the_first_admin(monkeypatch, client_factory):
     monkeypatch.setenv("GRIPTRACK_BOOTSTRAP_TOKEN", "let-me-in")
     client = client_factory()

@@ -52,7 +52,7 @@ def register_second_user(client, email="friend@example.com", password="test-pw-4
 
 def grip_type_id(client, name):
     page = client.get("/max-tests").text
-    return re.search(rf'value="(\d+)">{name}<', page).group(1)
+    return re.search(rf'value="(\d+)"[^>]*>{name}<', page).group(1)
 
 
 def log_max_test(client, hand, grip, edge_mm, date, weight):
@@ -88,13 +88,21 @@ def save_work_set(
 
 
 def log_climb(
-    client, date="2026-07-04", grade="V5", discipline="boulder",
-    style="flash", notes=None,
+    client, date="2026-07-04", grade="V5", style="flash", notes=None,
+    discipline=None, follow_redirects=True,
 ):
-    data = {"date": date, "discipline": discipline, "grade": grade, "style": style}
+    """Log a climb via the HTTP seam. The climb form no longer offers a
+    discipline choice (issue #55 — new climbs are always boulder), but a
+    `discipline` kwarg is still accepted here so a test can assert the
+    server ignores an attacker-supplied hidden field."""
+    data = {"date": date, "grade": grade, "style": style}
+    if discipline is not None:
+        data["discipline"] = discipline
     if notes is not None:
         data["notes"] = notes
-    return client.post("/climbs", data=data, follow_redirects=True)
+    return client.post(
+        "/climbs", data=data, follow_redirects=follow_redirects
+    )
 
 
 def log_bodyweight(client, date, weight):
@@ -103,6 +111,24 @@ def log_bodyweight(client, date, weight):
         data={"date": date, "weight": weight},
         follow_redirects=True,
     )
+
+
+def get_session_page(client, path, params):
+    """GET a session page (warmup/worksets), auto-confirming the "no
+    session on this date — create one?" prompt if it appears.
+
+    Most tests exercise the normal warmup/worksets content, not the
+    past-date creation gate itself (see test_past_session_creation.py for
+    that) — this keeps every other test's dates free to land anywhere in
+    the past without tripping over the gate."""
+    response = client.get(path, params=params, follow_redirects=True)
+    if "session-confirm-card" in response.text:
+        page = "warmup" if path.endswith("warmup") else "worksets"
+        client.post(
+            "/session/create", data={"page": page, **params}, follow_redirects=True
+        )
+        response = client.get(path, params=params, follow_redirects=True)
+    return response
 
 
 def current_maxes(client):

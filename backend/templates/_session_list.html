@@ -1,7 +1,7 @@
 {% for entry in history %}
-<details class="history-session" data-date="{{ entry.session.date }}">
+<details class="history-session" data-date="{{ entry.session.date }}" data-session-number="{{ entry.session.session_number }}">
   <summary>
-    <strong>{{ entry.session.date }}</strong>
+    <strong>{{ entry.session.date }}</strong>{% if entry.session.session_number > 1 %} <span class="muted">session {{ entry.session.session_number }}</span>{% endif %}
     <span class="muted">· {{ entry.work_sets|length }} work set{{ "s" if entry.work_sets|length != 1 }}</span>
   </summary>
   <ul class="plain history-sets">

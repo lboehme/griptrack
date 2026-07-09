@@ -6,6 +6,7 @@ import re
 
 from tests.helpers import (
     current_maxes,
+    get_session_page,
     grip_type_id,
     log_bodyweight,
     login,
@@ -259,9 +260,10 @@ def test_guided_routine_writes_nothing_to_session_max_estimate(client):
 
     # The warmup page for the same combo/date must still prompt for an
     # estimate: the guided routine never touches SessionMaxEstimate storage.
-    page = client.get(
+    page = get_session_page(
+        client,
         "/session/warmup",
-        params={
+        {
             "grip_type_id": grip_type_id(client, "half crimp"),
             "edge_mm": 20,
             "date": "2026-07-04",

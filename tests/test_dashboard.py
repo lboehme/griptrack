@@ -40,6 +40,33 @@ def test_plateau_flag_on_stalled_but_not_growing_history(client):
     assert plateau_flags(client) == {"left|half crimp|20"}
 
 
+def test_plateau_flag_ignores_deload_sessions(client):
+    register(client)
+    log_max_test(client, "left", "half crimp", 20, "2026-05-01", "40")
+
+    # Stalled pattern (should be a plateau):
+    for day, volume in enumerate([400, 410, 420, 420, 415, 410, 420]):
+        save_work_set(client, "left", 1, str(volume), "1", date=f"2026-06-{day + 1:02d}")
+    
+    assert plateau_flags(client) == {"left|half crimp|20"}
+
+    # Now mark the latest session as a deload
+    client.post(
+        "/session/update",
+        data={
+            "date": "2026-06-07",
+            "is_deload": "on",
+        },
+        headers={"HX-Request": "true"}
+    )
+    
+    # The 7th session (420) is ignored. The remaining 6 sessions are:
+    # 400, 410, 420, 420, 415, 410
+    # The 4 recent sessions are [420, 420, 415, 410]. Their max is 420.
+    # The earlier sessions are [400, 410]. Their max is 410.
+    # Since 420 is NOT <= 410, there is NO plateau detected when ignoring the deload!
+    assert plateau_flags(client) == set()
+
 def overtraining_flags(client):
     page = client.get("/dashboard").text
     return set(
