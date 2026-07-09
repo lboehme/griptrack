@@ -1,12 +1,13 @@
 from datetime import date as date_type
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlmodel import Session, select
 
 from backend import auth
 from backend.analytics import parse_boulder_grade
 from backend.db import get_session
+from backend.limits import MAX_GRADE_LENGTH, MAX_NOTES_LENGTH
 from backend.models import CLIMB_STYLES, Climb, User
 from backend.templating import templates
 
@@ -23,7 +24,9 @@ GRADE_NOT_RECOGNIZED_MESSAGE = (
 )
 
 
-def _climbs_for(session: Session, user: User) -> list[Climb]:
+def climbs_newest_first(session: Session, user: User) -> list[Climb]:
+    """A user's climbs, newest first — the one query both the climbs page
+    and the history page render from, so their ordering can't drift."""
     return session.exec(
         select(Climb)
         .where(Climb.user_id == user.id)
@@ -34,6 +37,7 @@ def _climbs_for(session: Session, user: User) -> list[Climb]:
 @router.get("/climbs")
 def climbs_page(
     request: Request,
+    grade_warning: bool = Query(default=False),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
@@ -42,20 +46,22 @@ def climbs_page(
         "climbs.html",
         {
             "user": user,
-            "climbs": _climbs_for(session, user),
+            "climbs": climbs_newest_first(session, user),
             "styles": CLIMB_STYLES,
             "today": date_type.today().isoformat(),
+            # The flag rides across the POST-redirect-GET; the message text
+            # is a server-side constant, never echoed from the query string.
+            "grade_warning": GRADE_NOT_RECOGNIZED_MESSAGE if grade_warning else None,
         },
     )
 
 
 @router.post("/climbs")
 def log_climb(
-    request: Request,
     date: date_type = Form(),
-    grade: str = Form(min_length=1),
+    grade: str = Form(min_length=1, max_length=MAX_GRADE_LENGTH),
     style: str = Form(),
-    notes: str | None = Form(default=None),
+    notes: str | None = Form(default=None, max_length=MAX_NOTES_LENGTH),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
@@ -76,18 +82,8 @@ def log_climb(
     session.commit()
 
     if parse_boulder_grade(grade) is None:
-        # Loud feedback per issue #55: render the page directly (instead of
-        # the usual redirect) with a banner, rather than silently excluding
-        # this climb from the correlation.
-        return templates.TemplateResponse(
-            request,
-            "climbs.html",
-            {
-                "user": user,
-                "climbs": _climbs_for(session, user),
-                "styles": CLIMB_STYLES,
-                "today": date_type.today().isoformat(),
-                "grade_warning": GRADE_NOT_RECOGNIZED_MESSAGE,
-            },
-        )
+        # Loud feedback per issue #55, without breaking POST-redirect-GET
+        # (a refresh must not re-POST a duplicate climb): redirect with a
+        # flag that the GET handler turns into the banner.
+        return RedirectResponse("/climbs?grade_warning=1", status_code=303)
     return RedirectResponse("/climbs", status_code=303)

@@ -96,11 +96,18 @@ def test_unparseable_grade_shows_immediate_feedback_and_is_still_saved(client):
         client, grade="hard", style="flash", follow_redirects=False
     )
 
-    # No redirect for the warning case — the warning is rendered directly.
-    assert response.status_code == 200
-    assert "grade" in response.text.lower()
-    assert "recognized" in response.text.lower()
-    assert "correlation" in response.text.lower()
+    # POST-redirect-GET must hold on every save path (a browser refresh
+    # must not re-POST a duplicate climb); the warning rides across the
+    # redirect as a flag, never as echoed user input.
+    assert response.status_code == 303
+
+    followed = client.get(response.headers["location"])
+    assert followed.status_code == 200
+    assert "recognized" in followed.text.lower()
+    assert "correlation" in followed.text.lower()
+
+    # A fresh navigation without the flag shows no banner.
+    assert "grade-warning" not in client.get("/climbs").text
 
     rows = climb_rows(client)
     assert ("boulder", "hard", "flash", "2026-07-04") in rows
