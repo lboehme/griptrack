@@ -245,34 +245,65 @@ tested before starting the next.
 Above roadmap is complete, further roadmap here:
 
 ## Roadmap (open)
-- **Stretch/polish** (only once the above is solid) — progression-path
-   logic, per-user `TrainingProtocol` overrides, open self-signup + email
-   infrastructure (verification, self-service password reset), PWA manifest
-   for "add to home screen", revisit deployment/hosting
-- Names: I'm greeted with lboehme since my mail is lboehme@mailbox, let Users
-    give a name when signing up so it's more customized
-- max test logic
-- Can't start session without a max test first. If no max weight test was done, let the user insert a target weight for the session on the start session page. Maybe like as a pop up above the white field there where it says: do a max weight test or insert target weight.
-- Advanced Grade System Conversion: 
-    If not already comprehensively handled, building a unified conversion matrix for climbing grades. This would allow users to log a climb in the Fontainebleau scale, whilst the backend dynamically translates and correlates it against equivalent scales for the analytics dashboard.
-- System Administration & Global Configuration
-    While the is_admin role is currently limited to basic functions, a maturing application will require better oversight tools.
-    Protocol Tuning Dashboard: A dedicated interface for the administrator to globally adjust the TrainingProtocol default ramp percentages and base repetitions.
-    System Health Analytics: Exposing aggregated, anonymised system metrics (e.g., average session logging time, active user counts) to ensure the application remains performant as the database grows.
--  Progressive Web App (PWA) and Offline Support: Climbing gyms and outdoor crags frequently suffer from poor network connectivity.       
-    Implementing a Service Worker and local browser storage (like IndexedDB) would allow users to log a TrainingSession or Climb whilst offline, with the system automatically syncing via the FastAPI backend once connectivity is restored.
-- in-between set rest timer. Because GripTrack autosaves instantly, you wouldn't need a clunky start/stop interface. The moment you input   
-    your reps for a WorkSet row, the backend could return an HTMX Out-Of-Band (hx-swap-oob) update. This would automatically trigger a lightweight, non-blocking visual countdown
-- Asymmetry Analytics.
-    Because your work_sets table explicitly tracks the hand (left vs right) alongside weight and reps, GripTrack is sitting on a goldmine of bilateral deficit data.
-- Finger-injury risk guardian (GitHub issue #28, needs-triage) — a protective,
-    per-(grip, edge) load-management monitor (acute:chronic workload ratio +
-    asymmetry drift) that flags pulley-strain risk *before* a session, framed as
-    a heuristic guardrail not a diagnosis. Uses data GripTrack already stores and
-    no other logging app combines. Build *after* Asymmetry Analytics (which
-    becomes its first input signal); the existing `OvertrainingWarning` is a
-    crude single-grip prototype of it. Needs its own grill + real-data threshold
-    calibration first.
+
+Re-planned 2026-07-09 from `docs/griptrack-full-review.md` (full critical
+review) — see `docs/adr/0006-personal-instrument-scope.md` for the framing
+decision: GripTrack stays a personal instrument (owner + invited friends),
+open-sourcing is the candidate growth path, the public-launch track is
+dropped. Waves in order; GitHub issues are the source of truth for status.
+
+- **Wave 0 — hardening PR:** SQLite WAL mode + `busy_timeout`; ruff + mypy +
+  pip-audit in CI; derive the service worker's `CACHE_VERSION` from a
+  content hash (kills the manual-bump rule).
+- **Wave 1 — data-model corrections** (cheap while the dataset is small):
+  1. `session_number` for two-a-day sessions + client-local date default +
+     past-date warning banner + explicit (not implicit) past-session creation
+  2. Pinch dimension semantics: `dimension_name` on `grip_types` ("edge
+     depth" / "block width"); the `edge_mm` column keeps its name — glossary
+     note in `CONTEXT.md`
+  3. Expose session `notes` + `is_deload` flag (plateau logic skips deloads)
+     + minimal pain table `(session_id, hand, severity 1–3, note)`, all
+     autosaving
+  4. Self-service void-a-test flag; voided tests excluded from `CurrentMax`
+  5. Climb form boulder-only (UI-only; schema and history untouched) + loud
+     "grade not recognized" feedback instead of silent analytics exclusion
+- **Wave 2 — correctness/trust batch:** session revocation (per-user
+  session-generation counter; admin password reset invalidates sessions) +
+  rate-limit `/register`; Spearman + n≥8 floor for the strength–grade
+  correlation; CSV export.
+- **Wave 3 — Asymmetry Analytics** (PRD #45, slices #46–#48, ready-for-agent).
+- **Wave 4 — retention wave** (one feature surface, needs its own mini-grill
+  first): RPE-driven Tier-1 deterministic autoregulation (RPE ≤ 7 twice →
+  suggest smallest loadable increment; RPE ≥ 9 / missed reps → hold or step
+  down); retest nudge when work-set history implies `CurrentMax` drift;
+  "estimated this combo 3× → guided test?" nudge; mean-intensity series
+  (weight ÷ CurrentMax-as-of-date) beside tonnage on the trend chart; RPE
+  stepper input; in-between-set rest timer (htmx OOB countdown, stored rest
+  durations, wake lock, audio/notification strategy).
+- **Owner-gated, parallel:** Oracle switch when the account unblocks —
+  Litestream enable + restore drill is step one (if the ticket is still
+  stuck after ~a week, revisit decoupling backups to R2/B2); PWA phone test
+  with an accessibility mini-pass (chart ARIA titles, non-color-only
+  warning states, contrast, 44px targets); error-tracking decision
+  post-Oracle (Sentry vs self-hosted vs structured logs).
+- **Deferred with named triggers:** CSP nonces, admin audit table, first-run
+  onboarding, chart-render caching → open-sourcing or audience growth;
+  Playwright smoke tests → starting #20; cross-combination aggregate load
+  (needs read-time unit canonicalization, the ADR-0003 IOU) and pain-data
+  consumption → injury guardian (#28); offline WorkSet sync (#20) → its own
+  design grill, someday; stored canonical grades / conversion matrix → if a
+  grade matrix ever becomes real (Font + V both already parse); per-user
+  `TrainingProtocol` overrides and progression-path logic → after Wave 4
+  proves the nudge machinery.
+- Finger-injury risk guardian (GitHub issue #28) — build *after* Asymmetry
+    Analytics and after Wave 1 pain/deload logging has accumulated real
+    data; the existing `OvertrainingWarning` is a crude single-grip
+    prototype of it. Needs its own grill + real-data threshold calibration.
+- **Dropped (2026-07-09):** Tindeq/force-gauge integration (no owner
+  interest yet), sport-climb analytics (climb logging is boulder-only for
+  now), V-grade suffix parsing (local gyms use Font), 2FA, open self-signup
+  + email infrastructure, admin protocol-tuning dashboard, system-health
+  analytics.
 
 
 ## Remaining implementation-level decisions
