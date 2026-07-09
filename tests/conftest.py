@@ -26,7 +26,8 @@ def build_client() -> TestClient:
         # Mirrors the data migrations that seed production: starter grip
         # types and the single global TrainingProtocol row (ADR-0005).
         for name in STARTER_GRIP_TYPES:
-            seed_session.add(GripType(name=name))
+            dimension = "block width" if name == "pinch" else "edge depth"
+            seed_session.add(GripType(name=name, dimension_name=dimension))
         seed_session.add(TrainingProtocol(user_id=None))
         seed_session.commit()
 

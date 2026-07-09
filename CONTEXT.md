@@ -176,3 +176,6 @@ A dated bodyweight entry. The most recent entry is the user's "current"
 bodyweight; the full history is what strength-vs-bodyweight analysis uses,
 matched to the closest entry at or before each TrainingSession/test date.
 _Avoid_: Bodyweight (as a mutable profile field)
+
+**edge_mm**:
+Stores the grip's characteristic dimension in mm; for pinch that's block width, for most other grips it's edge depth. The DB column keeps the name `edge_mm` across all grips for stability, but the UI labels it dynamically based on the selected GripType's `dimension_name`.
