@@ -15,19 +15,6 @@
 
 <div class="card">
 <h3>Climbs</h3>
-{% if climbs %}
-<ul class="plain">
-  {% for climb in climbs %}
-  <li class="climb" data-discipline="{{ climb.discipline }}" data-grade="{{ climb.grade }}" data-style="{{ climb.style }}" data-date="{{ climb.date }}">
-    <span class="grade">{{ climb.grade }}</span>
-    <span class="pill {{ climb.discipline }}">{{ climb.discipline }}</span>
-    <span class="pill">{{ climb.style }}</span>
-    <div class="meta">{{ climb.date }}{% if climb.notes %} — {{ climb.notes }}{% endif %}</div>
-  </li>
-  {% endfor %}
-</ul>
-{% else %}
-<p class="muted" style="margin:0">No climbs logged yet.</p>
-{% endif %}
+{% include "_climb_list.html" %}
 </div>
 {% endblock %}
