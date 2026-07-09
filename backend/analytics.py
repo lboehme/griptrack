@@ -140,7 +140,7 @@ def training_volume_trend(
         .where(WorkSet.hand == hand)
         .where(WorkSet.grip_type_id == grip_type_id)
         .where(WorkSet.edge_mm == edge_mm)
-        .where(~TrainingSession.is_deload)
+        .where(TrainingSession.is_deload.is_(False))
         .order_by(TrainingSession.date, TrainingSession.session_number)
     ).all()
     volumes: dict[tuple[date_type, int], float] = {}

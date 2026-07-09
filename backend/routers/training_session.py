@@ -6,7 +6,7 @@ from sqlmodel import Session, select
 
 from backend import auth, training_log
 from backend.db import get_session
-from backend.limits import MAX_EDGE_MM, MAX_REPS, MAX_SET_NUMBER, MAX_WEIGHT
+from backend.limits import MAX_EDGE_MM, MAX_NOTES_LENGTH, MAX_REPS, MAX_SET_NUMBER, MAX_WEIGHT
 from backend.models import GripType, PainReport, User
 from backend.templating import templates
 
@@ -226,34 +226,19 @@ def update_session(
     request: Request,
     date: date_type = Form(),
     session_number: int | None = Form(default=None),
-    notes: str | None = Form(default=None),
+    notes: str | None = Form(default=None, max_length=MAX_NOTES_LENGTH),
     is_deload: str | None = Form(default=None),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
-    """Autosave endpoint for session-level fields."""
+    """Autosave endpoint for session-level fields. The form always posts
+    both fields together, so a checkbox that's unchecked (and therefore
+    omitted by the browser) is unambiguous: it means False."""
     training_session = training_log.find_session(session, user, date, session_number)
     if training_session is not None:
-        if notes is not None:
-            training_session.notes = notes
-        
-        # Checkbox logic: form sends "on" if checked, omits field if unchecked.
-        # So we can just check if it's "on".
-        if "is_deload" in dict(request._form if hasattr(request, "_form") else {}):
-             # Actually, if we use Form(), when it's not present, it is None.
-             # But if they uncheck it, it's missing from the form data. 
-             # To distinguish from a partial update, we might need a hidden field or just assume 
-             # this endpoint always updates is_deload if called from the form.
-             pass
-        
-        # A safer way to handle checkbox with HTMX: we might receive only notes or only is_deload
-        # if using hx-post on the specific inputs. But wait, if they are in a form and the form is submitted,
-        # we get both. 
-        # Let's just update fields that are explicitly provided, but for checkbox, it's tricky.
-        # Actually, let's just accept both and set them.
         training_session.notes = notes or ""
         training_session.is_deload = (is_deload == "on")
-        
+
         session.add(training_session)
         session.commit()
 
@@ -268,25 +253,32 @@ def add_pain_report(
     date: date_type = Form(),
     hand: str = Form(),
     severity: int = Form(ge=1, le=3),
-    note: str | None = Form(default=None),
+    note: str | None = Form(default=None, max_length=MAX_NOTES_LENGTH),
     session_number: int | None = Form(default=None),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
+    if hand not in ("left", "right", "both"):
+        return HTMLResponse("Hand must be left, right, or both.", status_code=400)
     training_session = training_log.find_session(session, user, date, session_number)
     if training_session is not None:
-        report = PainReport(
-            training_session_id=training_session.id,
-            hand=hand,
-            severity=severity,
-            note=note,
-        )
+        # One logical "tweak" per hand is one row — the severity select and
+        # the note field autosave independently on the frontend, so this
+        # must be an upsert keyed on (session, hand) rather than always
+        # inserting, matching the autosave idiom everywhere else in the app.
+        report = session.exec(
+            select(PainReport)
+            .where(PainReport.training_session_id == training_session.id)
+            .where(PainReport.hand == hand)
+        ).first()
+        if report is None:
+            report = PainReport(training_session_id=training_session.id, hand=hand)
+        report.severity = severity
+        report.note = note
         session.add(report)
         session.commit()
-    
+
     if request.headers.get("HX-Request"):
-        # For a seamless UI, we could return the rendered pain report row, but 204 is fine 
-        # if the frontend relies on reload or we just want to accept the test for now.
         return Response(status_code=204)
     return RedirectResponse("/history", status_code=303)
 
