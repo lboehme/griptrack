@@ -14,7 +14,6 @@ from backend.models import (
     User,
     WarmupStepCheck,
     WorkSet,
-    PainReport,
 )
 
 
