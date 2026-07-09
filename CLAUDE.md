@@ -39,14 +39,18 @@ through an explicit design-interview session (the `grilling` +
   before revisiting any of the choices below; each explains a real
   trade-off that was deliberately made.
 
-**Current state:** the full PRD (issue #1, slices #2–#13) is implemented —
-auth, profile, plates, max tests, session logging, climbs, history, and the
-analytics dashboard (volume trend charts, plateau, overtraining warning,
-%BW-vs-grade correlation), with a 53-test suite at the HTTP seam. Remaining
-open work lives in the GitHub issue tracker (e.g. #14, the guided
-max-testing routine — needs design input before it's buildable). Work
-test-first (see the `tdd` skill) and keep migrations in lockstep with model
-changes.
+**Current state (2026-07-09):** the full PRD (issue #1) plus Waves 0–2 of
+the post-review roadmap are implemented and deployed to Fly — auth (with
+session revocation), profile, plates, max tests (guided routine, voidable),
+session logging (multi-session days, notes/deload/pain reports), boulder
+climb logging with loud grade feedback, history, CSV export, PWA
+(manifest + service worker with content-hash cache version), and the
+analytics dashboard (deload-aware volume trend, plateau, overtraining
+warning, Spearman %BW-vs-grade correlation with an n≥8 floor) — 173 tests
+at the HTTP seam plus ruff/mypy/pip-audit gates. Remaining open work:
+Asymmetry Analytics (#45–#48, next up), the Wave 4 retention PRD (#59,
+needs its own grill), and the deferred #20/#28. Work test-first (see the
+`tdd` skill) and keep migrations in lockstep with model changes.
 
 ## Environment & running
 
@@ -66,10 +70,13 @@ conda run -n griptrack fastapi dev backend/main.py
 Run tests with `scripts/test` (wraps the conda env; pass pytest args through).
 The full dev loop lives in `scripts/`: `scripts/check-migrations` (the two CI
 migration gates, runnable locally), `scripts/new-migration "msg"` (autogenerate
-a revision against a temp DB at head — never hand-write revision files), and
-`scripts/deploy` (fly deploy + health check + migration-log verification).
-CI calls the same `scripts/test` / `scripts/check-migrations`, so local and CI
-behavior can't drift. All tests sit at the HTTP seam.
+a revision against a temp DB at head — never hand-write revision files),
+`scripts/lint` (ruff + mypy + pip-audit; mypy has a pyproject override list
+for modules that build SQLModel query expressions — extend the list, don't
+re-broaden the disabled codes), and `scripts/deploy` (fly deploy + health
+check + migration-log verification). CI calls the same `scripts/test` /
+`scripts/lint` / `scripts/check-migrations`, so local and CI behavior can't
+drift. All tests sit at the HTTP seam.
 
 ## Deployment & security
 
@@ -165,25 +172,35 @@ below) and `TrainingVolume` (the primary trend/plateau signal, not
 `MaxWeightTest`).
 
 - **users**: id, email, hashed_password, is_admin, unit_pref (kg/lbs, fixed
-  at signup), hand_order_pref (alternating/sequential), created_at
+  at signup), hand_order_pref (alternating/sequential), name (optional
+  display name), session_version (bumped on password reset — revokes all
+  of that user's session cookies), created_at
 - **invites**: id, code, created_by_user_id (FK), used_by_user_id (FK,
   nullable), created_at, used_at (nullable)
 - **body_weight_logs**: id, user_id (FK), date, weight — a time series, not
   a mutable profile field (`docs/adr/0001-...md`)
-- **grip_types**: id, name — a lookup table (extensible without a deploy),
-  seeded with a starter list (half_crimp, full_crimp, open_hand,
-  three_finger_drag, pinch)
+- **grip_types**: id, name, dimension_name ("edge depth" / "block width" —
+  labels what `edge_mm` means for that grip, see CONTEXT.md) — a lookup
+  table (extensible without a deploy), seeded with a starter list
+  (half_crimp, full_crimp, open_hand, three_finger_drag, pinch)
 - **max_weight_tests**: id, user_id (FK), hand, grip_type_id (FK), edge_mm,
-  date, weight — dated, append-only, scoped per (hand, grip_type, edge_mm),
-  not just per hand (`docs/adr/0001-...md`). Expected to be logged rarely in
-  practice (mainly when switching grip/edge).
+  date, weight, voided_at (nullable — self-service void; voided tests are
+  excluded from CurrentMax and all consumers, row never deleted) — dated,
+  append-only, scoped per (hand, grip_type, edge_mm), not just per hand
+  (`docs/adr/0001-...md`). Expected to be logged rarely in practice.
 - **plate_inventory_items**: id, user_id (FK), plate_weight, count — a
   single stack (one loading pin/handle, not split like a barbell); new
   users get a seeded default, editable anytime (`docs/adr/0002-...md`)
-- **training_sessions**: id, user_id (FK), date, notes, created_at
+- **training_sessions**: id, user_id (FK), date, session_number (unique
+  (user, date, session_number) — identity-bearing key for two-a-days and
+  offline-sync replay), started_at (descriptive only), notes, is_deload
+  (plateau/trend math skips deloads), created_at
+- **pain_reports**: id, training_session_id (FK), hand, severity (1–3),
+  note — at most one row per (session, hand), autosaving; ground truth
+  being accumulated for the injury guardian (#28)
 - **work_sets**: id, training_session_id (FK), hand, grip_type_id (FK),
   edge_mm, weight, reps, set_number, rpe (1.0–10.0, 0.5 increments, nullable)
-- **climbs**: id, user_id (FK), date, discipline (boulder/sport), grade,
+- **climbs**: id, user_id (FK), date, discipline (form is boulder-only since #55; old sport rows still render in history), grade,
   style (onsight/flash/redpoint/attempt), notes
 - **training_protocols**: id, ramp_percentages (50/65/80/90 default),
   base_work_set_reps (5 default), user_id (FK, nullable — null means "global
@@ -252,10 +269,10 @@ decision: GripTrack stays a personal instrument (owner + invited friends),
 open-sourcing is the candidate growth path, the public-launch track is
 dropped. Waves in order; GitHub issues are the source of truth for status.
 
-- **Wave 0 — hardening PR:** SQLite WAL mode + `busy_timeout`; ruff + mypy +
+- **Wave 0 — hardening PR (shipped 2026-07-09, #50/PR #62):** SQLite WAL mode + `busy_timeout`; ruff + mypy +
   pip-audit in CI; derive the service worker's `CACHE_VERSION` from a
   content hash (kills the manual-bump rule).
-- **Wave 1 — data-model corrections** (cheap while the dataset is small):
+- **Wave 1 — data-model corrections (shipped 2026-07-09, #51–#55 / PRs #63, #65, #66, #67, #61 + cleanup #71):**
   1. `session_number` for two-a-day sessions + client-local date default +
      past-date warning banner + explicit (not implicit) past-session creation
   2. Pinch dimension semantics: `dimension_name` on `grip_types` ("edge
@@ -267,11 +284,11 @@ dropped. Waves in order; GitHub issues are the source of truth for status.
   4. Self-service void-a-test flag; voided tests excluded from `CurrentMax`
   5. Climb form boulder-only (UI-only; schema and history untouched) + loud
      "grade not recognized" feedback instead of silent analytics exclusion
-- **Wave 2 — correctness/trust batch:** session revocation (per-user
+- **Wave 2 — correctness/trust batch (shipped 2026-07-09, #56–#58 / PRs #68, #69, #70):** session revocation (per-user
   session-generation counter; admin password reset invalidates sessions) +
   rate-limit `/register`; Spearman + n≥8 floor for the strength–grade
   correlation; CSV export.
-- **Wave 3 — Asymmetry Analytics** (PRD #45, slices #46–#48, ready-for-agent).
+- **Wave 3 — Asymmetry Analytics** (PRD #45, slices #46–#48, ready-for-agent). **← next up.**
 - **Wave 4 — retention wave** (one feature surface, needs its own mini-grill
   first): RPE-driven Tier-1 deterministic autoregulation (RPE ≤ 7 twice →
   suggest smallest loadable increment; RPE ≥ 9 / missed reps → hold or step
