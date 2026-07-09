@@ -18,6 +18,14 @@ def test_unit_preference_defaults_to_kg(client):
     assert "kg" in profile.text
 
 
+def test_profile_page_links_to_data_export(client):
+    register(client, "lifter@example.com", "test-pw-1234")
+
+    profile = client.get("/profile")
+
+    assert 'href="/profile/export"' in profile.text
+
+
 def current_bodyweight(client):
     import re
 
@@ -84,3 +92,50 @@ def test_hand_order_preference_defaults_and_is_editable(client):
 
     assert response.status_code == 200
     assert "sequential" in client.get("/profile").text
+
+
+def test_csv_export_returns_user_scoped_data(client):
+    import io
+    import zipfile
+
+    from tests.helpers import log_climb, log_max_test
+
+    # Setup User A
+    register(client, "founder@example.com", "test-pw-1234", unit_pref="kg")
+    log_bodyweight(client, "2026-07-01", "71.4")
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "35")
+    
+    # Setup User B
+    register_second_user(client, "friend@example.com", "test-pw-1234")
+    log_bodyweight(client, "2026-07-02", "88.0")
+    log_climb(client, "2026-07-02", "V3")
+    log_climb(client, "2026-07-03", "V4")
+
+    # Export User B data
+    response = client.get("/profile/export")
+    assert response.status_code == 200
+    assert response.headers["Content-Type"] == "application/zip"
+    
+    with zipfile.ZipFile(io.BytesIO(response.content)) as z:
+        # Check files exist
+        names = z.namelist()
+        assert "BodyWeightLog.csv" in names
+        assert "Climb.csv" in names
+        assert "MaxWeightTest.csv" in names
+        
+        # Verify row counts and scope
+        bodyweights = z.read("BodyWeightLog.csv").decode().splitlines()
+        # header + 1 row
+        assert len(bodyweights) == 2
+        assert "88.0" in bodyweights[1]
+        
+        climbs = z.read("Climb.csv").decode().splitlines()
+        # header + 2 rows
+        assert len(climbs) == 3
+        
+        max_tests = z.read("MaxWeightTest.csv").decode().splitlines()
+        # header only
+        assert len(max_tests) == 1
+        
+        # Verify units are in headers
+        assert "weight (kg)" in bodyweights[0]
