@@ -272,6 +272,23 @@ def test_yesterday_with_a_recent_session_needs_no_confirmation(client):
     assert 'class="ramp-weight"' in page.text
 
 
+def test_warmup_page_pins_a_concrete_session_number_before_any_session_exists(client):
+    """A session page rendered for a date with no TrainingSession yet must
+    still pin a concrete session_number into its hidden field — otherwise
+    an autosave POST re-resolves "latest" at submit time, which could land
+    in a session another tab created meanwhile (the tab-race review nit)."""
+    setup_tested_user(client)
+    grip_id = grip_type_id(client, "half crimp")
+    today = date_type.today().isoformat()
+
+    page = client.get(
+        "/session/warmup",
+        params={"grip_type_id": grip_id, "edge_mm": 20, "date": today},
+    ).text
+
+    assert 'name="session_number" value="1"' in page
+
+
 def test_existing_migration_data_lands_on_session_number_one(client):
     """Sessions created before this slice (i.e. with no explicit
     session_number) default to 1 — the migration's backfill value."""

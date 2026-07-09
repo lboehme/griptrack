@@ -23,6 +23,7 @@ def history_page(
             "user": user,
             "history": training_log.session_history(session, user),
             "grip_names": training_log.grip_names(session),
+            "grip_dimension_names": training_log.grip_dimension_names(session),
             "climbs": climbs_newest_first(session, user),
         },
     )

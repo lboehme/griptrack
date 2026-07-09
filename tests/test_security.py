@@ -221,6 +221,38 @@ def test_oversized_climb_text_inputs_are_rejected(client):
     assert 'data-grade=' not in client.get("/climbs").text
 
 
+def test_session_number_is_bounded(client):
+    register(client, password="long-enough-pw")
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "40")
+    grip_id = grip_type_id(client, "half crimp")
+
+    too_high = client.post(
+        "/session/workset",
+        data={
+            "grip_type_id": grip_id, "edge_mm": 20, "date": "2026-07-04",
+            "hand": "left", "set_number": 1, "weight": "40", "reps": "5",
+            "session_number": 999999,
+        },
+        follow_redirects=False,
+    )
+    assert too_high.status_code == 422
+
+    too_low = client.post(
+        "/session/workset",
+        data={
+            "grip_type_id": grip_id, "edge_mm": 20, "date": "2026-07-04",
+            "hand": "left", "set_number": 1, "weight": "40", "reps": "5",
+            "session_number": 0,
+        },
+        follow_redirects=False,
+    )
+    assert too_low.status_code == 422
+
+    # Neither absurd attempt created a row.
+    history = client.get("/history").text
+    assert 'data-date="2026-07-04"' not in history
+
+
 def test_bootstrap_token_gates_the_first_admin(monkeypatch, client_factory):
     monkeypatch.setenv("GRIPTRACK_BOOTSTRAP_TOKEN", "let-me-in")
     client = client_factory()

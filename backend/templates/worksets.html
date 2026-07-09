@@ -2,7 +2,7 @@
 {% block title %}Work sets — GripTrack{% endblock %}
 {% block content %}
 <h2>Work sets</h2>
-<p class="page-sub">{{ grip.name }} · {{ edge_mm }} mm · {{ date }}{% if session_number and session_number > 1 %} · session {{ session_number }}{% endif %}{% if hands|length == 1 %} · <span class="hand-heading">{{ hands[0] }} hand</span>{% endif %}</p>
+<p class="page-sub">{{ grip.name }} · {{ edge_mm }} mm {{ grip.dimension_name }} · {{ date }}{% if session_number and session_number > 1 %} · session {{ session_number }}{% endif %}{% if hands|length == 1 %} · <span class="hand-heading">{{ hands[0] }} hand</span>{% endif %}</p>
 <div class="notice past-session-banner" data-session-date="{{ date }}" hidden>You're viewing a past session — edits change your history.</div>
 <div class="card">
 <p class="muted" style="margin:0 0 .6rem; font-size:.82rem">Tick a set when you've done it — edits to ticked sets save automatically, and a weight change carries down to later unticked sets.</p>
