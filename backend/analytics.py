@@ -133,12 +133,12 @@ def training_volume_trend(
             WorkSet.weight,
             WorkSet.reps,
         )
-        .join(WorkSet, WorkSet.training_session_id == TrainingSession.id)  # type: ignore[arg-type]
+        .join(WorkSet, WorkSet.training_session_id == TrainingSession.id)
         .where(TrainingSession.user_id == user.id)
         .where(WorkSet.hand == hand)
         .where(WorkSet.grip_type_id == grip_type_id)
         .where(WorkSet.edge_mm == edge_mm)
-        .where(TrainingSession.is_deload == False)
+        .where(TrainingSession.is_deload.is_(False))
         .order_by(TrainingSession.date, TrainingSession.session_number)
     ).all()
     volumes: dict[tuple[date_type, int], float] = {}

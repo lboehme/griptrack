@@ -7,13 +7,13 @@ from backend.models import (
     BodyWeightLog,
     GripType,
     MaxWeightTest,
+    PainReport,
     SessionMaxEstimate,
     TrainingProtocol,
     TrainingSession,
     User,
     WarmupStepCheck,
     WorkSet,
-    PainReport,
 )
 
 
