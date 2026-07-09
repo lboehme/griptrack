@@ -7,7 +7,7 @@ from sqlmodel import Session, select
 from backend import auth, training_log
 from backend.db import get_session
 from backend.limits import MAX_EDGE_MM, MAX_REPS, MAX_SET_NUMBER, MAX_WEIGHT
-from backend.models import GripType, User, TrainingSession, PainReport
+from backend.models import GripType, PainReport, User
 from backend.templating import templates
 
 router = APIRouter()

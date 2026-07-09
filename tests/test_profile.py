@@ -18,6 +18,14 @@ def test_unit_preference_defaults_to_kg(client):
     assert "kg" in profile.text
 
 
+def test_profile_page_links_to_data_export(client):
+    register(client, "lifter@example.com", "test-pw-1234")
+
+    profile = client.get("/profile")
+
+    assert 'href="/profile/export"' in profile.text
+
+
 def current_bodyweight(client):
     import re
 
@@ -87,9 +95,10 @@ def test_hand_order_preference_defaults_and_is_editable(client):
 
 
 def test_csv_export_returns_user_scoped_data(client):
-    from tests.helpers import log_climb, log_max_test, login
-    import zipfile
     import io
+    import zipfile
+
+    from tests.helpers import log_climb, log_max_test
 
     # Setup User A
     register(client, "founder@example.com", "test-pw-1234", unit_pref="kg")
@@ -98,8 +107,6 @@ def test_csv_export_returns_user_scoped_data(client):
     
     # Setup User B
     register_second_user(client, "friend@example.com", "test-pw-1234")
-    client.post("/profile", data={"unit_pref": "lbs"}, follow_redirects=True) # Wait, it can't change unit_pref after signup
-    # We registered with lbs in helper? No, default is kg. But we can test scoping anyway.
     log_bodyweight(client, "2026-07-02", "88.0")
     log_climb(client, "2026-07-02", "V3")
     log_climb(client, "2026-07-03", "V4")

@@ -1,13 +1,26 @@
+import csv
+import io
+import zipfile
 from datetime import date as date_type
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlmodel import Session
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from sqlmodel import Session, select
 
 from backend import auth, training_log
 from backend.db import get_session
 from backend.limits import MAX_NAME_LENGTH, MAX_WEIGHT
-from backend.models import BodyWeightLog, User
+from backend.models import (
+    BodyWeightLog,
+    Climb,
+    MaxWeightTest,
+    PainReport,
+    SessionMaxEstimate,
+    TrainingSession,
+    User,
+    WarmupStepCheck,
+    WorkSet,
+)
 from backend.templating import templates
 
 router = APIRouter()
@@ -73,22 +86,6 @@ def export_data(
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
-    import csv
-    import io
-    import zipfile
-    from fastapi.responses import Response
-    from backend.models import (
-        MaxWeightTest,
-        TrainingSession,
-        PainReport,
-        WarmupStepCheck,
-        SessionMaxEstimate,
-        WorkSet,
-        Climb,
-        BodyWeightLog,
-    )
-    from sqlmodel import select
-
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         def add_csv(filename: str, rows, fieldnames: list[str]):
@@ -136,13 +133,33 @@ def export_data(
             )
             ts_ids = [ts.id for ts in ts_rows]
             
-            dump_with_units(PainReport, select(PainReport).where(PainReport.training_session_id.in_(ts_ids)), [])
-            dump_with_units(WarmupStepCheck, select(WarmupStepCheck).where(WarmupStepCheck.training_session_id.in_(ts_ids)), ["actual_weight"])
-            dump_with_units(SessionMaxEstimate, select(SessionMaxEstimate).where(SessionMaxEstimate.training_session_id.in_(ts_ids)), ["weight"])
-            dump_with_units(WorkSet, select(WorkSet).where(WorkSet.training_session_id.in_(ts_ids)), ["weight"])
+            dump_with_units(
+                PainReport,
+                select(PainReport).where(PainReport.training_session_id.in_(ts_ids)),
+                [],
+            )
+            dump_with_units(
+                WarmupStepCheck,
+                select(WarmupStepCheck).where(
+                    WarmupStepCheck.training_session_id.in_(ts_ids)
+                ),
+                [],
+            )
+            dump_with_units(
+                SessionMaxEstimate,
+                select(SessionMaxEstimate).where(
+                    SessionMaxEstimate.training_session_id.in_(ts_ids)
+                ),
+                ["weight"],
+            )
+            dump_with_units(
+                WorkSet,
+                select(WorkSet).where(WorkSet.training_session_id.in_(ts_ids)),
+                ["weight"],
+            )
 
     return Response(
         content=zip_buffer.getvalue(),
         media_type="application/zip",
-        headers={"Content-Disposition": "attachment; filename=griptrack_export.zip"}
+        headers={"Content-Disposition": "attachment; filename=griptrack-export.zip"}
     )
