@@ -48,3 +48,26 @@ def test_new_routes_carry_the_unchanged_csp(client):
     for path in ("/sw.js", "/offline"):
         response = client.get(path)
         assert "default-src 'self'" in response.headers["Content-Security-Policy"]
+
+
+def test_cache_version_changes_when_a_precached_asset_content_changes(tmp_path, monkeypatch):
+    # CACHE_VERSION is a content hash of the precached static files, with
+    # no manual-bump step. Point the hashing helper at throwaway files
+    # under tmp_path (never touch the real static/ assets) and confirm
+    # that editing a file's bytes changes the computed version.
+    import backend.routers.pwa as pwa_module
+
+    asset = tmp_path / "app.css"
+    asset.write_bytes(b"body { color: red; }")
+    monkeypatch.setattr(pwa_module, "_PRECACHED_STATIC_FILES", [asset])
+
+    version_before = pwa_module._compute_cache_version()
+
+    asset.write_bytes(b"body { color: blue; }")
+    version_after = pwa_module._compute_cache_version()
+
+    assert version_before != version_after
+
+    # And confirm CACHE_VERSION, as actually computed at import time, is
+    # exactly what's baked into the served service worker JS.
+    assert pwa_module.CACHE_VERSION in pwa_module.SERVICE_WORKER_JS

@@ -21,7 +21,7 @@ WORKING_REPS = 3
 # Effort-increment ladder driving the next suggested weight, expressed per
 # unit_pref (never converted between units — mirrors ADR-0003's native-unit
 # precedent) rather than a raw kg<->lbs conversion of one master table.
-LADDERS = {
+LADDERS: dict[str, dict[str, float]] = {
     "kg": {"effortless": 10, "fairly_easy": 5, "moderate": 2, "hard": 1},
     "lbs": {"effortless": 20, "fairly_easy": 10, "moderate": 5, "hard": 2.5},
 }
@@ -82,8 +82,8 @@ def decode_column(token: str) -> dict:
     InvalidColumn on anything malformed or past the app's numeric ceilings."""
     try:
         column = json.loads(token)
-    except (TypeError, ValueError):
-        raise InvalidColumn(token)
+    except (TypeError, ValueError) as exc:
+        raise InvalidColumn(token) from exc
     if not isinstance(column, dict) or column.get("hand") not in ("left", "right"):
         raise InvalidColumn(token)
     if column.get("status") == "done":
@@ -153,6 +153,9 @@ def advance_two_hand(
     if outcome == "done":
         this_column = {"hand": hand, "status": "done", "weight": actual}
     else:
+        # advance() only returns step=None alongside outcome="done" (the
+        # branch above), so step is always a dict here.
+        assert step is not None
         this_column = {"hand": hand, "status": "active", "estimate": estimate, **step}
     ordered = (
         [this_column, other_column] if hand == "left" else [other_column, this_column]

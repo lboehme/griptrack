@@ -1,4 +1,7 @@
+import hashlib
 import json
+from pathlib import Path
+from string import Template
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
@@ -13,10 +16,7 @@ BACKGROUND_COLOR = "#f3f4f6"
 
 router = APIRouter()
 
-# Bump this whenever a precached file's content changes — the service
-# worker deletes any cache keyed under an older version on activation, so
-# this string is the whole update mechanism for already-installed clients.
-CACHE_VERSION = "griptrack-v1"
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 # Everything the service worker precaches on install: the static shell plus
 # the offline fallback page itself, so it's servable with no network at
@@ -31,9 +31,34 @@ PRECACHE_URLS = [
     "/offline",
 ]
 
-SERVICE_WORKER_JS = """\
-const CACHE_VERSION = %(cache_version)s;
-const PRECACHE_URLS = %(precache_urls)s;
+# Every /static precache URL maps directly to a file under STATIC_DIR (see
+# backend/main.py's StaticFiles mount); "/offline" is server-rendered, not
+# a static file, so it's excluded from hashing.
+_PRECACHED_STATIC_FILES = [
+    STATIC_DIR / url.removeprefix("/static/") for url in PRECACHE_URLS if url.startswith("/static/")
+]
+
+
+def _compute_cache_version() -> str:
+    """Derive CACHE_VERSION from the content of every precached static asset.
+
+    Replaces a manual "bump CACHE_VERSION whenever a precached file
+    changes" rule — a maintenance landmine: forget it once and installed
+    clients keep serving stale assets. Hashing content directly means the
+    version changes automatically, and only when it actually needs to.
+    Computed once at import/startup from the files on disk at that moment.
+    """
+    digest = hashlib.sha256()
+    for path in sorted(_PRECACHED_STATIC_FILES):
+        digest.update(path.read_bytes())
+    return f"griptrack-{digest.hexdigest()[:16]}"
+
+
+CACHE_VERSION = _compute_cache_version()
+
+SERVICE_WORKER_JS_TEMPLATE = Template("""\
+const CACHE_VERSION = $cache_version;
+const PRECACHE_URLS = $precache_urls;
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -78,10 +103,12 @@ self.addEventListener("fetch", (event) => {
     );
   }
 });
-""" % {
-    "cache_version": json.dumps(CACHE_VERSION),
-    "precache_urls": json.dumps(PRECACHE_URLS),
-}
+""")
+
+SERVICE_WORKER_JS = SERVICE_WORKER_JS_TEMPLATE.substitute(
+    cache_version=json.dumps(CACHE_VERSION),
+    precache_urls=json.dumps(PRECACHE_URLS),
+)
 
 
 @router.get("/manifest.webmanifest")

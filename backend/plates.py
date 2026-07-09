@@ -60,6 +60,6 @@ def inventory_for(session: Session, user: User) -> list[PlateInventoryItem]:
         session.exec(
             select(PlateInventoryItem)
             .where(PlateInventoryItem.user_id == user.id)
-            .order_by(PlateInventoryItem.weight)
+            .order_by(PlateInventoryItem.weight)  # type: ignore[arg-type]  # SQLModel column typed as float, not Column
         )
     )

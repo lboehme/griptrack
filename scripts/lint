@@ -1,0 +1,24 @@
+#!/bin/sh
+# Static-analysis gates: ruff (lint), mypy (types), pip-audit (dependency
+# vulnerabilities). Uses the griptrack conda env when present (local dev);
+# falls back to the tools on PATH (CI). Same script both places, so local
+# and CI can't drift.
+set -e
+cd "$(dirname "$0")/.."
+
+if command -v conda >/dev/null 2>&1 && conda env list 2>/dev/null | grep -q "^griptrack "; then
+    run() { conda run --no-capture-output -n griptrack "$@"; }
+else
+    run() { "$@"; }
+fi
+
+echo "gate 1: ruff"
+run ruff check .
+
+echo "gate 2: mypy"
+run mypy backend
+
+echo "gate 3: pip-audit"
+run pip-audit --progress-spinner off -r requirements.txt -r requirements-dev.txt
+
+echo "lint OK"
