@@ -52,7 +52,7 @@ def register_second_user(client, email="friend@example.com", password="test-pw-4
 
 def grip_type_id(client, name):
     page = client.get("/max-tests").text
-    return re.search(rf'value="(\d+)">{name}<', page).group(1)
+    return re.search(rf'value="(\d+)"[^>]*>{name}<', page).group(1)
 
 
 def log_max_test(client, hand, grip, edge_mm, date, weight):

@@ -43,6 +43,7 @@ class GripType(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     name: str = Field(unique=True, index=True)
+    dimension_name: str = Field(default="edge depth")
 
 
 # Seeded into grip_types by the migration (prod) and the test fixture.
