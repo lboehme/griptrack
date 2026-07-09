@@ -5,3 +5,7 @@ httpx==0.28.1
 # scripts/generate-icons only — the app itself never imports PIL at runtime,
 # it just serves the PNGs that script commits under backend/static/icons/.
 Pillow==12.3.0
+# scripts/lint: lint, type-check, and dependency-vulnerability gates.
+ruff==0.15.20
+mypy==2.2.0
+pip-audit==2.10.1

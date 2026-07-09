@@ -585,8 +585,27 @@ li.climb .meta { color: var(--muted); font-size: .87rem; margin-top: .15rem; }
   margin-left: .4rem;
 }
 
+.pill.grade-unparsed {
+  color: #a05a00;
+  background: color-mix(in srgb, #e8a13c 18%, transparent);
+  border-color: transparent;
+  margin-left: .4rem;
+}
+
+.grade-warning {
+  margin: 0 0 .6rem;
+  padding: .5rem .7rem;
+  border-radius: 8px;
+  font-size: .87rem;
+  font-weight: 600;
+  color: #a05a00;
+  background: color-mix(in srgb, #e8a13c 18%, transparent);
+}
+
 @media (prefers-color-scheme: dark) {
   .pill.overtraining-flag { color: #f3b95f; }
+  .pill.grade-unparsed { color: #f3b95f; }
+  .grade-warning { color: #f3b95f; }
 }
 
 .corr-headline {

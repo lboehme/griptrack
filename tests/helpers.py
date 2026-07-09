@@ -88,13 +88,21 @@ def save_work_set(
 
 
 def log_climb(
-    client, date="2026-07-04", grade="V5", discipline="boulder",
-    style="flash", notes=None,
+    client, date="2026-07-04", grade="V5", style="flash", notes=None,
+    discipline=None, follow_redirects=True,
 ):
-    data = {"date": date, "discipline": discipline, "grade": grade, "style": style}
+    """Log a climb via the HTTP seam. The climb form no longer offers a
+    discipline choice (issue #55 — new climbs are always boulder), but a
+    `discipline` kwarg is still accepted here so a test can assert the
+    server ignores an attacker-supplied hidden field."""
+    data = {"date": date, "grade": grade, "style": style}
+    if discipline is not None:
+        data["discipline"] = discipline
     if notes is not None:
         data["notes"] = notes
-    return client.post("/climbs", data=data, follow_redirects=True)
+    return client.post(
+        "/climbs", data=data, follow_redirects=follow_redirects
+    )
 
 
 def log_bodyweight(client, date, weight):
