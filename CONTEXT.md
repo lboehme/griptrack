@@ -179,3 +179,29 @@ _Avoid_: Bodyweight (as a mutable profile field)
 
 **edge_mm**:
 Stores the grip's characteristic dimension in mm; for pinch that's block width, for most other grips it's edge depth. The DB column keeps the name `edge_mm` across all grips for stability, but the UI labels it dynamically based on the selected GripType's `dimension_name`.
+
+**SessionNumber**:
+Orders multiple TrainingSessions on the same date (default 1; two-a-days
+get 2, 3, …). Identity-bearing: a session's stable key is (user, date,
+session_number), which the future offline-sync replay (#20) relies on. A
+descriptive `started_at` timestamp exists but is never identity-bearing.
+_Avoid_: Session id (ambiguous with the DB primary key)
+
+**Deload**:
+A TrainingSession the user marks as a planned light session (`is_deload`).
+Deload sessions are excluded from TrainingVolume trend/plateau math so an
+intentional easy week doesn't read as a Plateau.
+_Avoid_: Rest week, light flag
+
+**PainReport**:
+An autosaved per-session annotation — (hand, severity 1–3, optional note),
+at most one row per (session, hand). Ground-truth signal being accumulated
+for the future finger-injury guardian (#28); no analytics consume it yet.
+_Avoid_: Injury (it's a tweak/niggle record, not a diagnosis)
+
+**Voided MaxWeightTest**:
+A max test the owner flagged as bad data (`voided_at` set, self-service).
+The row is never deleted, but voided tests are excluded from CurrentMax
+and every consumer of it; voiding a combination's only test returns that
+combination to "needs test/estimate".
+_Avoid_: Deleted test
