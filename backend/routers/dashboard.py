@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from backend import analytics, auth, charts, training_log
 from backend.db import get_session

@@ -62,16 +62,33 @@ def _best_pull_at(session: Session, user: User, date: date_type) -> float | None
     return max((v for v in values if v is not None), default=None)
 
 
+def _rank(values: list[float]) -> list[float]:
+    """Assigns ranks to a list of values, averaging the ranks for ties."""
+    indexed = sorted(enumerate(values), key=lambda x: x[1])
+    ranks = [0.0] * len(values)
+    i = 0
+    while i < len(indexed):
+        val = indexed[i][1]
+        j = i
+        while j < len(indexed) and indexed[j][1] == val:
+            j += 1
+        avg_rank = sum(range(i + 1, j + 1)) / (j - i)
+        for k in range(i, j):
+            ranks[indexed[k][0]] = avg_rank
+        i = j
+    return ranks
+
+
 def strength_grade_correlation(session: Session, user: User) -> dict:
     """%bodyweight strength vs boulder grade, framed against Lattice's
     published methodology as a reference point — not a reproduction (their
     research covers hangboard hangs, not block pulls). Sport climbs and
-    unparseable grades are excluded; needs 3+ points with variance."""
+    unparseable grades are excluded; needs 8+ points with variance."""
     climbs = session.exec(
         select(Climb)
         .where(Climb.user_id == user.id)
         .where(Climb.discipline == "boulder")
-        .order_by(Climb.date)
+        .order_by(Climb.date)  # type: ignore[arg-type]  # SQLModel column typed as date, not Column
     ).all()
 
     points = []
@@ -91,10 +108,14 @@ def strength_grade_correlation(session: Session, user: User) -> dict:
         )
 
     result = {"points": points, "n": len(points), "r": None}
-    pcts = [point["pct_bodyweight"] for point in points]
-    grades = [point["grade_value"] for point in points]
-    if len(points) >= 3 and len(set(pcts)) > 1 and len(set(grades)) > 1:
-        result["r"] = statistics.correlation(pcts, grades)
+    # points is list[dict[str, object]] (mixed-type dict) so the comprehension
+    # can't statically prove the values back out as float — they are, by
+    # construction just above.
+    pcts: list[float] = [point["pct_bodyweight"] for point in points]  # type: ignore[misc]
+    grades: list[float] = [point["grade_value"] for point in points]  # type: ignore[misc]
+    if len(points) >= 8 and len(set(pcts)) > 1 and len(set(grades)) > 1:
+        # Spearman rank correlation is the Pearson correlation of the ranks.
+        result["r"] = statistics.correlation(_rank(pcts), _rank(grades))
     return result
 
 
@@ -140,7 +161,7 @@ def overtraining_warning(trend: list[tuple[date_type, float]]) -> bool:
     trailing_average = sum(volumes[:-1]) / len(volumes[:-1])
     volume_spike = volumes[-1] >= OVERTRAINING_SPIKE_FACTOR * trailing_average
 
-    gaps = [(b - a).days for a, b in zip(dates, dates[1:])]
+    gaps = [(b - a).days for a, b in zip(dates, dates[1:], strict=False)]
     typical_rest = sum(gaps[:-1]) / len(gaps[:-1])
     short_rest = gaps[-1] < typical_rest
 

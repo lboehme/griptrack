@@ -3,11 +3,12 @@
 {% block content %}
 <h2>Trends</h2>
 <p class="page-sub">TrainingVolume (weight × reps, summed per session) for every combination you train.</p>
-{% if correlation and correlation.r is not none %}
+{% if correlation and correlation.n > 0 %}
 <div class="card corr-card">
   <h3>Strength ↔ boulder grade</h3>
+  {% if correlation.r is not none %}
   <p class="corr-headline">
-    r = <strong class="corr-r" data-r="{{ "%.2f"|format(correlation.r) }}" data-n="{{ correlation.n }}">{{ "%.2f"|format(correlation.r) }}</strong>
+    Spearman ρ = <strong class="corr-r" data-r="{{ "%.2f"|format(correlation.r) }}" data-n="{{ correlation.n }}">{{ "%.2f"|format(correlation.r) }}</strong>
     <span class="muted">across {{ correlation.n }} boulder sends</span>
   </p>
   <ul class="plain corr-points">
@@ -19,7 +20,12 @@
     </li>
     {% endfor %}
   </ul>
-  <p class="muted corr-note">Correlation between your best pull (as % of bodyweight at the time) and boulder grade. Framed against Lattice's published finger-strength research as a reference point — their data covers hangboard hangs, not block pulls.</p>
+  <p class="muted corr-note">Rank correlation (Spearman's ρ) between your best pull (as % of bodyweight at the time) and boulder grade. Framed against Lattice's published finger-strength research as a reference point — their data covers hangboard hangs, not block pulls.</p>
+  {% else %}
+  <p class="corr-headline muted">
+    Not enough data yet. Log {{ 8 - correlation.n }} more boulder send(s) with recent strength/bodyweight records to see correlation.
+  </p>
+  {% endif %}
 </div>
 {% endif %}
 {% if combos %}
