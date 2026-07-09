@@ -7,6 +7,7 @@ from backend.models import (
     BodyWeightLog,
     GripType,
     MaxWeightTest,
+    PainReport,
     SessionMaxEstimate,
     TrainingProtocol,
     TrainingSession,
@@ -140,6 +141,10 @@ def worksets_view(
         "more_sets": row_count + 1,
         # Extra empty rows (from "add another set") can be dismissed again.
         "removable_to": row_count - 1 if row_count > needed_rows else None,
+        "training_session": training_session,
+        "pain_reports": session.exec(
+            select(PainReport).where(PainReport.training_session_id == training_session.id)
+        ).all() if training_session else [],
     }
 
 

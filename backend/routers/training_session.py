@@ -6,8 +6,8 @@ from sqlmodel import Session, select
 
 from backend import auth, training_log
 from backend.db import get_session
-from backend.limits import MAX_EDGE_MM, MAX_REPS, MAX_SET_NUMBER, MAX_WEIGHT
-from backend.models import GripType, User
+from backend.limits import MAX_EDGE_MM, MAX_NOTES_LENGTH, MAX_REPS, MAX_SET_NUMBER, MAX_WEIGHT
+from backend.models import GripType, PainReport, User
 from backend.templating import templates
 
 router = APIRouter()
@@ -219,6 +219,68 @@ def check_warmup_step(
     if request.headers.get("HX-Request"):
         return Response(status_code=204)
     return combo_redirect("warmup", grip_type_id, edge_mm, date, hand, session_number)
+
+
+@router.post("/session/update")
+def update_session(
+    request: Request,
+    date: date_type = Form(),
+    session_number: int | None = Form(default=None),
+    notes: str | None = Form(default=None, max_length=MAX_NOTES_LENGTH),
+    is_deload: str | None = Form(default=None),
+    user: User = Depends(auth.current_user),
+    session: Session = Depends(get_session),
+):
+    """Autosave endpoint for session-level fields. The form always posts
+    both fields together, so a checkbox that's unchecked (and therefore
+    omitted by the browser) is unambiguous: it means False."""
+    training_session = training_log.find_session(session, user, date, session_number)
+    if training_session is not None:
+        training_session.notes = notes or ""
+        training_session.is_deload = (is_deload == "on")
+
+        session.add(training_session)
+        session.commit()
+
+    if request.headers.get("HX-Request"):
+        return Response(status_code=204)
+    return RedirectResponse("/history", status_code=303)
+
+
+@router.post("/session/pain-report")
+def add_pain_report(
+    request: Request,
+    date: date_type = Form(),
+    hand: str = Form(),
+    severity: int = Form(ge=1, le=3),
+    note: str | None = Form(default=None, max_length=MAX_NOTES_LENGTH),
+    session_number: int | None = Form(default=None),
+    user: User = Depends(auth.current_user),
+    session: Session = Depends(get_session),
+):
+    if hand not in ("left", "right", "both"):
+        return HTMLResponse("Hand must be left, right, or both.", status_code=400)
+    training_session = training_log.find_session(session, user, date, session_number)
+    if training_session is not None:
+        # One logical "tweak" per hand is one row — the severity select and
+        # the note field autosave independently on the frontend, so this
+        # must be an upsert keyed on (session, hand) rather than always
+        # inserting, matching the autosave idiom everywhere else in the app.
+        report = session.exec(
+            select(PainReport)
+            .where(PainReport.training_session_id == training_session.id)
+            .where(PainReport.hand == hand)
+        ).first()
+        if report is None:
+            report = PainReport(training_session_id=training_session.id, hand=hand)
+        report.severity = severity
+        report.note = note
+        session.add(report)
+        session.commit()
+
+    if request.headers.get("HX-Request"):
+        return Response(status_code=204)
+    return RedirectResponse("/history", status_code=303)
 
 
 @router.get("/session/new")

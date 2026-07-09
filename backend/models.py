@@ -115,9 +115,19 @@ class TrainingSession(SQLModel, table=True):
     date: date_type
     session_number: int = Field(default=1)
     notes: str | None = None
+    is_deload: bool = Field(default=False)
     created_at: datetime = Field(default_factory=utcnow)
     # Descriptive only — not identity-bearing (see class docstring).
     started_at: datetime | None = Field(default_factory=utcnow)
+
+
+class PainReport(SQLModel, table=True):
+    __tablename__ = "pain_reports"
+    id: int | None = Field(default=None, primary_key=True)
+    training_session_id: int = Field(foreign_key="training_sessions.id", index=True)
+    hand: str
+    severity: int
+    note: str | None = None
 
 
 class WarmupStepCheck(SQLModel, table=True):
