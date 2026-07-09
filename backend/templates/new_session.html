@@ -16,9 +16,12 @@
       <label>Edge (mm)
         <input type="number" name="edge_mm" value="{{ default_edge_mm }}" step="1" min="1" required>
       </label>
-      <label>Date <input type="date" name="date" value="{{ today }}" required></label>
+      <label>Date <input type="date" name="date" value="{{ today }}" class="local-date-default" required></label>
     </div>
     <button type="submit">Start warmup →</button>
+    {% if next_session_number_today %}
+    <button type="submit" name="session_number" value="{{ next_session_number_today }}" class="btn-secondary start-second-session">Start a second session today →</button>
+    {% endif %}
   </form>
 </div>
 {% if history %}

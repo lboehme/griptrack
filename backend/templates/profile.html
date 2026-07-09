@@ -16,7 +16,7 @@
 </p>
 <form method="post" action="/profile/bodyweight">
   <div class="form-row">
-    <label>Date <input type="date" name="date" value="{{ today }}" required></label>
+    <label>Date <input type="date" name="date" value="{{ today }}" class="local-date-default" required></label>
     <label>Bodyweight ({{ user.unit_pref }})
       <input type="number" name="weight" step="0.1" min="1" required>
     </label>

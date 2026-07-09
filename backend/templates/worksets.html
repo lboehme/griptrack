@@ -2,7 +2,8 @@
 {% block title %}Work sets — GripTrack{% endblock %}
 {% block content %}
 <h2>Work sets</h2>
-<p class="page-sub">{{ grip.name }} · {{ edge_mm }} mm · {{ date }}{% if hands|length == 1 %} · <span class="hand-heading">{{ hands[0] }} hand</span>{% endif %}</p>
+<p class="page-sub">{{ grip.name }} · {{ edge_mm }} mm · {{ date }}{% if session_number and session_number > 1 %} · session {{ session_number }}{% endif %}{% if hands|length == 1 %} · <span class="hand-heading">{{ hands[0] }} hand</span>{% endif %}</p>
+<div class="notice past-session-banner" data-session-date="{{ date }}" hidden>You're viewing a past session — edits change your history.</div>
 <div class="card">
 <p class="muted" style="margin:0 0 .6rem; font-size:.82rem">Tick a set when you've done it — edits to ticked sets save automatically, and a weight change carries down to later unticked sets.</p>
 <div class="table-scroll">
@@ -43,17 +44,17 @@
 </table>
 </div>
 <p class="add-set">
-  <a class="btn btn-secondary" href="/session/worksets?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}&amp;sets={{ more_sets }}{% if hands|length == 1 %}&amp;hand={{ hands[0] }}{% endif %}">＋ Add another set</a>
+  <a class="btn btn-secondary" href="/session/worksets?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}&amp;sets={{ more_sets }}{% if hands|length == 1 %}&amp;hand={{ hands[0] }}{% endif %}{% if session_number %}&amp;session_number={{ session_number }}{% endif %}">＋ Add another set</a>
   {% if removable_to %}
-  <a class="btn btn-secondary remove-empty-set" href="/session/worksets?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}&amp;sets={{ removable_to }}{% if hands|length == 1 %}&amp;hand={{ hands[0] }}{% endif %}">－ Remove empty set</a>
+  <a class="btn btn-secondary remove-empty-set" href="/session/worksets?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}&amp;sets={{ removable_to }}{% if hands|length == 1 %}&amp;hand={{ hands[0] }}{% endif %}{% if session_number %}&amp;session_number={{ session_number }}{% endif %}">－ Remove empty set</a>
   {% endif %}
 </p>
 </div>
 <div class="flow-next">
-  <a class="btn btn-secondary" href="/session/warmup?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}{% if hands|length == 1 %}&amp;hand={{ hands[0] }}{% endif %}">← Back to warmup</a>
+  <a class="btn btn-secondary" href="/session/warmup?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}{% if hands|length == 1 %}&amp;hand={{ hands[0] }}{% endif %}{% if session_number %}&amp;session_number={{ session_number }}{% endif %}">← Back to warmup</a>
   {% if hands|length == 1 %}
   {% set other = "right" if hands[0] == "left" else "left" %}
-  <a class="btn btn-secondary" href="/session/warmup?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}&amp;hand={{ other }}">Switch to {{ other }} hand</a>
+  <a class="btn btn-secondary" href="/session/warmup?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}&amp;hand={{ other }}{% if session_number %}&amp;session_number={{ session_number }}{% endif %}">Switch to {{ other }} hand</a>
   {% endif %}
   <a class="btn" href="/">Done — back home</a>
 </div>

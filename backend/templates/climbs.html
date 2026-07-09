@@ -8,7 +8,7 @@
 {% if grade_warning %}<p class="grade-warning" role="alert">{{ grade_warning }}</p>{% endif %}
 <form method="post" action="/climbs">
   <div class="form-row">
-    <label>Date <input type="date" name="date" value="{{ today }}" required></label>
+    <label>Date <input type="date" name="date" value="{{ today }}" class="local-date-default" required></label>
     <label>Grade <input type="text" name="grade" placeholder="V5 / 7A+" required></label>
   </div>
   <div class="form-row">

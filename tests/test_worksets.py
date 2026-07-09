@@ -2,6 +2,7 @@ import re
 
 from tests.helpers import (
     current_maxes,
+    get_session_page,
     grip_type_id,
     log_max_test,
     register,
@@ -17,7 +18,7 @@ def worksets_page(client, grip="half crimp", edge_mm=20, date="2026-07-04", hand
     }
     if hand is not None:
         params["hand"] = hand
-    return client.get("/session/worksets", params=params)
+    return get_session_page(client, "/session/worksets", params)
 
 
 def workset_rows(page_text):
