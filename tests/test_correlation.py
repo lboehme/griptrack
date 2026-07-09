@@ -22,27 +22,29 @@ def correlation_points(client):
 
 
 def seed_progression(client):
-    """Strength and boulder grade rising together; one sport climb as noise."""
+    """Strength and boulder grade rising together; one unparseable-grade
+    climb as noise (issue #55 — excluded from the correlation, not silently
+    but with loud feedback at logging time and a history badge)."""
     register(client)
     log_bodyweight(client, "2026-06-01", "70")
-    
-    # We need at least 8 points for correlation now.
+
+    # The n >= 8 floor needs eight parseable points; ties exercise
+    # Spearman's average-rank handling.
     points = [
         ("2026-06-01", "35", "2026-06-02", "V1"),
         ("2026-06-10", "38", "2026-06-12", "V2"),
         ("2026-06-15", "42", "2026-06-16", "V3"),
         ("2026-06-20", "44", "2026-06-21", "V4"),
-        ("2026-06-25", "46", "2026-06-26", "V4"), # tie in grades
-        ("2026-06-28", "46", "2026-06-29", "V5"), # tie in strength
+        ("2026-06-25", "46", "2026-06-26", "V4"),  # tie in grades
+        ("2026-06-28", "46", "2026-06-29", "V5"),  # tie in strength
         ("2026-07-02", "48", "2026-07-03", "V6"),
         ("2026-07-10", "50", "2026-07-12", "V7"),
     ]
     for strength_date, weight, climb_date, grade in points:
         log_max_test(client, "left", "half crimp", 20, strength_date, weight)
         log_climb(client, climb_date, grade)
-    
-    # Noise sport climb
-    log_climb(client, "2026-06-15", "7a+", discipline="sport")
+
+    log_climb(client, "2026-06-15", "hard")  # unparseable grade, excluded
 
 
 def test_rising_strength_and_grades_correlate_positively(client):
@@ -51,7 +53,7 @@ def test_rising_strength_and_grades_correlate_positively(client):
     stat = correlation_stat(client)
     assert stat is not None, "no correlation stat on the dashboard"
     r, n = stat
-    assert n == 8  # the sport climb is excluded
+    assert n == 8  # the unparseable-grade climb is excluded
     assert r > 0.95
 
 
