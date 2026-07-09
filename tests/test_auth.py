@@ -132,3 +132,93 @@ def test_login_and_logout_round_trip(client):
     )
     assert right.status_code == 303
     assert "founder@example.com" in client.get("/").text
+
+
+def test_session_is_revoked_after_admin_password_reset(client):
+    register(client, "founder@example.com", "s3cret-pw")
+    code = generate_invite(client)
+    register(client, "friend@example.com", "friend-pw", invite_code=code)
+
+    # Save the friend's valid session cookie
+    friend_session = client.cookies.get("session")
+
+    # Log out friend, log in founder
+    client.post("/logout")
+    login(client, "founder@example.com", "s3cret-pw")
+
+    # Admin resets friend's password
+    client.post(
+        "/admin/reset-password",
+        data={"email": "friend@example.com", "new_password": "fresh-pw"},
+        follow_redirects=True,
+    )
+    client.post("/logout")
+
+    client.post("/logout")
+
+    # Attempt to use the friend's old session. Sent as a raw Cookie header
+    # (not client.cookies.set(), which can silently fail to reattach a
+    # cookie after the jar has been cleared by a prior /logout, making a
+    # test that only checks page text pass for the wrong reason) so this
+    # genuinely exercises the stale cookie against the live app.
+    #
+    # Asserted against a route that 401s via auth.current_user (which
+    # checks session_version); the home route degrades to anonymous
+    # instead (see test_home_page_treats_revoked_session_as_anonymous).
+    stale_headers = {"Cookie": f"session={friend_session}"}
+    protected = client.get("/dashboard", headers=stale_headers)
+    assert protected.status_code == 401
+
+    # The friend can log in with the new password
+    assert login(client, "friend@example.com", "fresh-pw").status_code == 303
+
+
+def test_other_users_session_survives_admin_password_reset(client):
+    """Resetting one user's password must only revoke *that* user's
+    sessions — an uninvolved user B should stay logged in throughout."""
+    register(client, "founder@example.com", "s3cret-pw")
+    code_a = generate_invite(client)
+    register(client, "target@example.com", "target-pw", invite_code=code_a)
+
+    client.post("/logout")
+    login(client, "founder@example.com", "s3cret-pw")
+    code_b = generate_invite(client)
+    register(client, "bystander@example.com", "bystander-pw", invite_code=code_b)
+    bystander_session = client.cookies.get("session")
+
+    client.post("/logout")
+    login(client, "founder@example.com", "s3cret-pw")
+    client.post(
+        "/admin/reset-password",
+        data={"email": "target@example.com", "new_password": "fresh-pw"},
+        follow_redirects=True,
+    )
+    client.post("/logout")
+
+    # The bystander's session, untouched by the reset, still works — sent
+    # as a raw Cookie header for the same reattachment reason noted above.
+    response = client.get(
+        "/dashboard", headers={"Cookie": f"session={bystander_session}"}
+    )
+    assert response.status_code == 200
+
+
+def test_home_page_treats_revoked_session_as_anonymous(client):
+    register(client, "founder@example.com", "s3cret-pw")
+    code = generate_invite(client)
+    register(client, "friend@example.com", "friend-pw", invite_code=code)
+    friend_session = client.cookies.get("session")
+
+    client.post("/logout")
+    login(client, "founder@example.com", "s3cret-pw")
+    client.post(
+        "/admin/reset-password",
+        data={"email": "friend@example.com", "new_password": "fresh-pw"},
+        follow_redirects=True,
+    )
+    client.post("/logout")
+
+    response = client.get("/", headers={"Cookie": f"session={friend_session}"})
+
+    assert response.status_code == 200
+    assert "friend" not in response.text  # greeted as anonymous, not by name

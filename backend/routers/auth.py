@@ -59,6 +59,7 @@ def login(
         limiter.record_failure(client_key)
         return HTMLResponse("Wrong email or password.", status_code=401)
     request.session["user_id"] = user.id
+    request.session["session_version"] = user.session_version
     return RedirectResponse("/", status_code=303)
 
 
@@ -83,11 +84,20 @@ def register(
     name: str | None = Form(default=None, max_length=MAX_NAME_LENGTH),
     session: Session = Depends(get_session),
 ):
+    limiter = request.app.state.login_limiter
+    client_key = request.client.host if request.client else "unknown"
+    if limiter.blocked(client_key):
+        return HTMLResponse(
+            "Too many attempts. Wait a minute and try again.", status_code=429
+        )
+        
     try:
         user = auth.register_user(
             session, email, password, invite_code, unit_pref, name
         )
     except auth.RegistrationError as error:
+        limiter.record_failure(client_key)
         return HTMLResponse(str(error), status_code=400)
     request.session["user_id"] = user.id
+    request.session["session_version"] = user.session_version
     return RedirectResponse("/", status_code=303)

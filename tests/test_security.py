@@ -246,3 +246,21 @@ def test_unknown_grip_type_is_a_404_not_a_crash(client):
             params={"grip_type_id": 9999, "edge_mm": 20, "date": "2026-07-04"},
         )
         assert response.status_code == 404
+
+
+def test_register_is_rate_limited(client):
+    from tests.helpers import generate_invite
+    register(client)  # register founder to generate invite
+    code = generate_invite(client)
+    client.post("/logout")
+
+    # Spam the register endpoint (even with failures, it should rate limit)
+    for _ in range(10):
+        assert register(client, "test@example.com", "pw", invite_code="bad").status_code == 400
+
+    blocked = register(client, "test@example.com", "pw", invite_code="bad")
+    assert blocked.status_code == 429
+    
+    # Even a valid registration is blocked while rate-limited
+    valid = register(client, "newuser@example.com", "long-pw", invite_code=code)
+    assert valid.status_code == 429

@@ -24,6 +24,7 @@ class User(SQLModel, table=True):
     # "alternating": both hands side by side per step; "sequential": one
     # hand's full flow, then the other (see HandOrderPreference in CONTEXT.md).
     hand_order_pref: str = "alternating"
+    session_version: int = Field(default=1, sa_column_kwargs={"server_default": "1"})
     created_at: datetime = Field(default_factory=utcnow)
 
 
