@@ -27,13 +27,22 @@ check_untyped_defs = true
 warn_redundant_casts = true
 warn_unused_ignores = true
 exclude = ["migrations/versions/", "^build/"]
+
 # SQLModel has no mypy plugin: a Field-based class attribute (e.g.
 # `MaxWeightTest.date`) is typed as its plain Python value type, not
 # SQLAlchemy's InstrumentedAttribute, so every column-level query
 # expression built from one (`.desc()`, the generic `select(...)`
 # overloads, `Session.exec(text(...))`) trips mypy even though it's
-# correct and exercised by the test suite at runtime. These three codes
-# are that one known false-positive class; genuinely wrong attribute
-# names/types elsewhere still fail under them turned off, because they'd
-# also fail at import or in `scripts/test`.
+# correct and exercised by the test suite at runtime. Disable those
+# false-positive codes ONLY for the modules that build such query
+# expressions — everywhere else (including all None-safety via
+# `union-attr`) the codes stay on.
+[[tool.mypy.overrides]]
+module = [
+    "backend.analytics",
+    "backend.main",
+    "backend.routers.climbs",
+    "backend.routers.history",
+    "backend.training_log",
+]
 disable_error_code = ["attr-defined", "union-attr", "call-overload"]

@@ -50,24 +50,46 @@ def test_new_routes_carry_the_unchanged_csp(client):
         assert "default-src 'self'" in response.headers["Content-Security-Policy"]
 
 
-def test_cache_version_changes_when_a_precached_asset_content_changes(tmp_path, monkeypatch):
-    # CACHE_VERSION is a content hash of the precached static files, with
-    # no manual-bump step. Point the hashing helper at throwaway files
-    # under tmp_path (never touch the real static/ assets) and confirm
-    # that editing a file's bytes changes the computed version.
+def _cache_version_with_tweaked_file(pwa_module, monkeypatch, tmp_path, filename: str) -> str:
+    """CACHE_VERSION recomputed from the *real* hashed source list, with
+    exactly one named file's content altered (via tmp copies — the real
+    files on disk are never touched)."""
+    copies = []
+    for index, source in enumerate(pwa_module._HASHED_SOURCE_FILES):
+        copy = tmp_path / f"{index}-{source.name}"
+        content = source.read_bytes()
+        if source.name == filename:
+            content += b"\n<!-- cache-version test tweak -->\n"
+        copy.write_bytes(content)
+        copies.append(copy)
+    monkeypatch.setattr(pwa_module, "_HASHED_SOURCE_FILES", copies)
+    return pwa_module._compute_cache_version()
+
+
+def test_cache_version_changes_when_a_precached_static_asset_changes(tmp_path, monkeypatch):
+    # CACHE_VERSION is a content hash with no manual-bump step: editing a
+    # real precached asset's bytes must change the version.
     import backend.routers.pwa as pwa_module
 
-    asset = tmp_path / "app.css"
-    asset.write_bytes(b"body { color: red; }")
-    monkeypatch.setattr(pwa_module, "_PRECACHED_STATIC_FILES", [asset])
+    baseline = pwa_module._compute_cache_version()
+    tweaked = _cache_version_with_tweaked_file(pwa_module, monkeypatch, tmp_path, "app.css")
 
-    version_before = pwa_module._compute_cache_version()
+    assert tweaked != baseline
 
-    asset.write_bytes(b"body { color: blue; }")
-    version_after = pwa_module._compute_cache_version()
-
-    assert version_before != version_after
-
-    # And confirm CACHE_VERSION, as actually computed at import time, is
-    # exactly what's baked into the served service worker JS.
+    # And CACHE_VERSION, as actually computed at import time, is exactly
+    # what's baked into the served service worker JS.
     assert pwa_module.CACHE_VERSION in pwa_module.SERVICE_WORKER_JS
+
+
+def test_cache_version_changes_when_the_offline_page_source_changes(tmp_path, monkeypatch):
+    # "/offline" is precached too — its page is server-rendered from
+    # offline.html (wrapped by base.html), so both templates' source must
+    # be part of the digest or installed clients would keep a stale
+    # offline page forever.
+    import backend.routers.pwa as pwa_module
+
+    baseline = pwa_module._compute_cache_version()
+
+    for template in ("offline.html", "base.html"):
+        tweaked = _cache_version_with_tweaked_file(pwa_module, monkeypatch, tmp_path, template)
+        assert tweaked != baseline, f"{template} content is not reflected in CACHE_VERSION"

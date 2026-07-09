@@ -17,6 +17,7 @@ BACKGROUND_COLOR = "#f3f4f6"
 router = APIRouter()
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 
 # Everything the service worker precaches on install: the static shell plus
 # the offline fallback page itself, so it's servable with no network at
@@ -31,16 +32,22 @@ PRECACHE_URLS = [
     "/offline",
 ]
 
-# Every /static precache URL maps directly to a file under STATIC_DIR (see
-# backend/main.py's StaticFiles mount); "/offline" is server-rendered, not
-# a static file, so it's excluded from hashing.
-_PRECACHED_STATIC_FILES = [
+# Everything whose content feeds CACHE_VERSION — one source file per
+# precached URL. The /static URLs map directly to files under STATIC_DIR
+# (see backend/main.py's StaticFiles mount); "/offline" is server-rendered
+# from offline.html wrapped by base.html, so hashing those two template
+# sources stands in for the rendered page (any change to what /offline
+# serves goes through one of them).
+_HASHED_SOURCE_FILES = [
     STATIC_DIR / url.removeprefix("/static/") for url in PRECACHE_URLS if url.startswith("/static/")
+] + [
+    TEMPLATES_DIR / "offline.html",
+    TEMPLATES_DIR / "base.html",
 ]
 
 
 def _compute_cache_version() -> str:
-    """Derive CACHE_VERSION from the content of every precached static asset.
+    """Derive CACHE_VERSION from the content of every precached asset's source.
 
     Replaces a manual "bump CACHE_VERSION whenever a precached file
     changes" rule — a maintenance landmine: forget it once and installed
@@ -49,7 +56,10 @@ def _compute_cache_version() -> str:
     Computed once at import/startup from the files on disk at that moment.
     """
     digest = hashlib.sha256()
-    for path in sorted(_PRECACHED_STATIC_FILES):
+    for path in sorted(_HASHED_SOURCE_FILES):
+        # A missing listed file raising FileNotFoundError here is
+        # intentional: fail loud at boot rather than silently serve a
+        # version that no longer tracks the full precache set.
         digest.update(path.read_bytes())
     return f"griptrack-{digest.hexdigest()[:16]}"
 
