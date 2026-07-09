@@ -7,7 +7,10 @@ from datetime import date as date_type
 from datetime import timedelta
 
 from tests.helpers import (
+<<<<<<< HEAD
     get_session_page,
+=======
+>>>>>>> origin/main
     grip_type_id,
     log_max_test,
     register,
@@ -147,7 +150,11 @@ def test_second_session_affordance_only_appears_once_today_has_one(client):
 
     after = client.get("/session/new").text
     assert "start-second-session" in after
+<<<<<<< HEAD
     assert f'name="session_number" value="2"' in after
+=======
+    assert 'name="session_number" value="2"' in after
+>>>>>>> origin/main
 
 
 def test_starting_a_second_session_today_gets_its_own_session_number(client):

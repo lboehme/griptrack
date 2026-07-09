@@ -197,6 +197,9 @@ def advance_guided_test(
                 "other_hand": switch_to,
             },
         )
+    # advance() only returns step=None alongside outcome="done", handled
+    # (and returned from) above — reachable here, step is always a dict.
+    assert step is not None
     return templates.TemplateResponse(
         request,
         "guided_max_test_step.html",

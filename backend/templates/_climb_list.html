@@ -1,0 +1,20 @@
+{# Shared climb <li> markup for the climbs page and the history page.
+   Badges boulder climbs whose grade didn't parse (backend.analytics.
+   parse_boulder_grade) — those are silently excluded from the
+   strength/grade correlation, so make the exclusion visible here. #}
+{% if climbs %}
+<ul class="plain">
+  {% for climb in climbs %}
+  {% set unparsed = climb.discipline == "boulder" and parse_boulder_grade(climb.grade) is none %}
+  <li class="climb" data-discipline="{{ climb.discipline }}" data-grade="{{ climb.grade }}" data-style="{{ climb.style }}" data-date="{{ climb.date }}">
+    <span class="grade">{{ climb.grade }}</span>
+    <span class="pill {{ climb.discipline }}">{{ climb.discipline }}</span>
+    <span class="pill">{{ climb.style }}</span>
+    {% if unparsed %}<span class="pill grade-unparsed" data-testid="grade-unparsed" title="Grade not recognized — excluded from the strength/grade correlation">⚠ grade not recognized</span>{% endif %}
+    <div class="meta">{{ climb.date }}{% if climb.notes %} — {{ climb.notes }}{% endif %}</div>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="muted" style="margin:0">No climbs logged yet.</p>
+{% endif %}
