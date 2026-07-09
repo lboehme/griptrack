@@ -75,3 +75,42 @@ def test_admin_can_add_a_grip_type_but_non_admin_cannot(client):
     )
     assert response.status_code == 403
     assert "sloper" not in client.get("/max-tests").text
+
+
+def test_user_can_void_their_own_max_test(client):
+    register(client)
+    
+    # Log a max test
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "80")
+    
+    assert current_maxes(client) == {("left", "half crimp", 20): 80.0}
+
+    # Extract the test ID from the page
+    page = client.get("/max-tests")
+    # Using a simple substring search for the void action endpoint
+    # The UI should have a form or button that posts to /max-tests/{id}/void
+    import re
+    match = re.search(r'action="/max-tests/(\d+)/void"', page.text)
+    assert match is not None
+    test_id = match.group(1)
+
+    # Void the test
+    response = client.post(f"/max-tests/{test_id}/void", follow_redirects=True)
+    assert response.status_code == 200
+
+    # The test is no longer in current_maxes (treating it as untested)
+    assert current_maxes(client) == {}
+
+
+def test_user_cannot_void_someone_elses_max_test(client):
+    register(client)
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "40")
+    
+    page = client.get("/max-tests")
+    import re
+    test_id = re.search(r'action="/max-tests/(\d+)/void"', page.text).group(1)
+
+    register_second_user(client)
+    
+    response = client.post(f"/max-tests/{test_id}/void", follow_redirects=False)
+    assert response.status_code == 403

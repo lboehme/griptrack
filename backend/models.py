@@ -69,6 +69,7 @@ class MaxWeightTest(SQLModel, table=True):
     # Stored in the owning user's unit_pref (ADR-0003).
     weight: float
     created_at: datetime = Field(default_factory=utcnow)
+    voided_at: datetime | None = None
 
 
 class PlateInventoryItem(SQLModel, table=True):

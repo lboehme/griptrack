@@ -26,6 +26,39 @@
   No max tests yet — log one below before your first training session.
 </div>
 {% endif %}
+{% if test_history %}
+<div class="card">
+<h3>Test History</h3>
+<table>
+  <thead>
+    <tr><th>Date</th><th>Hand</th><th>Grip</th><th>Dimension</th><th>Weight</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for test, grip in test_history %}
+    <tr>
+      <td>{{ test.date }}</td>
+      <td>{{ test.hand }}</td>
+      <td>{{ grip.name }}</td>
+      <td>{{ test.edge_mm }} mm</td>
+      <td>
+        <strong {% if test.voided_at %}class="muted" style="text-decoration: line-through;"{% endif %}>{{ test.weight }}</strong> 
+        <span class="muted">{{ user.unit_pref }}</span>
+      </td>
+      <td>
+        {% if not test.voided_at %}
+        <form method="post" action="/max-tests/{{ test.id }}/void" style="margin: 0;" onsubmit="return confirm('Are you sure you want to void this test? It will be excluded from all calculations.');">
+          <button type="submit" class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.8rem;">Void</button>
+        </form>
+        {% else %}
+        <span class="muted" style="font-size: 0.8rem;">Voided</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
 <div class="card">
 <h3>Run guided test</h3>
 <p class="page-sub">A guided warmup and effort-rated ladder that walks you to a real max.</p>
