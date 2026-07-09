@@ -47,7 +47,7 @@
   </div>
   <div class="form-row">
     <label>Edge (mm) <input type="number" name="edge_mm" step="1" min="1" required></label>
-    <label>Date <input type="date" name="date" value="{{ today }}" required></label>
+    <label>Date <input type="date" name="date" value="{{ today }}" class="local-date-default" required></label>
   </div>
   <button type="submit">Run guided test</button>
 </form>
@@ -72,7 +72,7 @@
   </div>
   <div class="form-row">
     <label>Edge (mm) <input type="number" name="edge_mm" step="1" min="1" required></label>
-    <label>Date <input type="date" name="date" value="{{ today }}" required></label>
+    <label>Date <input type="date" name="date" value="{{ today }}" class="local-date-default" required></label>
   </div>
   <label>Weight ({{ user.unit_pref }})
     <input type="number" name="weight" step="0.1" min="0.1" required>

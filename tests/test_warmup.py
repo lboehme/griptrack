@@ -1,17 +1,18 @@
 import re
+from datetime import date as date_type
 
-from tests.helpers import grip_type_id, log_max_test, register
+from tests.helpers import get_session_page, grip_type_id, log_max_test, register
 
 
 def warmup_page(client, grip="half crimp", edge_mm=20, date="2026-07-04"):
-    return client.get(
+    return get_session_page(
+        client,
         "/session/warmup",
-        params={
+        {
             "grip_type_id": grip_type_id(client, grip),
             "edge_mm": edge_mm,
             "date": date,
         },
-        follow_redirects=True,
     )
 
 
@@ -125,25 +126,29 @@ def check_step(client, hand, step, grip="half crimp", edge_mm=20, date="2026-07-
 
 
 def test_checking_a_warmup_step_autosaves_and_starts_the_session(client):
+    """Implicit create-on-first-tap: only guaranteed for TODAY (a past
+    date instead requires the explicit confirm prompt — see
+    test_past_session_creation.py)."""
     register(client)
     log_max_test(client, "left", "half crimp", 20, "2026-07-01", "42.5")
     log_max_test(client, "right", "half crimp", 20, "2026-07-01", "40")
+    today = date_type.today().isoformat()
 
-    before = warmup_page(client)
+    before = warmup_page(client, date=today)
     assert 'class="session-started"' not in before.text
     assert checked_steps(before.text) == set()
 
-    check_step(client, "left", 0)
+    check_step(client, "left", 0, date=today)
 
     # A fresh fetch (no client state) must show the persisted progress and
     # the session that came into existence on that first tap.
-    after = warmup_page(client)
+    after = warmup_page(client, date=today)
     assert 'class="session-started"' in after.text
     assert checked_steps(after.text) == {("left", 0)}
 
-    check_step(client, "right", 0)
-    check_step(client, "left", 1)
-    assert checked_steps(warmup_page(client).text) == {
+    check_step(client, "right", 0, date=today)
+    check_step(client, "left", 1, date=today)
+    assert checked_steps(warmup_page(client, date=today).text) == {
         ("left", 0),
         ("right", 0),
         ("left", 1),

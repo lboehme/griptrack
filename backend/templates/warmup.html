@@ -2,9 +2,10 @@
 {% block title %}Warmup — GripTrack{% endblock %}
 {% block content %}
 <h2>Warmup</h2>
-<p class="page-sub">{{ grip.name }} · {{ edge_mm }} mm · {{ date }}{% if hands|length == 1 %} · <span class="hand-heading">{{ hands[0] }} hand</span>{% endif %}</p>
+<p class="page-sub">{{ grip.name }} · {{ edge_mm }} mm · {{ date }}{% if session_number and session_number > 1 %} · session {{ session_number }}{% endif %}{% if hands|length == 1 %} · <span class="hand-heading">{{ hands[0] }} hand</span>{% endif %}</p>
+<div class="notice past-session-banner" data-session-date="{{ date }}" hidden>You're viewing a past session — edits change your history.</div>
 {% if training_session %}
-<p class="session-started">Session {{ training_session.date }} — in progress</p>
+<p class="session-started">Session {{ training_session.date }}{% if training_session.session_number > 1 %} #{{ training_session.session_number }}{% endif %} — in progress</p>
 {% endif %}
 {% if untested_hands %}
 <div class="notice">
@@ -57,10 +58,10 @@
 </table>
 </div>
 <div class="flow-next">
-  <a class="btn" href="/session/worksets?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}{% if hands|length == 1 %}&amp;hand={{ hands[0] }}{% endif %}">Continue to work sets →</a>
+  <a class="btn" href="/session/worksets?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}{% if hands|length == 1 %}&amp;hand={{ hands[0] }}{% endif %}{% if session_number %}&amp;session_number={{ session_number }}{% endif %}">Continue to work sets →</a>
   {% if hands|length == 1 %}
   {% set other = "right" if hands[0] == "left" else "left" %}
-  <a class="btn btn-secondary" href="/session/warmup?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}&amp;hand={{ other }}">Switch to {{ other }} hand</a>
+  <a class="btn btn-secondary" href="/session/warmup?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}&amp;hand={{ other }}{% if session_number %}&amp;session_number={{ session_number }}{% endif %}">Switch to {{ other }} hand</a>
   {% endif %}
 </div>
 {% endif %}

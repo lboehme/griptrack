@@ -5,6 +5,7 @@ ramp and work-set prefills for this session only (see CONTEXT.md)."""
 import re
 
 from tests.helpers import (
+    get_session_page,
     grip_type_id,
     log_bodyweight,
     log_climb,
@@ -24,7 +25,7 @@ def warmup_page(client, grip="half crimp", edge_mm=20, date="2026-07-04", hand=N
     }
     if hand is not None:
         params["hand"] = hand
-    return client.get("/session/warmup", params=params, follow_redirects=True)
+    return get_session_page(client, "/session/warmup", params)
 
 
 def estimate_form_hands(page_text):
@@ -125,9 +126,10 @@ def test_resubmitting_an_estimate_updates_it_in_place(client):
 
 def prefill_weights(client, grip="half crimp", edge_mm=20, date="2026-07-04"):
     """Parse the work-sets page into {(hand, set_number): weight prefill}."""
-    page = client.get(
+    page = get_session_page(
+        client,
         "/session/worksets",
-        params={
+        {
             "grip_type_id": grip_type_id(client, grip),
             "edge_mm": edge_mm,
             "date": date,

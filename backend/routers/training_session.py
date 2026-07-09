@@ -14,19 +14,87 @@ router = APIRouter()
 
 
 def combo_redirect(
-    page: str, grip_type_id: int, edge_mm: int, date: date_type, hand: str
+    page: str,
+    grip_type_id: int,
+    edge_mm: int,
+    date: date_type,
+    hand: str,
+    session_number: int | None = None,
 ) -> RedirectResponse:
-    """Back to a session page for the same (grip, edge, date, hand)."""
-    return RedirectResponse(
+    """Back to a session page for the same (grip, edge, date, hand[, session_number])."""
+    url = (
         f"/session/{page}?grip_type_id={grip_type_id}&edge_mm={edge_mm}"
-        f"&date={date}&hand={hand}",
-        status_code=303,
+        f"&date={date}&hand={hand}"
     )
+    if session_number is not None:
+        url += f"&session_number={session_number}"
+    return RedirectResponse(url, status_code=303)
 
 
 def require_grip_type(session: Session, grip_type_id: int) -> None:
     if session.get(GripType, grip_type_id) is None:
         raise HTTPException(status_code=404, detail="Unknown grip type")
+
+
+def needs_creation_confirmation(
+    session: Session,
+    user: User,
+    date: date_type,
+    session_number: int | None,
+) -> bool:
+    """Whether this (date[, session_number]) has no TrainingSession yet AND
+    the date is in the past — the explicit-past-session-creation gate (see
+    CLAUDE.md: multi-session days). Today's date always creates implicitly,
+    same as before this slice."""
+    if not training_log.is_past_date(date):
+        return False
+    return training_log.find_session(session, user, date, session_number) is None
+
+
+def confirm_creation_response(
+    request: Request,
+    user: User,
+    page: str,
+    grip_type_id: int,
+    edge_mm: int,
+    date: date_type,
+    hand: str | None,
+    session_number: int | None,
+):
+    return templates.TemplateResponse(
+        request,
+        "session_confirm.html",
+        {
+            "user": user,
+            "page": page,
+            "grip_type_id": grip_type_id,
+            "edge_mm": edge_mm,
+            "date": date,
+            "hand": hand,
+            "session_number": session_number,
+        },
+    )
+
+
+@router.post("/session/create")
+def create_session(
+    request: Request,
+    page: str = Form(),
+    grip_type_id: int = Form(),
+    edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
+    date: date_type = Form(),
+    hand: str | None = Form(default=None),
+    session_number: int | None = Form(default=None),
+    user: User = Depends(auth.current_user),
+    session: Session = Depends(get_session),
+):
+    """The explicit "create a session on this past date" confirmation
+    (see needs_creation_confirmation) — the only place a past-dated
+    session gets created without one already existing."""
+    if page not in ("warmup", "worksets"):
+        return HTMLResponse("Unknown page.", status_code=400)
+    training_log.start_or_get_session(session, user, date, session_number)
+    return combo_redirect(page, grip_type_id, edge_mm, date, hand or "", session_number)
 
 
 @router.get("/session/worksets")
@@ -37,12 +105,18 @@ def worksets_page(
     date: date_type = Query(),
     hand: str | None = Query(default=None),
     sets: int | None = Query(default=None, ge=1, le=MAX_SET_NUMBER),
+    session_number: int | None = Query(default=None),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
     require_grip_type(session, grip_type_id)
+    if needs_creation_confirmation(session, user, date, session_number):
+        return confirm_creation_response(
+            request, user, "worksets", grip_type_id, edge_mm, date, hand,
+            session_number,
+        )
     view = training_log.worksets_view(
-        session, user, grip_type_id, edge_mm, date, hand, sets
+        session, user, grip_type_id, edge_mm, date, hand, sets, session_number
     )
     return templates.TemplateResponse(
         request, "worksets.html", {"user": user, **view}
@@ -60,6 +134,7 @@ def save_work_set(
     weight: float = Form(gt=0, le=MAX_WEIGHT),
     reps: int = Form(ge=1, le=MAX_REPS),
     rpe: float | None = Form(default=None),
+    session_number: int | None = Form(default=None),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
@@ -67,14 +142,16 @@ def save_work_set(
         return HTMLResponse(
             "RPE must be between 1 and 10 in 0.5 steps.", status_code=400
         )
-    training_session = training_log.start_or_get_session(session, user, date)
+    training_session = training_log.start_or_get_session(
+        session, user, date, session_number
+    )
     training_log.record_work_set(
         session, training_session, hand, grip_type_id, edge_mm, set_number,
         weight, reps, rpe,
     )
     if request.headers.get("HX-Request"):
         return Response(status_code=204)
-    return combo_redirect("worksets", grip_type_id, edge_mm, date, hand)
+    return combo_redirect("worksets", grip_type_id, edge_mm, date, hand, session_number)
 
 
 @router.post("/session/workset/delete")
@@ -85,17 +162,18 @@ def delete_work_set(
     date: date_type = Form(),
     hand: str = Form(),
     set_number: int = Form(ge=1, le=MAX_SET_NUMBER),
+    session_number: int | None = Form(default=None),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
-    training_session = training_log.find_session(session, user, date)
+    training_session = training_log.find_session(session, user, date, session_number)
     if training_session is not None:
         training_log.delete_work_set(
             session, training_session, hand, grip_type_id, edge_mm, set_number
         )
     if request.headers.get("HX-Request"):
         return Response(status_code=204)
-    return combo_redirect("worksets", grip_type_id, edge_mm, date, hand)
+    return combo_redirect("worksets", grip_type_id, edge_mm, date, hand, session_number)
 
 
 @router.post("/session/estimate")
@@ -106,16 +184,19 @@ def save_session_estimate(
     date: date_type = Form(),
     hand: str = Form(),
     weight: float = Form(gt=0, le=MAX_WEIGHT),
+    session_number: int | None = Form(default=None),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
-    training_session = training_log.start_or_get_session(session, user, date)
+    training_session = training_log.start_or_get_session(
+        session, user, date, session_number
+    )
     training_log.record_session_estimate(
         session, training_session, hand, grip_type_id, edge_mm, weight
     )
     if request.headers.get("HX-Request"):
         return Response(status_code=204)
-    return combo_redirect("warmup", grip_type_id, edge_mm, date, hand)
+    return combo_redirect("warmup", grip_type_id, edge_mm, date, hand, session_number)
 
 
 @router.post("/session/check")
@@ -126,15 +207,18 @@ def check_warmup_step(
     date: date_type = Form(),
     hand: str = Form(),
     step_index: int = Form(ge=0, le=MAX_SET_NUMBER),
+    session_number: int | None = Form(default=None),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
-    training_session = training_log.start_or_get_session(session, user, date)
+    training_session = training_log.start_or_get_session(
+        session, user, date, session_number
+    )
     training_log.toggle_warmup_check(session, training_session, hand, step_index)
     # htmx ticks stay on the page (no reload); plain form posts redirect.
     if request.headers.get("HX-Request"):
         return Response(status_code=204)
-    return combo_redirect("warmup", grip_type_id, edge_mm, date, hand)
+    return combo_redirect("warmup", grip_type_id, edge_mm, date, hand, session_number)
 
 
 @router.get("/session/new")
@@ -145,6 +229,12 @@ def new_session_form(
 ):
     grip_types = session.exec(select(GripType).order_by(GripType.name)).all()
     last_used = training_log.last_used_combination(session, user)
+    today = date_type.today()
+    # "Start a second session today" only appears once today already has
+    # one — the server's own clock is close enough here (this is a display
+    # affordance, not the client-local date correctness the date input
+    # itself needs; see the local-date-default JS for that).
+    today_session = training_log.find_session(session, user, today)
     return templates.TemplateResponse(
         request,
         "new_session.html",
@@ -153,7 +243,10 @@ def new_session_form(
             "grip_types": grip_types,
             "default_grip_type_id": last_used[0] if last_used else None,
             "default_edge_mm": last_used[1] if last_used else "",
-            "today": date_type.today().isoformat(),
+            "today": today.isoformat(),
+            "next_session_number_today": (
+                today_session.session_number + 1 if today_session else None
+            ),
             "history": training_log.session_history(session, user)[:8],
             "grip_names": training_log.grip_names(session),
         },
@@ -167,11 +260,19 @@ def warmup_page(
     edge_mm: int = Query(gt=0, le=MAX_EDGE_MM),
     date: date_type = Query(),
     hand: str | None = Query(default=None),
+    session_number: int | None = Query(default=None),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
     require_grip_type(session, grip_type_id)
-    view = training_log.warmup_view(session, user, grip_type_id, edge_mm, date, hand)
+    if needs_creation_confirmation(session, user, date, session_number):
+        return confirm_creation_response(
+            request, user, "warmup", grip_type_id, edge_mm, date, hand,
+            session_number,
+        )
+    view = training_log.warmup_view(
+        session, user, grip_type_id, edge_mm, date, hand, session_number
+    )
     return templates.TemplateResponse(
         request, "warmup.html", {"user": user, **view}
     )

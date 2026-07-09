@@ -94,13 +94,29 @@ class TrainingProtocol(SQLModel, table=True):
 
 
 class TrainingSession(SQLModel, table=True):
+    """A (user, date) can now have more than one session — e.g. a morning
+    and evening pull — distinguished by session_number (see issue #51).
+    session_number + date + user_id form the identity key that future
+    offline sync (#20) relies on for idempotent upserts, so it must never
+    be renumbered/reassigned once created. started_at is purely
+    descriptive (future rest-gap analytics), never identity-bearing."""
+
     __tablename__ = "training_sessions"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "date", "session_number",
+            name="uq_training_sessions_user_date_session_number",
+        ),
+    )
 
     id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", index=True)
     date: date_type
+    session_number: int = Field(default=1)
     notes: str | None = None
     created_at: datetime = Field(default_factory=utcnow)
+    # Descriptive only — not identity-bearing (see class docstring).
+    started_at: datetime | None = Field(default_factory=utcnow)
 
 
 class WarmupStepCheck(SQLModel, table=True):

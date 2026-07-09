@@ -11,7 +11,15 @@ One logged workout visit: a date plus the work sets performed in it. Owns
 many WorkSets. Exists in the database from the moment its first
 warmup/ramp step is checked off — every interaction autosaves immediately,
 there is no final "submit" step, so a TrainingSession can be, and often
-briefly is, incomplete.
+briefly is, incomplete. A (user, date) can hold more than one
+TrainingSession — e.g. a morning and evening pull — distinguished by
+`session_number` (1, 2, ...; default 1). `(user_id, date, session_number)`
+is the identity key and must stay stable (future offline sync relies on
+idempotent upserts against it). Default flows (start page, session-page
+redirects) always resolve to the day's *latest* session_number; starting a
+second session on today is an explicit affordance, and navigating to a
+past date with no session at all requires an explicit "create one?"
+confirmation rather than instantiating silently (issue #51).
 _Avoid_: Session (ambiguous with the auth/login session), Workout, Training Log
 
 **WorkSet**:

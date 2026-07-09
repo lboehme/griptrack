@@ -105,6 +105,24 @@ def log_bodyweight(client, date, weight):
     )
 
 
+def get_session_page(client, path, params):
+    """GET a session page (warmup/worksets), auto-confirming the "no
+    session on this date — create one?" prompt if it appears.
+
+    Most tests exercise the normal warmup/worksets content, not the
+    past-date creation gate itself (see test_past_session_creation.py for
+    that) — this keeps every other test's dates free to land anywhere in
+    the past without tripping over the gate."""
+    response = client.get(path, params=params, follow_redirects=True)
+    if "session-confirm-card" in response.text:
+        page = "warmup" if path.endswith("warmup") else "worksets"
+        client.post(
+            "/session/create", data={"page": page, **params}, follow_redirects=True
+        )
+        response = client.get(path, params=params, follow_redirects=True)
+    return response
+
+
 def current_maxes(client):
     """Parse the max-tests page into {(hand, grip, edge): weight}."""
     page = client.get("/max-tests").text

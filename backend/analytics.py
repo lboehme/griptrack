@@ -102,20 +102,28 @@ def training_volume_trend(
     session: Session, user: User, hand: str, grip_type_id: int, edge_mm: int
 ) -> list[tuple[date_type, float]]:
     """TrainingVolume (Σ weight × reps) per TrainingSession for one combo,
-    oldest first."""
+    oldest first. Grouped by (date, session_number) rather than date alone
+    — two sessions on the same date (see CLAUDE.md: multi-session days)
+    stay independent points rather than merging into one."""
     rows = session.exec(
-        select(TrainingSession.date, WorkSet.weight, WorkSet.reps)
+        select(
+            TrainingSession.date,
+            TrainingSession.session_number,
+            WorkSet.weight,
+            WorkSet.reps,
+        )
         .join(WorkSet, WorkSet.training_session_id == TrainingSession.id)  # type: ignore[arg-type]
         .where(TrainingSession.user_id == user.id)
         .where(WorkSet.hand == hand)
         .where(WorkSet.grip_type_id == grip_type_id)
         .where(WorkSet.edge_mm == edge_mm)
-        .order_by(TrainingSession.date)
+        .order_by(TrainingSession.date, TrainingSession.session_number)
     ).all()
-    volumes: dict[date_type, float] = {}
-    for date, weight, reps in rows:
-        volumes[date] = volumes.get(date, 0.0) + weight * reps
-    return sorted(volumes.items())
+    volumes: dict[tuple[date_type, int], float] = {}
+    for date, session_number, weight, reps in rows:
+        key = (date, session_number)
+        volumes[key] = volumes.get(key, 0.0) + weight * reps
+    return [(date, volume) for (date, _session_number), volume in sorted(volumes.items())]
 
 
 def overtraining_warning(trend: list[tuple[date_type, float]]) -> bool:

@@ -7,7 +7,7 @@
 <h3>Log a climb</h3>
 <form method="post" action="/climbs">
   <div class="form-row">
-    <label>Date <input type="date" name="date" value="{{ today }}" required></label>
+    <label>Date <input type="date" name="date" value="{{ today }}" class="local-date-default" required></label>
     <label>Discipline
       <select name="discipline">
         {% for d in disciplines %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
