@@ -1,10 +1,8 @@
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
-from sqlmodel import SQLModel
-
 from alembic import context
+from sqlalchemy import engine_from_config, pool
+from sqlmodel import SQLModel
 
 import backend.models  # noqa: F401  (registers all tables on SQLModel.metadata)
 from backend.db import DATABASE_URL

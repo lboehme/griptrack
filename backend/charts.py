@@ -48,7 +48,7 @@ def render_volume_chart(
 
     ax.grid(axis="y", color=palette["grid"], linewidth=1, zorder=1)
     ax.plot(
-        dates,
+        dates,  # type: ignore[arg-type]  # matplotlib stubs don't accept list[date] directly, though it renders correctly
         volumes,
         color=palette["mark"],
         linewidth=2,
@@ -63,7 +63,8 @@ def render_volume_chart(
     )
     ax.margins(x=0.06, y=0.22)
     ax.fill_between(
-        dates, volumes, ax.get_ylim()[0],
+        dates,  # type: ignore[arg-type]  # same matplotlib stub gap as ax.plot above
+        volumes, ax.get_ylim()[0],
         color=palette["mark"], alpha=0.10, linewidth=0, zorder=2,
     )
     # Selective direct label: the endpoint only.

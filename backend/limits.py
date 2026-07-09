@@ -8,6 +8,8 @@ count and target weight.
 
 MAX_WEIGHT = 1000        # kg or lbs; covers any bodyweight or block-pull load
 MAX_NAME_LENGTH = 60     # display name (user text, not numeric)
+MAX_GRADE_LENGTH = 32    # climb grade string ("V5", "7A+", odd local scales)
+MAX_NOTES_LENGTH = 2000  # free-text climb notes
 MAX_REPS = 1000
 MAX_SET_NUMBER = 100
 MAX_EDGE_MM = 1000
