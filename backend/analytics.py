@@ -62,11 +62,28 @@ def _best_pull_at(session: Session, user: User, date: date_type) -> float | None
     return max((v for v in values if v is not None), default=None)
 
 
+def _rank(values: list[float]) -> list[float]:
+    """Assigns ranks to a list of values, averaging the ranks for ties."""
+    indexed = sorted(enumerate(values), key=lambda x: x[1])
+    ranks = [0.0] * len(values)
+    i = 0
+    while i < len(indexed):
+        val = indexed[i][1]
+        j = i
+        while j < len(indexed) and indexed[j][1] == val:
+            j += 1
+        avg_rank = sum(range(i + 1, j + 1)) / (j - i)
+        for k in range(i, j):
+            ranks[indexed[k][0]] = avg_rank
+        i = j
+    return ranks
+
+
 def strength_grade_correlation(session: Session, user: User) -> dict:
     """%bodyweight strength vs boulder grade, framed against Lattice's
     published methodology as a reference point — not a reproduction (their
     research covers hangboard hangs, not block pulls). Sport climbs and
-    unparseable grades are excluded; needs 3+ points with variance."""
+    unparseable grades are excluded; needs 8+ points with variance."""
     climbs = session.exec(
         select(Climb)
         .where(Climb.user_id == user.id)
@@ -96,8 +113,9 @@ def strength_grade_correlation(session: Session, user: User) -> dict:
     # construction just above.
     pcts: list[float] = [point["pct_bodyweight"] for point in points]  # type: ignore[misc]
     grades: list[float] = [point["grade_value"] for point in points]  # type: ignore[misc]
-    if len(points) >= 3 and len(set(pcts)) > 1 and len(set(grades)) > 1:
-        result["r"] = statistics.correlation(pcts, grades)
+    if len(points) >= 8 and len(set(pcts)) > 1 and len(set(grades)) > 1:
+        # Spearman rank correlation is the Pearson correlation of the ranks.
+        result["r"] = statistics.correlation(_rank(pcts), _rank(grades))
     return result
 
 
