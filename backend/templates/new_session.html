@@ -31,24 +31,5 @@
   <p style="margin:.6rem 0 0"><a class="muted" href="/history">Full history →</a></p>
 </div>
 {% endif %}
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-  document.querySelectorAll('select.grip-select').forEach(select => {
-    const updateLabel = () => {
-      const option = select.options[select.selectedIndex];
-      if (!option) return;
-      const dimName = option.getAttribute('data-dimension-name');
-      if (!dimName) return;
-      const form = select.closest('form');
-      const labelSpan = form.querySelector('.dimension-label');
-      if (labelSpan) {
-        labelSpan.textContent = dimName + " (mm)";
-      }
-    };
-    select.addEventListener('change', updateLabel);
-    // Use setTimeout to ensure DOM is fully ready if other scripts modify it
-    setTimeout(updateLabel, 0);
-  });
-});
-</script>
+<script src="/static/dimension-label.js" defer></script>
 {% endblock %}

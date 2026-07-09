@@ -2,7 +2,7 @@
 {% block title %}Warmup — GripTrack{% endblock %}
 {% block content %}
 <h2>Warmup</h2>
-<p class="page-sub">{{ grip.name }} · {{ edge_mm }} mm · {{ date }}{% if session_number and session_number > 1 %} · session {{ session_number }}{% endif %}{% if hands|length == 1 %} · <span class="hand-heading">{{ hands[0] }} hand</span>{% endif %}</p>
+<p class="page-sub">{{ grip.name }} · {{ edge_mm }} mm {{ grip.dimension_name }} · {{ date }}{% if session_number and session_number > 1 %} · session {{ session_number }}{% endif %}{% if hands|length == 1 %} · <span class="hand-heading">{{ hands[0] }} hand</span>{% endif %}</p>
 <div class="notice past-session-banner" data-session-date="{{ date }}" hidden>You're viewing a past session — edits change your history.</div>
 {% if training_session %}
 <p class="session-started">Session {{ training_session.date }}{% if training_session.session_number > 1 %} #{{ training_session.session_number }}{% endif %} — in progress</p>

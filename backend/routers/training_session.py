@@ -6,7 +6,14 @@ from sqlmodel import Session, select
 
 from backend import auth, training_log
 from backend.db import get_session
-from backend.limits import MAX_EDGE_MM, MAX_NOTES_LENGTH, MAX_REPS, MAX_SET_NUMBER, MAX_WEIGHT
+from backend.limits import (
+    MAX_EDGE_MM,
+    MAX_NOTES_LENGTH,
+    MAX_REPS,
+    MAX_SESSION_NUMBER,
+    MAX_SET_NUMBER,
+    MAX_WEIGHT,
+)
 from backend.models import GripType, PainReport, User
 from backend.templating import templates
 
@@ -84,7 +91,7 @@ def create_session(
     edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
     date: date_type = Form(),
     hand: str | None = Form(default=None),
-    session_number: int | None = Form(default=None),
+    session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
@@ -105,7 +112,7 @@ def worksets_page(
     date: date_type = Query(),
     hand: str | None = Query(default=None),
     sets: int | None = Query(default=None, ge=1, le=MAX_SET_NUMBER),
-    session_number: int | None = Query(default=None),
+    session_number: int | None = Query(default=None, ge=1, le=MAX_SESSION_NUMBER),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
@@ -134,7 +141,7 @@ def save_work_set(
     weight: float = Form(gt=0, le=MAX_WEIGHT),
     reps: int = Form(ge=1, le=MAX_REPS),
     rpe: float | None = Form(default=None),
-    session_number: int | None = Form(default=None),
+    session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
@@ -162,7 +169,7 @@ def delete_work_set(
     date: date_type = Form(),
     hand: str = Form(),
     set_number: int = Form(ge=1, le=MAX_SET_NUMBER),
-    session_number: int | None = Form(default=None),
+    session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
@@ -184,7 +191,7 @@ def save_session_estimate(
     date: date_type = Form(),
     hand: str = Form(),
     weight: float = Form(gt=0, le=MAX_WEIGHT),
-    session_number: int | None = Form(default=None),
+    session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
@@ -207,7 +214,7 @@ def check_warmup_step(
     date: date_type = Form(),
     hand: str = Form(),
     step_index: int = Form(ge=0, le=MAX_SET_NUMBER),
-    session_number: int | None = Form(default=None),
+    session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
@@ -225,7 +232,7 @@ def check_warmup_step(
 def update_session(
     request: Request,
     date: date_type = Form(),
-    session_number: int | None = Form(default=None),
+    session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
     notes: str | None = Form(default=None, max_length=MAX_NOTES_LENGTH),
     is_deload: str | None = Form(default=None),
     user: User = Depends(auth.current_user),
@@ -254,7 +261,7 @@ def add_pain_report(
     hand: str = Form(),
     severity: int = Form(ge=1, le=3),
     note: str | None = Form(default=None, max_length=MAX_NOTES_LENGTH),
-    session_number: int | None = Form(default=None),
+    session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
@@ -311,6 +318,7 @@ def new_session_form(
             ),
             "history": training_log.session_history(session, user)[:8],
             "grip_names": training_log.grip_names(session),
+            "grip_dimension_names": training_log.grip_dimension_names(session),
         },
     )
 
@@ -322,7 +330,7 @@ def warmup_page(
     edge_mm: int = Query(gt=0, le=MAX_EDGE_MM),
     date: date_type = Query(),
     hand: str | None = Query(default=None),
-    session_number: int | None = Query(default=None),
+    session_number: int | None = Query(default=None, ge=1, le=MAX_SESSION_NUMBER),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):

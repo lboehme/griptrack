@@ -1,5 +1,6 @@
 from datetime import date as date_type
 
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from backend import plates
@@ -81,9 +82,9 @@ def warmup_view(
         "grip": session.get(GripType, grip_type_id),
         "edge_mm": edge_mm,
         "date": date,
-        "session_number": training_session.session_number
-        if training_session is not None
-        else session_number,
+        "session_number": resolve_session_number(
+            session, user, date, session_number, training_session
+        ),
         "hands": hands,
         "plans": plans,
         "untested_hands": untested_hands,
@@ -130,9 +131,9 @@ def worksets_view(
         "grip": session.get(GripType, grip_type_id),
         "edge_mm": edge_mm,
         "date": date,
-        "session_number": training_session.session_number
-        if training_session is not None
-        else session_number,
+        "session_number": resolve_session_number(
+            session, user, date, session_number, training_session
+        ),
         "hands": hands,
         "set_numbers": list(range(1, row_count + 1)),
         "saved": saved,
@@ -248,7 +249,15 @@ def start_or_get_session(
     session" — create session_number 1 if none exists yet for that date,
     otherwise reuse the highest-numbered one. An explicit session_number
     (the "start a second session today" affordance) gets or creates that
-    exact slot instead."""
+    exact slot instead.
+
+    Two concurrent first-POSTs on the same (user, date) can both read "no
+    session yet" and both compute the same next_number — the loser then
+    hits the (user_id, date, session_number) unique constraint on commit.
+    This also matters for offline-sync replay (#20), where a queued write
+    can land after a session on the same date was created elsewhere in the
+    meantime. Rather than surface a 500, retry once: the winner's row is
+    now committed, so a plain re-fetch finds it."""
     training_session = find_session(session, user, date, session_number)
     if training_session is not None:
         return training_session
@@ -259,7 +268,14 @@ def start_or_get_session(
         user_id=user.id, date=date, session_number=next_number
     )
     session.add(training_session)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        training_session = find_session(session, user, date, next_number)
+        if training_session is None:
+            raise
+        return training_session
     session.refresh(training_session)
     return training_session
 
@@ -292,6 +308,27 @@ def latest_session_number(
     today" affordance and start_or_get_session's auto-numbering key off."""
     existing = find_session(session, user, date)
     return existing.session_number if existing is not None else None
+
+
+def resolve_session_number(
+    session: Session,
+    user: User,
+    date: date_type,
+    session_number: int | None,
+    training_session: TrainingSession | None,
+) -> int:
+    """The concrete session_number a session page should pin into its
+    hidden field, so every autosave POST targets one specific slot instead
+    of re-resolving "the day's latest session" at POST time — two tabs
+    open on today before any session exists could otherwise land their
+    edits in different sessions. Mirrors start_or_get_session's own
+    next-number arithmetic, so the pinned value always matches what that
+    call would create."""
+    if training_session is not None:
+        return training_session.session_number
+    if session_number is not None:
+        return session_number
+    return (latest_session_number(session, user, date) or 0) + 1
 
 
 def is_past_date(date: date_type, today: date_type | None = None) -> bool:
@@ -595,6 +632,13 @@ def grip_names(session: Session) -> dict[int, str]:
     return {grip.id: grip.name for grip in session.exec(select(GripType))}  # type: ignore[misc]
 
 
+def grip_dimension_names(session: Session) -> dict[int, str]:
+    """GripType id -> dimension_name ("edge depth" / "block width"), for
+    anything rendering a WorkSet's edge_mm value next to its grip — see
+    CONTEXT.md on pinch dimension semantics."""
+    return {grip.id: grip.dimension_name for grip in session.exec(select(GripType))}  # type: ignore[misc]
+
+
 def trained_combinations(session: Session, user: User) -> list[dict]:
     """One entry per (hand, grip_type, edge_mm) with any WorkSet or
     MaxWeightTest — what the dashboard iterates. A combo trained only under
@@ -612,11 +656,13 @@ def trained_combinations(session: Session, user: User) -> list[dict]:
         | {(ws.hand, ws.grip_type_id, ws.edge_mm) for ws in work_sets}
     )
     names = grip_names(session)
+    dimension_names = grip_dimension_names(session)
     return [
         {
             "hand": hand,
             "grip_type_id": grip_type_id,
             "grip_name": names[grip_type_id],
+            "dimension_name": dimension_names[grip_type_id],
             "edge_mm": edge_mm,
             "current_max": compute_current_max(
                 session, user, hand, grip_type_id, edge_mm
@@ -634,11 +680,13 @@ def tested_combinations(session: Session, user: User) -> list[dict]:
     ).all()
     combos = sorted({(t.hand, t.grip_type_id, t.edge_mm) for t in tests})
     names = grip_names(session)
+    dimension_names = grip_dimension_names(session)
     return [
         {
             "hand": hand,
             "grip_type_id": grip_type_id,
             "grip_name": names[grip_type_id],
+            "dimension_name": dimension_names[grip_type_id],
             "edge_mm": edge_mm,
             "current_max": compute_current_max(
                 session, user, hand, grip_type_id, edge_mm
