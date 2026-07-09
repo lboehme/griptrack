@@ -22,7 +22,9 @@ def correlation_points(client):
 
 
 def seed_progression(client):
-    """Strength and boulder grade rising together; one sport climb as noise."""
+    """Strength and boulder grade rising together; one unparseable-grade
+    climb as noise (issue #55 — excluded from the correlation, not silently
+    but with loud feedback at logging time and a history badge)."""
     register(client)
     log_bodyweight(client, "2026-06-01", "70")
     log_max_test(client, "left", "half crimp", 20, "2026-06-01", "35")
@@ -31,7 +33,7 @@ def seed_progression(client):
     log_climb(client, "2026-06-12", "6B")          # Font for V4
     log_max_test(client, "left", "half crimp", 20, "2026-06-20", "49")
     log_climb(client, "2026-06-22", "V6")
-    log_climb(client, "2026-06-15", "7a+", discipline="sport")  # excluded
+    log_climb(client, "2026-06-15", "hard")  # unparseable grade, excluded
 
 
 def test_rising_strength_and_grades_correlate_positively(client):
@@ -40,7 +42,7 @@ def test_rising_strength_and_grades_correlate_positively(client):
     stat = correlation_stat(client)
     assert stat is not None, "no correlation stat on the dashboard"
     r, n = stat
-    assert n == 3  # the sport climb is excluded
+    assert n == 3  # the unparseable-grade climb is excluded
     assert r > 0.9
 
 
