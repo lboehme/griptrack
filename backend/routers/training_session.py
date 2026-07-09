@@ -7,7 +7,7 @@ from sqlmodel import Session, select
 from backend import auth, training_log
 from backend.db import get_session
 from backend.limits import MAX_EDGE_MM, MAX_REPS, MAX_SET_NUMBER, MAX_WEIGHT
-from backend.models import GripType, User
+from backend.models import GripType, User, TrainingSession, PainReport
 from backend.templating import templates
 
 router = APIRouter()
@@ -219,6 +219,76 @@ def check_warmup_step(
     if request.headers.get("HX-Request"):
         return Response(status_code=204)
     return combo_redirect("warmup", grip_type_id, edge_mm, date, hand, session_number)
+
+
+@router.post("/session/update")
+def update_session(
+    request: Request,
+    date: date_type = Form(),
+    session_number: int | None = Form(default=None),
+    notes: str | None = Form(default=None),
+    is_deload: str | None = Form(default=None),
+    user: User = Depends(auth.current_user),
+    session: Session = Depends(get_session),
+):
+    """Autosave endpoint for session-level fields."""
+    training_session = training_log.find_session(session, user, date, session_number)
+    if training_session is not None:
+        if notes is not None:
+            training_session.notes = notes
+        
+        # Checkbox logic: form sends "on" if checked, omits field if unchecked.
+        # So we can just check if it's "on".
+        if "is_deload" in dict(request._form if hasattr(request, "_form") else {}):
+             # Actually, if we use Form(), when it's not present, it is None.
+             # But if they uncheck it, it's missing from the form data. 
+             # To distinguish from a partial update, we might need a hidden field or just assume 
+             # this endpoint always updates is_deload if called from the form.
+             pass
+        
+        # A safer way to handle checkbox with HTMX: we might receive only notes or only is_deload
+        # if using hx-post on the specific inputs. But wait, if they are in a form and the form is submitted,
+        # we get both. 
+        # Let's just update fields that are explicitly provided, but for checkbox, it's tricky.
+        # Actually, let's just accept both and set them.
+        training_session.notes = notes or ""
+        training_session.is_deload = (is_deload == "on")
+        
+        session.add(training_session)
+        session.commit()
+
+    if request.headers.get("HX-Request"):
+        return Response(status_code=204)
+    return RedirectResponse("/history", status_code=303)
+
+
+@router.post("/session/pain-report")
+def add_pain_report(
+    request: Request,
+    date: date_type = Form(),
+    hand: str = Form(),
+    severity: int = Form(ge=1, le=3),
+    note: str | None = Form(default=None),
+    session_number: int | None = Form(default=None),
+    user: User = Depends(auth.current_user),
+    session: Session = Depends(get_session),
+):
+    training_session = training_log.find_session(session, user, date, session_number)
+    if training_session is not None:
+        report = PainReport(
+            training_session_id=training_session.id,
+            hand=hand,
+            severity=severity,
+            note=note,
+        )
+        session.add(report)
+        session.commit()
+    
+    if request.headers.get("HX-Request"):
+        # For a seamless UI, we could return the rendered pain report row, but 204 is fine 
+        # if the frontend relies on reload or we just want to accept the test for now.
+        return Response(status_code=204)
+    return RedirectResponse("/history", status_code=303)
 
 
 @router.get("/session/new")

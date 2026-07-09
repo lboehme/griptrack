@@ -183,3 +183,46 @@ def test_worksets_table_defaults_to_three_sets_with_protocol_reps(client):
     # Empty rows prefill the protocol's rep target and the hand's CurrentMax.
     assert rows[("left", 1)] == ("42.5", "5", "")
     assert rows[("right", 1)] == ("40.0", "5", "")
+
+
+def test_session_notes_and_deload_autosave(client):
+    setup_tested_user(client)
+    # Save a workset to ensure session is created
+    save_work_set(client, "left", 1, "40", "5", date="2026-07-04")
+
+    response = client.post(
+        "/session/update",
+        data={
+            "date": "2026-07-04",
+            "notes": "Felt tired today.",
+            "is_deload": "on",
+        },
+        headers={"HX-Request": "true"}
+    )
+    assert response.status_code == 204
+
+    page = worksets_page(client, date="2026-07-04").text
+    assert "Felt tired today." in page
+    assert 'name="is_deload" checked' in page or 'checked name="is_deload"' in page
+
+
+def test_pain_report_autosaves_and_displays(client):
+    setup_tested_user(client)
+    save_work_set(client, "left", 1, "40", "5", date="2026-07-04")
+
+    response = client.post(
+        "/session/pain-report",
+        data={
+            "date": "2026-07-04",
+            "hand": "left",
+            "severity": "2",
+            "note": "Tweaked a pulley",
+        },
+        headers={"HX-Request": "true"}
+    )
+    assert response.status_code == 204
+
+    page = worksets_page(client, date="2026-07-04").text
+    assert "left" in page
+    assert "2" in page
+    assert "Tweaked a pulley" in page

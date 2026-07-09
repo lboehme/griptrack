@@ -50,6 +50,51 @@
   {% endif %}
 </p>
 </div>
+<div class="card session-meta">
+  <form id="session-update-form" method="post" action="/session/update">
+    {% include "_combo_fields.html" %}
+    <input type="hidden" name="session_number" value="{{ session_number if session_number else '' }}">
+    <label>
+      <input type="checkbox" name="is_deload" {% if training_session and training_session.is_deload %}checked{% endif %}>
+      Planned light session (deload)
+    </label>
+    <label>Session Notes
+      <textarea name="notes" rows="3" placeholder="How did it feel?">{{ training_session.notes if training_session and training_session.notes else '' }}</textarea>
+    </label>
+  </form>
+
+  <details style="margin-top: 1rem;">
+    <summary>Any tweaks? (Pain reports)</summary>
+    {% if pain_reports %}
+    <table style="margin-bottom: 1rem;">
+      <thead><tr><th>Hand</th><th>Severity</th><th>Note</th></tr></thead>
+      <tbody>
+        {% for pr in pain_reports %}
+        <tr><td>{{ pr.hand }}</td><td>{{ pr.severity }}</td><td>{{ pr.note or '' }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+    <!-- Auto-saves when severity is selected (if hand is set) or note is changed -->
+    <form id="pain-report-form" method="post" action="/session/pain-report">
+      {% include "_combo_fields.html" %}
+      <input type="hidden" name="session_number" value="{{ session_number if session_number else '' }}">
+      <div class="form-row">
+        <label>Hand
+          <select name="hand" required>
+            <option value="left">Left</option>
+            <option value="right">Right</option>
+            <option value="both">Both</option>
+          </select>
+        </label>
+        <label>Severity (1-3)
+          <input type="number" name="severity" min="1" max="3" required placeholder="e.g. 1">
+        </label>
+      </div>
+      <label>Note <input type="text" name="note" placeholder="Optional"></label>
+    </form>
+  </details>
+</div>
 <div class="flow-next">
   <a class="btn btn-secondary" href="/session/warmup?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}{% if hands|length == 1 %}&amp;hand={{ hands[0] }}{% endif %}{% if session_number %}&amp;session_number={{ session_number }}{% endif %}">← Back to warmup</a>
   {% if hands|length == 1 %}
@@ -92,5 +137,33 @@ document.querySelectorAll(".workset-cell").forEach((cell) => {
     });
   });
 });
+
+const metaForm = document.getElementById("session-update-form");
+if (metaForm) {
+  const saveMeta = () => {
+    fetch(metaForm.action, {
+      method: "POST",
+      body: new FormData(metaForm),
+      headers: { "HX-Request": "true" }
+    });
+  };
+  metaForm.querySelector('textarea[name="notes"]').addEventListener('change', saveMeta);
+  metaForm.querySelector('input[name="is_deload"]').addEventListener('change', saveMeta);
+}
+
+const painForm = document.getElementById("pain-report-form");
+if (painForm) {
+  const savePain = () => {
+    const sev = painForm.querySelector('input[name="severity"]').value;
+    if (sev) {
+      fetch(painForm.action, {
+        method: "POST",
+        body: new FormData(painForm)
+      }).then(() => window.location.reload());
+    }
+  };
+  painForm.querySelector('input[name="severity"]').addEventListener('change', savePain);
+  painForm.querySelector('input[name="note"]').addEventListener('change', savePain);
+}
 </script>
 {% endblock %}
