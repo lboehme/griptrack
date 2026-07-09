@@ -132,3 +132,33 @@ def test_login_and_logout_round_trip(client):
     )
     assert right.status_code == 303
     assert "founder@example.com" in client.get("/").text
+
+
+def test_session_is_revoked_after_admin_password_reset(client):
+    register(client, "founder@example.com", "s3cret-pw")
+    code = generate_invite(client)
+    register(client, "friend@example.com", "friend-pw", invite_code=code)
+    
+    # Save the friend's valid session cookie
+    friend_session = client.cookies.get("session")
+    
+    # Log out friend, log in founder
+    client.post("/logout")
+    login(client, "founder@example.com", "s3cret-pw")
+    
+    # Admin resets friend's password
+    client.post(
+        "/admin/reset-password",
+        data={"email": "friend@example.com", "new_password": "fresh-pw"},
+        follow_redirects=True,
+    )
+    client.post("/logout")
+    
+    # Attempt to use the friend's old session
+    client.cookies.set("session", friend_session, domain="testserver")
+    response = client.get("/")
+    # The old session should not be logged in
+    assert "friend@example.com" not in response.text
+    
+    # The friend can log in with the new password
+    assert login(client, "friend@example.com", "fresh-pw").status_code == 303

@@ -64,7 +64,7 @@ def current_user(
     request: Request, session: Session = Depends(get_session)
 ) -> User:
     user = session.get(User, request.session.get("user_id"))
-    if user is None:
+    if user is None or request.session.get("session_version") != user.session_version:
         raise HTTPException(status_code=401, detail="Not logged in")
     return user
 
@@ -91,6 +91,7 @@ def reset_password(session: Session, email: str, new_password: str) -> User | No
     if user is None:
         return None
     user.hashed_password = hash_password(new_password)
+    user.session_version += 1
     session.add(user)
     session.commit()
     return user
