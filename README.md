@@ -1,5 +1,10 @@
 # GripTrack
 
+[![CI](https://github.com/lboehme/griptrack/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/lboehme/griptrack/actions/workflows/ci.yml)
+![Python 3.12](https://img.shields.io/badge/python-3.12-blue)
+![Tests](https://img.shields.io/badge/tests-173%20passing-brightgreen)
+![FastAPI + htmx](https://img.shields.io/badge/stack-FastAPI%20%2B%20htmx-009688)
+
 A mobile-first PWA for data-driven finger-strength training in climbing.
 It tracks block-pull (no-hang) training per hand, grip and edge size,
 computes plate-accurate loading suggestions from your tested max, and
@@ -41,8 +46,10 @@ blended "finger strength" score.
   session notes, deload marking, pain reports per hand, full history,
   CSV export of everything, and PWA install with an offline fallback.
 
-Registration is invite-only by design — this runs as a personal
-instrument for a handful of climbers, not a service.
+GripTrack runs as a personal instrument for a handful of climbers, so
+registration is invite-only rather than open signup. If you'd like to
+click around a live instance, a demo account with sample data is
+available on request — or run it locally in three commands (see below).
 
 ## How the analytics work
 
@@ -198,3 +205,8 @@ the open roadmap lives in [`CLAUDE.md`](CLAUDE.md). Bigger items on the
 list: left/right asymmetry analytics, and — once enough pain-report and
 deload data has accumulated — a per-grip injury-risk guardian that the
 current overtraining warning is a crude prototype of.
+
+---
+
+Built by [Lukas](https://github.com/lboehme), a physicist who climbs —
+which is why the statistics above get more care than the CSS.
