@@ -208,5 +208,5 @@ current overtraining warning is a crude prototype of.
 
 ---
 
-Built by [Lukas](https://github.com/lboehme), a physicist who climbs —
+Built by Lukas, a physicist who climbs —
 which is why the statistics above get more care than the CSS.
