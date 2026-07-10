@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/lboehme/griptrack/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/lboehme/griptrack/actions/workflows/ci.yml)
 ![Python 3.12](https://img.shields.io/badge/python-3.12-blue)
-![Tests](https://img.shields.io/badge/tests-173%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-170+%20passing-brightgreen)
 ![FastAPI + htmx](https://img.shields.io/badge/stack-FastAPI%20%2B%20htmx-009688)
 
 A mobile-first PWA for data-driven finger-strength training in climbing.
