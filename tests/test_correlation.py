@@ -75,3 +75,30 @@ def test_too_few_boulder_climbs_shows_no_correlation(client):
     log_climb(client, "2026-06-02", "V2")
 
     assert correlation_stat(client) is None
+
+
+def test_correlation_floor_boundary_seven_points_is_still_too_few(client):
+    """The n >= 8 floor at its boundary: the full seed minus one climb is
+    exactly 7 parseable points — no correlation yet."""
+    seed_progression(client)
+    stat = correlation_stat(client)
+    assert stat is not None and stat[1] == 8
+
+    # Rebuild one climb short on a fresh user.
+    from tests.helpers import register_second_user
+
+    register_second_user(client)
+    log_bodyweight(client, "2026-06-01", "70")
+    for strength_date, weight, climb_date, grade in [
+        ("2026-06-01", "35", "2026-06-02", "V1"),
+        ("2026-06-10", "38", "2026-06-12", "V2"),
+        ("2026-06-15", "42", "2026-06-16", "V3"),
+        ("2026-06-20", "44", "2026-06-21", "V4"),
+        ("2026-06-25", "46", "2026-06-26", "V4"),
+        ("2026-06-28", "46", "2026-06-29", "V5"),
+        ("2026-07-02", "48", "2026-07-03", "V6"),
+    ]:
+        log_max_test(client, "left", "half crimp", 20, strength_date, weight)
+        log_climb(client, climb_date, grade)
+
+    assert correlation_stat(client) is None

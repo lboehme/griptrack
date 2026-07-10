@@ -369,3 +369,16 @@ def test_pain_reports_and_session_meta_are_isolated_per_user(client):
     assert 'name="is_deload" checked' in a_page or 'checked name="is_deload"' in a_page
     assert "User B own tweak" not in a_page
     assert "User B notes" not in a_page
+
+
+def test_pain_report_severity_out_of_bounds_is_rejected(client):
+    setup_tested_user(client)
+    save_work_set(client, "left", 1, "40", "5", date="2026-07-04")
+
+    for severity in ("0", "4", "-1"):
+        response = client.post(
+            "/session/pain-report",
+            data={"date": "2026-07-04", "hand": "left", "severity": severity},
+            headers={"HX-Request": "true"},
+        )
+        assert response.status_code == 422, f"severity {severity} was accepted"

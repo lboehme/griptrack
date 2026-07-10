@@ -222,3 +222,33 @@ def test_home_page_treats_revoked_session_as_anonymous(client):
 
     assert response.status_code == 200
     assert "friend" not in response.text  # greeted as anonymous, not by name
+
+
+def test_login_and_register_pages_render(client):
+    """Smoke tests for the two anonymous entry pages — a template
+    regression here would otherwise ship silently."""
+    login_page = client.get("/login")
+    assert login_page.status_code == 200
+    assert 'name="email"' in login_page.text
+    assert 'name="password"' in login_page.text
+
+    register_page = client.get("/register")
+    assert register_page.status_code == 200
+    assert 'name="email"' in register_page.text
+    assert 'name="password"' in register_page.text
+    assert 'name="invite_code"' in register_page.text
+
+
+def test_admin_reset_for_an_unknown_email_is_a_404(client):
+    register(client)  # founder = admin
+    response = client.post(
+        "/admin/reset-password",
+        data={"email": "nobody@example.com", "new_password": "fresh-pw-1234"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 404
+
+
+def test_registration_with_an_invalid_unit_pref_is_rejected(client):
+    response = register(client, unit_pref="stone")
+    assert response.status_code == 400
