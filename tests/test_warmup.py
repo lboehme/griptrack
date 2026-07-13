@@ -128,7 +128,7 @@ def check_step(client, hand, step, grip="half crimp", edge_mm=20, date="2026-07-
 def test_checking_a_warmup_step_autosaves_and_starts_the_session(client):
     """Implicit create-on-first-tap: only guaranteed for TODAY (a past
     date instead requires the explicit confirm prompt — see
-    test_past_session_creation.py)."""
+    test_multi_session_days.py)."""
     register(client)
     log_max_test(client, "left", "half crimp", 20, "2026-07-01", "42.5")
     log_max_test(client, "right", "half crimp", 20, "2026-07-01", "40")

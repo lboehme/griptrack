@@ -118,7 +118,7 @@ def get_session_page(client, path, params):
     session on this date — create one?" prompt if it appears.
 
     Most tests exercise the normal warmup/worksets content, not the
-    past-date creation gate itself (see test_past_session_creation.py for
+    past-date creation gate itself (see test_multi_session_days.py for
     that) — this keeps every other test's dates free to land anywhere in
     the past without tripping over the gate."""
     response = client.get(path, params=params, follow_redirects=True)

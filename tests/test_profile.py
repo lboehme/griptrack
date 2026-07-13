@@ -139,3 +139,11 @@ def test_csv_export_returns_user_scoped_data(client):
         
         # Verify units are in headers
         assert "weight (kg)" in bodyweights[0]
+
+
+def test_profile_update_with_invalid_hand_order_pref_is_rejected(client):
+    register(client)
+    response = client.post(
+        "/profile", data={"hand_order_pref": "random"}, follow_redirects=False
+    )
+    assert response.status_code == 400

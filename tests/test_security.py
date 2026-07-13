@@ -294,5 +294,49 @@ def test_register_is_rate_limited(client):
     assert blocked.status_code == 429
     
     # Even a valid registration is blocked while rate-limited
-    valid = register(client, "newuser@example.com", "long-pw", invite_code=code)
+    valid = register(client, "newuser@example.com", "long-enough-pw", invite_code=code)
     assert valid.status_code == 429
+
+
+# --- Structural auth sweep -------------------------------------------------
+
+# Routes that are deliberately reachable without a session. Everything
+# else registered on the app must 401 when hit unauthenticated — this is
+# structural coverage for "the author remembered Depends(auth.current_user)",
+# including for every future route.
+PUBLIC_ROUTES = {
+    ("GET", "/"),  # home degrades to an anonymous landing page
+    ("GET", "/health"),
+    ("GET", "/login"),
+    ("POST", "/login"),
+    ("GET", "/register"),
+    ("POST", "/register"),
+    ("POST", "/logout"),
+    ("GET", "/offline"),
+    ("GET", "/sw.js"),
+    ("GET", "/manifest.webmanifest"),
+}
+
+
+def all_app_routes():
+    import re
+
+    from fastapi.routing import APIRoute
+
+    from backend.main import create_app
+
+    routes = []
+    for route in create_app().routes:
+        if not isinstance(route, APIRoute):
+            continue  # static mount, docs, etc.
+        for method in route.methods & {"GET", "POST"}:
+            if (method, route.path) not in PUBLIC_ROUTES:
+                # Fill path params ({test_id} etc.) with a dummy id.
+                routes.append((method, re.sub(r"\{[^}]+\}", "1", route.path)))
+    return sorted(routes)
+
+
+@pytest.mark.parametrize("method,path", all_app_routes())
+def test_every_non_public_route_requires_authentication(client, method, path):
+    response = client.request(method, path, follow_redirects=False)
+    assert response.status_code == 401, f"{method} {path} did not 401"

@@ -21,7 +21,8 @@ def max_tests_page(
 ):
     grip_types = session.exec(select(GripType).order_by(GripType.name)).all()
     combos = training_log.tested_combinations(session, user)
-    # Fetch all max tests (unvoided) to show history
+    # Fetch all max tests — including voided ones, deliberately: the
+    # template strikes voided rows through rather than hiding them.
     tests = session.exec(
         select(MaxWeightTest, GripType)
         .join(GripType)
