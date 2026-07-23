@@ -47,9 +47,10 @@ climb logging with loud grade feedback, history, CSV export, PWA
 (manifest + service worker with content-hash cache version), and the
 analytics dashboard (deload-aware volume trend, plateau, overtraining
 warning, Spearman %BW-vs-grade correlation with an n≥8 floor) — 173 tests
-at the HTTP seam plus ruff/mypy/pip-audit gates. Remaining open work:
-Asymmetry Analytics (#45–#48, next up), the Wave 4 retention PRD (#59,
-needs its own grill), and the deferred #20/#28. Work test-first (see the
+at the HTTP seam plus ruff/mypy/pip-audit gates. Remaining open work: the
+Focus session-logging redesign (#76, grilled 2026-07-23, next up),
+Asymmetry Analytics (#45–#48), the Wave 4 retention PRD (#59, needs its
+own grill), and the deferred #20/#28. Work test-first (see the
 `tdd` skill) and keep migrations in lockstep with model changes.
 
 ## Environment & running
@@ -145,22 +146,38 @@ unit-tested in isolation for now.
   default) grants two capabilities only: generating invites, and manually
   resetting another user's forgotten password — not a general role system.
 - **Frontend:** FastAPI + Jinja2 templates + htmx, vanilla JS only where
-  htmx can't reach. No build step, no React/Vue, no PWA/offline support (for
-  now). Logging a `TrainingSession` is **not** a page-per-step wizard —
-  it's two consolidated pages: a warmup/ramp checklist and a work-sets
-  table, each laid out with one row per step/set and **L/R columns** so
-  both hands appear together (see `HandOrderPreference` in `CONTEXT.md` for
-  how "alternating" vs "sequential" changes this layout). Every interaction
-  (checking a warmup step, editing a work-set row) **autosaves immediately**
-  — there is no final "submit" step, so a `TrainingSession` can exist, and
-  often briefly does, in a partially-filled state.
+  htmx can't reach. No build step, no React/Vue. Logging a
+  `TrainingSession` is **not** a page-per-step wizard — it's two
+  consolidated pages, both built to be used one-handed between hangs (the
+  "Focus" design, `design_handoff_griptrack_focus/`):
+  - **warmup/ramp** — a card ladder, all ramp steps visible at once, each
+    card showing the plate-rounded weight with L/R tick targets.
+  - **work sets** — one set at a time: a Left and a Right hand card, each
+    with tap-to-adjust steppers (weight walks the loadable ladder; reps
+    and RPE step), and a single "Set done" button below both that commits
+    the whole set (see `Set commit` in `CONTEXT.md` and
+    `docs/adr/0007-...md`). Committed sets collapse into a COMPLETED list;
+    tapping one reopens it in the cards (`Edit mode`).
+
+  Both pages share a header spine (exercise title, progress pill,
+  segmented bar) and show both hands together — see `HandOrderPreference`
+  in `CONTEXT.md` for how "sequential" collapses this to one card/column.
+  Session-level interactions (warmup ticks, notes, deload flag, pain
+  reports) **autosave immediately**; work sets arrive one Set commit at a
+  time. There is no final "submit" step, so a `TrainingSession` can exist,
+  and often briefly does, in a partially-filled state. Screens are
+  progressively enhanced: the server renders real forms with number
+  inputs, and JS upgrades them into steppers.
 - **Analytics charts:** server-rendered images (matplotlib/plotly → SVG/PNG,
   embedded via `<img>`), not a client-side JS charting library.
 - **Deployment:** local only for now
   (`conda run -n griptrack fastapi dev backend/main.py`, tested on a phone
   via the machine's LAN IP). Revisit hosting once the MVP is proven useful.
 - **Testing:** `pytest` + FastAPI `TestClient` against an isolated SQLite DB
-  per test run. Treated as core scope (Phase 4), not optional polish.
+  per test run. Treated as core scope (Phase 4), not optional polish. The
+  Focus redesign moved real logic client-side (stepper, edit mode, rest
+  countdown), so a thin `pytest-playwright` smoke layer covers what the
+  HTTP seam can't see — same conda env, no JS tooling, no build step.
 
 ## Domain model
 
@@ -288,15 +305,28 @@ dropped. Waves in order; GitHub issues are the source of truth for status.
   session-generation counter; admin password reset invalidates sessions) +
   rate-limit `/register`; Spearman + n≥8 floor for the strength–grade
   correlation; CSV export.
-- **Wave 3 — Asymmetry Analytics** (PRD #45, slices #46–#48, ready-for-agent). **← next up.**
+- **Focus redesign — session-logging screens** (PRD #76). **← next up.**
+  Grilled 2026-07-23 from `design_handoff_griptrack_focus/` (Claude
+  design-tool handoff, concept `1c`). Replaces the work-sets table with
+  one-set-at-a-time hand cards and steppers, and the warmup table with a
+  card ladder. Layout/interaction only — the existing orange token system
+  and dark mode stay. Brings forward an atomic `POST /session/set`
+  (ADR-0007), `plates.loadable_ladder`, a stubbed client-only rest
+  countdown ahead of Wave 4's real one, and the `pytest-playwright`
+  harness. Sequenced ahead of Wave 3 because it's the screen used every
+  session, and real use is the only way to learn whether Focus works
+  between hangs.
+- **Wave 3 — Asymmetry Analytics** (PRD #45, slices #46–#48, ready-for-agent).
 - **Wave 4 — retention wave** (one feature surface, needs its own mini-grill
   first): RPE-driven Tier-1 deterministic autoregulation (RPE ≤ 7 twice →
   suggest smallest loadable increment; RPE ≥ 9 / missed reps → hold or step
   down); retest nudge when work-set history implies `CurrentMax` drift;
   "estimated this combo 3× → guided test?" nudge; mean-intensity series
-  (weight ÷ CurrentMax-as-of-date) beside tonnage on the trend chart; RPE
-  stepper input; in-between-set rest timer (htmx OOB countdown, stored rest
-  durations, wake lock, audio/notification strategy).
+  (weight ÷ CurrentMax-as-of-date) beside tonnage on the trend chart;
+  in-between-set rest timer (htmx OOB countdown, stored rest durations,
+  wake lock, audio/notification strategy) — replacing the Focus
+  redesign's deliberately throwaway client-only countdown. RPE stepper
+  input ships earlier, with the Focus redesign.
 - **Owner-gated, parallel:** Oracle switch when the account unblocks —
   Litestream enable + restore drill is step one (if the ticket is still
   stuck after ~a week, revisit decoupling backups to R2/B2); PWA phone test
@@ -305,7 +335,7 @@ dropped. Waves in order; GitHub issues are the source of truth for status.
   post-Oracle (Sentry vs self-hosted vs structured logs).
 - **Deferred with named triggers:** CSP nonces, admin audit table, first-run
   onboarding, chart-render caching → open-sourcing or audience growth;
-  Playwright smoke tests → starting #20; cross-combination aggregate load
+  cross-combination aggregate load
   (needs read-time unit canonicalization, the ADR-0003 IOU) and pain-data
   consumption → injury guardian (#28); offline WorkSet sync (#20) → its own
   design grill, someday; stored canonical grades / conversion matrix → if a
