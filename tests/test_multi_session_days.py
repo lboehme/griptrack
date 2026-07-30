@@ -7,6 +7,7 @@ from datetime import date as date_type
 from datetime import timedelta
 
 from tests.helpers import (
+    current_set_field,
     grip_type_id,
     log_max_test,
     register,
@@ -18,18 +19,6 @@ def setup_tested_user(client):
     register(client)
     log_max_test(client, "left", "half crimp", 20, "2026-07-01", "42.5")
     log_max_test(client, "right", "half crimp", 20, "2026-07-01", "40")
-
-
-def workset_rows(page_text):
-    rows = {}
-    for hand, set_number, block in re.findall(
-        r'<td class="workset-cell" data-hand="(\w+)" data-set="(\d+)">(.*?)</td>',
-        page_text,
-        re.DOTALL,
-    ):
-        weight = re.search(r'name="weight" value="([^"]*)"', block).group(1)
-        rows[(hand, int(set_number))] = weight
-    return rows
 
 
 def volume_points(client):
@@ -80,8 +69,8 @@ def test_two_sessions_same_date_have_independent_work_sets(client):
         },
     ).text
 
-    assert workset_rows(page1)[("left", 1)] == "42.5"
-    assert workset_rows(page2)[("left", 1)] == "30.0"
+    assert current_set_field(page1, "left", "weight") == "42.5"
+    assert current_set_field(page2, "left", "weight") == "30.0"
 
 
 def test_two_sessions_same_date_have_independent_volume(client):
@@ -125,7 +114,7 @@ def test_default_flows_land_on_the_days_latest_session(client):
         params={"grip_type_id": grip_id, "edge_mm": 20, "date": "2026-07-04"},
     ).text
 
-    assert workset_rows(page)[("left", 1)] == "50.0"
+    assert current_set_field(page, "left", "weight") == "50.0"
 
 
 def test_second_session_affordance_only_appears_once_today_has_one(client):
@@ -181,8 +170,8 @@ def test_starting_a_second_session_today_gets_its_own_session_number(client):
             "session_number": 2,
         },
     ).text
-    assert workset_rows(page1)[("left", 1)] == "40.0"
-    assert workset_rows(page2)[("left", 1)] == "20.0"
+    assert current_set_field(page1, "left", "weight") == "40.0"
+    assert current_set_field(page2, "left", "weight") == "20.0"
 
 
 def test_past_date_with_no_session_shows_confirm_prompt_and_creates_nothing(client):
@@ -303,4 +292,4 @@ def test_existing_migration_data_lands_on_session_number_one(client):
             "session_number": 1,
         },
     ).text
-    assert workset_rows(page)[("left", 1)] == "40.0"
+    assert current_set_field(page, "left", "weight") == "40.0"

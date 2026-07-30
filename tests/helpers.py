@@ -87,6 +87,76 @@ def save_work_set(
     return client.post("/session/workset", data=data, follow_redirects=True)
 
 
+def save_focus_set(
+    client, set_number, date="2026-07-04", grip="half crimp", edge_mm=20,
+    session_number=None, left=None, right=None,
+):
+    """POST to the Set commit endpoint (issue #79, docs/adr/0007). `left`
+    and `right` are optional (weight, reps, rpe) tuples -- omit a hand
+    entirely to mirror what a sequential HandOrderPreference submits, or
+    pass rpe=None within the tuple for a blank RPE."""
+    data = {
+        "grip_type_id": grip_type_id(client, grip),
+        "edge_mm": edge_mm,
+        "date": date,
+        "set_number": set_number,
+    }
+    if session_number is not None:
+        data["session_number"] = session_number
+    for hand, values in (("left", left), ("right", right)):
+        if values is None:
+            continue
+        weight, reps, rpe = values
+        data[f"{hand}_weight"] = weight
+        data[f"{hand}_reps"] = reps
+        if rpe is not None:
+            data[f"{hand}_rpe"] = rpe
+    return client.post("/session/set", data=data, follow_redirects=True)
+
+
+def pill_text(page_text):
+    """The Focus screen's progress-pill text ("Set 1 of 3"), read off its
+    data-pill-text attribute rather than the rendered HTML (which splits
+    the numbers into nested <span>s for the JS to update in place)."""
+    match = re.search(r'class="focus-pill"[^>]*data-pill-text="([^"]*)"', page_text)
+    return match.group(1) if match else None
+
+
+def current_set_field(page_text, hand, field):
+    """Parse the Focus screen's in-progress (current) set's raw prefill
+    for one hand/field ("weight"/"reps"/"rpe") -- the value a plain
+    <input> shows even with JS off, since the tap steppers just mirror it."""
+    match = re.search(rf'name="{hand}_{field}" value="([^"]*)"', page_text)
+    return match.group(1) if match else None
+
+
+def completed_detail(page_text, set_number):
+    """The COMPLETED-list detail text for one set_number: the single-hand
+    format ("32.5 kg × 5 @ 8") or the two-hand format
+    ("L 32.5 × 5 @ 8 · R 30.0 × 5 kg"). None if that set isn't complete
+    yet (still the in-progress/current set, or not reached at all)."""
+    match = re.search(
+        rf'<div class="completed-row" data-set="{set_number}">.*?'
+        r'<span class="completed-detail">\s*(.*?)\s*</span>',
+        page_text,
+        re.DOTALL,
+    )
+    return match.group(1).strip() if match else None
+
+
+def completed_weight(page_text, set_number, hand=None):
+    """A saved weight out of a COMPLETED row. Pass hand=None for the
+    single-hand format, or "left"/"right" to pick out of the two-hand
+    format."""
+    detail = completed_detail(page_text, set_number)
+    if detail is None:
+        return None
+    if hand is None:
+        return float(re.match(r"([\d.]+)", detail).group(1))
+    match = re.search(rf"{hand[0].upper()} ([\d.]+)", detail)
+    return float(match.group(1)) if match else None
+
+
 def log_climb(
     client, date="2026-07-04", grade="V5", style="flash", notes=None,
     discipline=None, follow_redirects=True,

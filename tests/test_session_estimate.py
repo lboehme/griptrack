@@ -5,6 +5,7 @@ ramp and work-set prefills for this session only (see CONTEXT.md)."""
 import re
 
 from tests.helpers import (
+    current_set_field,
     get_session_page,
     grip_type_id,
     log_bodyweight,
@@ -124,9 +125,8 @@ def test_resubmitting_an_estimate_updates_it_in_place(client):
     assert weights[("left", 0)] == 22.5
 
 
-def prefill_weights(client, grip="half crimp", edge_mm=20, date="2026-07-04"):
-    """Parse the work-sets page into {(hand, set_number): weight prefill}."""
-    page = get_session_page(
+def worksets_page(client, grip="half crimp", edge_mm=20, date="2026-07-04"):
+    return get_session_page(
         client,
         "/session/worksets",
         {
@@ -135,14 +135,6 @@ def prefill_weights(client, grip="half crimp", edge_mm=20, date="2026-07-04"):
             "date": date,
         },
     ).text
-    return {
-        (hand, int(n)): re.search(r'name="weight" value="([^"]*)"', block).group(1)
-        for hand, n, block in re.findall(
-            r'<td class="workset-cell" data-hand="(\w+)" data-set="(\d+)">(.*?)</td>',
-            page,
-            re.DOTALL,
-        )
-    }
 
 
 def test_workset_prefill_uses_the_same_fallback_as_the_warmup_ramp(client):
@@ -150,12 +142,14 @@ def test_workset_prefill_uses_the_same_fallback_as_the_warmup_ramp(client):
     log_max_test(client, "left", "half crimp", 20, "2026-07-01", "42.5")
     save_estimate(client, "right", "40")
 
-    prefills = prefill_weights(client)
+    page = worksets_page(client)
 
     # Tested hand prefills its real CurrentMax; the untested hand prefills
-    # the session's estimate — matching the ramp the user just saw.
-    assert prefills[("left", 1)] == "42.5"
-    assert prefills[("right", 1)] == "40.0"
+    # the session's estimate — matching the ramp the user just saw. Set 1
+    # is still the in-progress (current) set, so its raw prefill is what's
+    # asserted against.
+    assert current_set_field(page, "left", "weight") == "42.5"
+    assert current_set_field(page, "right", "weight") == "40.0"
 
 
 def test_worksets_from_an_estimate_only_combo_count_toward_volume(client):

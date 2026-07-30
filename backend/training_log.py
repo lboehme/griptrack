@@ -95,6 +95,44 @@ def warmup_view(
     }
 
 
+def _current_set_number(hands: list[str], saved: dict, row_count: int) -> int:
+    """The Set commit's target set_number — the lowest set_number that
+    isn't yet fully logged for every hand in play. Once every row up to
+    row_count is complete, this is row_count + 1 (the "extend with ＋ Add a
+    set" state)."""
+    for n in range(1, row_count + 1):
+        if any((h, n) not in saved for h in hands):
+            return n
+    return row_count + 1
+
+
+def _seed_for_hand(
+    hand: str,
+    current_set_number: int,
+    saved: dict,
+    current_max: dict,
+    default_reps: int,
+) -> dict:
+    """The Focus screen's in-progress values for one hand.
+
+    If this hand already has a saved WorkSet for the current set_number
+    (e.g. only one hand of an alternating pair has committed so far, so
+    the set isn't "complete" yet and current_set_number hasn't advanced),
+    that row's own values win, RPE included — reloading the page must not
+    forget what was just saved. Otherwise this is a genuinely new set:
+    weight/reps carry down from the most recently committed set for this
+    hand, else the usual CurrentMax/default-reps prefill, and RPE starts
+    blank (nullable) regardless, see CONTEXT.md: Loadable ladder."""
+    existing = saved.get((hand, current_set_number))
+    if existing is not None:
+        return {"weight": existing.weight, "reps": existing.reps, "rpe": existing.rpe}
+    for n in range(current_set_number - 1, 0, -1):
+        prior = saved.get((hand, n))
+        if prior is not None:
+            return {"weight": prior.weight, "reps": prior.reps, "rpe": None}
+    return {"weight": current_max.get(hand), "reps": default_reps, "rpe": None}
+
+
 def worksets_view(
     session: Session,
     user: User,
@@ -105,9 +143,12 @@ def worksets_view(
     sets_hint: int | None = None,
     session_number: int | None = None,
 ) -> dict:
-    """Everything the work-sets page shows: saved sets by (hand, set),
-    prefills from CurrentMax and the TrainingProtocol, and the row math
-    (default rows, add-another-set hint, dismissable empty rows).
+    """Everything the work-sets (Focus) page shows: saved sets by
+    (hand, set), prefills from CurrentMax and the TrainingProtocol, the row
+    math (default rows, add-another-set hint, dismissable empty rows), the
+    current in-progress set + its per-hand seed values, and the user's
+    loadable ladder (see CONTEXT.md: Loadable ladder) for the weight
+    steppers.
 
     session_number=None resolves to the day's latest session, same as
     warmup_view."""
@@ -127,6 +168,14 @@ def worksets_view(
     highest_saved = max((n for _, n in saved), default=0)
     needed_rows = max(protocol.default_work_sets, highest_saved)
     row_count = max(needed_rows, sets_hint or 0)
+    current_set_number = _current_set_number(hands, saved, row_count)
+    seed = {
+        h: _seed_for_hand(
+            h, current_set_number, saved, current_max, protocol.base_work_set_reps
+        )
+        for h in hands
+    }
+    inventory = plates.inventory_for(session, user)
     return {
         "grip": session.get(GripType, grip_type_id),
         "edge_mm": edge_mm,
@@ -146,6 +195,11 @@ def worksets_view(
         "pain_reports": session.exec(
             select(PainReport).where(PainReport.training_session_id == training_session.id)
         ).all() if training_session else [],
+        "total_sets": row_count,
+        "current_set_number": current_set_number,
+        "pill_set_number": min(current_set_number, row_count),
+        "seed": seed,
+        "ladder": plates.loadable_ladder(inventory),
     }
 
 
@@ -203,9 +257,16 @@ def record_work_set(
     weight: float,
     reps: int,
     rpe: float | None,
+    commit: bool = True,
 ) -> WorkSet:
     """Upsert one work set — every field edit autosaves, so the same
-    (hand, set_number) cell is written repeatedly within a session."""
+    (hand, set_number) cell is written repeatedly within a session.
+
+    commit=False stages the row (session.add only) without committing or
+    refreshing, so a caller can upsert both hands of a Set commit
+    (see docs/adr/0007) and commit them together as one transaction — the
+    per-hand /session/workset primitive still calls this with the default
+    commit=True."""
     work_set = session.exec(
         select(WorkSet)
         .where(WorkSet.training_session_id == training_session.id)
@@ -230,8 +291,9 @@ def record_work_set(
         work_set.reps = reps
         work_set.rpe = rpe
     session.add(work_set)
-    session.commit()
-    session.refresh(work_set)
+    if commit:
+        session.commit()
+        session.refresh(work_set)
     return work_set
 
 

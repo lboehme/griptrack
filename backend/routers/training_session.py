@@ -161,6 +161,81 @@ def save_work_set(
     return combo_redirect("worksets", grip_type_id, edge_mm, date, hand, session_number)
 
 
+@router.post("/session/set")
+def save_focus_set(
+    request: Request,
+    grip_type_id: int = Form(),
+    edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
+    date: date_type = Form(),
+    set_number: int = Form(ge=1, le=MAX_SET_NUMBER),
+    session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
+    left_weight: float | None = Form(default=None),
+    left_reps: int | None = Form(default=None),
+    left_rpe: float | None = Form(default=None),
+    right_weight: float | None = Form(default=None),
+    right_reps: int | None = Form(default=None),
+    right_rpe: float | None = Form(default=None),
+    user: User = Depends(auth.current_user),
+    session: Session = Depends(get_session),
+):
+    """Set commit (docs/adr/0007-set-commit-over-per-cell-autosave.md):
+    writes both hands' WorkSets for one set_number in a single atomic
+    request instead of two calls to the per-hand /session/workset — a
+    half-failure on flaky gym wifi must never log one hand and not the
+    other.
+
+    Every present hand's payload is fully validated (same bounds and RPE
+    grid as /session/workset) *before* anything touches the session or the
+    database, so an invalid or partial payload writes nothing at all. Once
+    validation passes, both hands are staged with record_work_set(commit=
+    False) and committed together in one transaction. Re-posting the same
+    (session, hand, set_number) upserts in place (also the edit-mode path,
+    #80) rather than duplicating."""
+    raw = {
+        "left": (left_weight, left_reps, left_rpe),
+        "right": (right_weight, right_reps, right_rpe),
+    }
+    hands_payload: dict[str, tuple[float, int, float | None]] = {}
+    for hand, (weight, reps, rpe) in raw.items():
+        if weight is None and reps is None and rpe is None:
+            continue  # this hand wasn't submitted (sequential hand order)
+        if weight is None or reps is None:
+            return HTMLResponse(
+                f"{hand} hand needs both weight and reps.", status_code=400
+            )
+        if not (0 < weight <= MAX_WEIGHT):
+            return HTMLResponse("Weight out of range.", status_code=400)
+        if not (1 <= reps <= MAX_REPS):
+            return HTMLResponse("Reps out of range.", status_code=400)
+        if rpe is not None and not (1.0 <= rpe <= 10.0 and (rpe * 2) == int(rpe * 2)):
+            return HTMLResponse(
+                "RPE must be between 1 and 10 in 0.5 steps.", status_code=400
+            )
+        hands_payload[hand] = (weight, reps, rpe)
+
+    if not hands_payload:
+        return HTMLResponse(
+            "At least one hand's weight and reps are required.", status_code=400
+        )
+
+    training_session = training_log.start_or_get_session(
+        session, user, date, session_number
+    )
+    for hand, (weight, reps, rpe) in hands_payload.items():
+        training_log.record_work_set(
+            session, training_session, hand, grip_type_id, edge_mm, set_number,
+            weight, reps, rpe, commit=False,
+        )
+    session.commit()
+
+    if request.headers.get("HX-Request"):
+        return Response(status_code=204)
+    redirect_hand = next(iter(hands_payload)) if len(hands_payload) == 1 else ""
+    return combo_redirect(
+        "worksets", grip_type_id, edge_mm, date, redirect_hand, session_number
+    )
+
+
 @router.post("/session/workset/delete")
 def delete_work_set(
     request: Request,
