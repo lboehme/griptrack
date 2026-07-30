@@ -193,6 +193,64 @@ def test_session_start_form_defaults_to_the_last_used_combination(client):
     assert 'name="edge_mm" value="10"' in page.text
 
 
+def test_warmup_renders_header_spine_with_step_pill_and_bar(client):
+    register(client)
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "42.5")
+    log_max_test(client, "right", "half crimp", 20, "2026-07-01", "40")
+
+    page = warmup_page(client).text
+
+    assert '<span class="focus-pill">' in page
+    assert "Step" in page and "of" in page
+    assert re.search(r'Step\s*<span class="focus-pill-n">1</span>\s*of\s*'
+                      r'<span class="focus-pill-m">4</span>', page)
+    assert 'class="focus-progress-bar"' in page
+    assert page.count('class="progress-segment') == 4
+
+
+def test_warmup_step_pill_reflects_first_incomplete_step(client):
+    register(client)
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "42.5")
+    log_max_test(client, "right", "half crimp", 20, "2026-07-01", "40")
+
+    check_step(client, "left", 0)
+    check_step(client, "right", 0)
+    # Step 0 (index) is fully ticked for both hands -> now on step 2 (index 1).
+    page = warmup_page(client).text
+
+    assert re.search(r'Step\s*<span class="focus-pill-n">2</span>\s*of\s*'
+                      r'<span class="focus-pill-m">4</span>', page)
+
+
+def test_warmup_renders_one_card_per_ramp_step(client):
+    register(client)
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "42.5")
+    log_max_test(client, "right", "half crimp", 20, "2026-07-01", "40")
+
+    page = warmup_page(client).text
+
+    assert page.count('class="card ramp-card"') == 4
+    # Each card shows its ramp percentage.
+    for pct in ("50%", "65%", "80%", "90%"):
+        assert f'class="ramp-card-percent">{pct}<' in page
+    # And, inside those cards, the same L/R tick targets tested elsewhere.
+    assert ramp_weights(page)
+    assert checked_steps(page) == set()
+
+
+def test_sequential_hand_order_ramp_card_is_a_single_column(client):
+    register(client)
+    client.post("/profile", data={"hand_order_pref": "sequential"})
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "42.5")
+    log_max_test(client, "right", "half crimp", 20, "2026-07-01", "40")
+
+    page = warmup_page(client).text
+
+    assert "ramp-card-hands-single" in page
+    # Only the left hand's tick target renders per card (one column).
+    assert {hand for hand, step in ramp_weights(page)} == {"left"}
+
+
 def test_one_untested_hand_still_renders_the_tested_hands_ramp(client):
     register(client)
     # Only the left hand is tested; the right hand has no max for this combo.

@@ -78,6 +78,17 @@ def warmup_view(
             {"index": index, "percent": first_plan[index]["percent"]}
             for index in range(len(first_plan))
         ]
+    checks = warmup_checks(session, training_session)
+    # Card-ladder progress pill (issue #83): the 1-based number of the
+    # first step that isn't yet fully ticked across every planned hand, or
+    # the last step once everything is checked. Display-only — the ramp
+    # itself has no enforced order, this is just "how far down the plan
+    # have you ticked".
+    current_step = len(steps)
+    for step in steps:
+        if not all((h, step["index"]) in checks for h in planned_hands):
+            current_step = step["index"] + 1
+            break
     return {
         "grip": session.get(GripType, grip_type_id),
         "edge_mm": edge_mm,
@@ -90,8 +101,9 @@ def warmup_view(
         "untested_hands": untested_hands,
         "planned_hands": planned_hands,
         "steps": steps,
+        "current_step": current_step,
         "training_session": training_session,
-        "checks": warmup_checks(session, training_session),
+        "checks": checks,
     }
 
 

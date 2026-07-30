@@ -430,21 +430,58 @@ ul.plain { list-style: none; margin: 0; padding: 0; }
 
 .session-started::before { content: "● "; font-size: .6rem; vertical-align: 2px; }
 
-.ramp-table td:first-child {
-  font-weight: 750;
+/* ---- card ladder (issue #83) ---- */
+
+.ramp-ladder { display: flex; flex-direction: column; gap: .8rem; margin: 0 0 .6rem; }
+
+.ramp-card { margin-bottom: 0; }
+
+.ramp-card-header { margin-bottom: .7rem; }
+
+.ramp-card-percent {
+  font-size: .78rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
   color: var(--muted);
-  font-size: .92rem;
-  white-space: nowrap;
 }
 
-.ramp-cell {
+.ramp-card-hands {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .6rem;
+}
+
+.ramp-card-hands-single { grid-template-columns: 1fr; }
+
+.ramp-tick {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: .8rem;
+  gap: .6rem;
+  min-height: var(--touch);
+  padding: .3rem .7rem;
+  background: var(--surface-2);
+  border-radius: 14px;
 }
 
-.ramp-cell form { margin: 0; display: flex; }
+.ramp-tick-label {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  min-width: 0;
+  min-height: var(--touch);
+  margin: 0;
+  cursor: pointer;
+}
+
+.ramp-check-form { margin: 0; display: flex; }
+
+/* The label association (for/id) covers most of the row's tap area; the
+   checkbox itself is enlarged here so its own hit box also clears the
+   44px touch-target floor (the shared custom-checkbox rule elsewhere
+   stays at a smaller default size for denser contexts). */
+.ramp-check-form input[type="checkbox"] { width: 2.75rem; height: 2.75rem; }
 
 .ramp-weight {
   font-size: 1.5rem;

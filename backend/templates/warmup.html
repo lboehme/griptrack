@@ -1,12 +1,29 @@
 {% extends "base.html" %}
 {% block title %}Warmup — GripTrack{% endblock %}
 {% block content %}
-<h2>Warmup</h2>
-<p class="page-sub">{{ grip.name }} · {{ edge_mm }} mm {{ grip.dimension_name }} · {{ date }}{% if session_number and session_number > 1 %} · session {{ session_number }}{% endif %}{% if hands|length == 1 %} · <span class="hand-heading">{{ hands[0] }} hand</span>{% endif %}</p>
 <div class="notice past-session-banner" data-session-date="{{ date }}" hidden>You're viewing a past session — edits change your history.</div>
+
+<section class="focus-header">
+  <div class="focus-header-row">
+    <h2 class="focus-title">{{ grip.name }} · {{ edge_mm }} mm {{ grip.dimension_name }}</h2>
+    {% if steps %}
+    <span class="focus-pill">Step <span class="focus-pill-n">{{ current_step }}</span> of <span class="focus-pill-m">{{ steps|length }}</span></span>
+    {% endif %}
+  </div>
+  <p class="page-sub focus-subtitle">{{ date }}{% if session_number and session_number > 1 %} · session {{ session_number }}{% endif %}{% if hands|length == 1 %} · <span class="hand-heading">{{ hands[0] }} hand</span>{% endif %}</p>
+  {% if steps %}
+  <div class="focus-progress-bar" data-total-steps="{{ steps|length }}">
+    {% for step in steps %}
+    <span class="progress-segment {% if step.index + 1 < current_step %}segment-filled{% elif step.index + 1 == current_step %}segment-current{% else %}segment-remaining{% endif %}"></span>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+
 {% if training_session %}
 <p class="session-started">Session {{ training_session.date }}{% if training_session.session_number > 1 %} #{{ training_session.session_number }}{% endif %} — in progress</p>
 {% endif %}
+
 {% if untested_hands %}
 <div class="notice">
   No max-weight test yet for your
@@ -27,35 +44,32 @@
 </div>
 {% endfor %}
 {% endif %}
+
 {% if planned_hands %}
-<div class="card">
-<table class="ramp-table">
-  <thead>
-    <tr>
-      <th>Step</th>
-      {% for hand in planned_hands %}<th>{{ hand[0]|upper }}</th>{% endfor %}
-    </tr>
-  </thead>
-  <tbody>
-    {% for step in steps %}
-    <tr>
-      <td>{{ step.percent }}%</td>
+<div class="ramp-ladder">
+  {% for step in steps %}
+  <div class="card ramp-card">
+    <div class="ramp-card-header">
+      <span class="ramp-card-percent">{{ step.percent }}%</span>
+    </div>
+    <div class="ramp-card-hands{% if planned_hands|length == 1 %} ramp-card-hands-single{% endif %}">
       {% for hand in planned_hands %}
-      <td>
-        <div class="ramp-cell">
-        <span><span class="ramp-weight" data-hand="{{ hand }}" data-step="{{ step.index }}">{{ plans[hand][step.index]["weight"] }}</span> <span class="ramp-unit">{{ user.unit_pref }}</span></span>
-        <form method="post" action="/session/check">
+      {% set check_id = "check-" ~ hand ~ "-" ~ step.index %}
+      <div class="ramp-tick" data-hand="{{ hand }}">
+        <label class="ramp-tick-label" for="{{ check_id }}">
+          <span class="hand-badge hand-badge-{{ hand }}">{{ hand[0]|upper }}</span>
+          <span class="ramp-weight-wrap"><span class="ramp-weight" data-hand="{{ hand }}" data-step="{{ step.index }}">{{ plans[hand][step.index]["weight"] }}</span> <span class="ramp-unit">{{ user.unit_pref }}</span></span>
+        </label>
+        <form method="post" action="/session/check" class="ramp-check-form">
           {% include "_combo_fields.html" %}
           <input type="hidden" name="step_index" value="{{ step.index }}">
-          <input type="checkbox" class="step-check" data-hand="{{ hand }}" data-step="{{ step.index }}"{% if (hand, step.index) in checks %} checked{% endif %} hx-post="/session/check" hx-include="closest form" hx-swap="none" hx-trigger="change">
+          <input type="checkbox" id="{{ check_id }}" class="step-check" data-hand="{{ hand }}" data-step="{{ step.index }}"{% if (hand, step.index) in checks %} checked{% endif %} hx-post="/session/check" hx-include="closest form" hx-swap="none" hx-trigger="change">
         </form>
-        </div>
-      </td>
+      </div>
       {% endfor %}
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+    </div>
+  </div>
+  {% endfor %}
 </div>
 <div class="flow-next">
   <a class="btn" href="/session/worksets?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}{% if hands|length == 1 %}&amp;hand={{ hands[0] }}{% endif %}{% if session_number %}&amp;session_number={{ session_number }}{% endif %}">Continue to work sets →</a>
@@ -64,5 +78,52 @@
   <a class="btn btn-secondary" href="/session/warmup?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}&amp;hand={{ other }}{% if session_number %}&amp;session_number={{ session_number }}{% endif %}">Switch to {{ other }} hand</a>
   {% endif %}
 </div>
+<script type="application/json" id="planned-hands-data">{{ planned_hands|tojson }}</script>
+<script>
+// Progress pill (issue #83): the ramp has no enforced order (you can tick
+// steps in any sequence), so "Step N of M" is a display-only readout of
+// how far down the plan you've ticked, recomputed client-side after each
+// tick so it doesn't need a page reload. The server-rendered value above
+// is already correct for the initial paint / no-JS case.
+(function () {
+  var pill = document.querySelector(".focus-pill");
+  var bar = document.querySelector(".focus-progress-bar");
+  if (!pill || !bar) return;
+  var totalSteps = parseInt(bar.dataset.totalSteps, 10) || 0;
+  var plannedHandsEl = document.getElementById("planned-hands-data");
+  var plannedHands = plannedHandsEl ? JSON.parse(plannedHandsEl.textContent) : [];
+
+  function currentStep() {
+    for (var i = 0; i < totalSteps; i++) {
+      var allChecked = plannedHands.every(function (hand) {
+        var cb = document.querySelector(
+          '.step-check[data-hand="' + hand + '"][data-step="' + i + '"]'
+        );
+        return cb && cb.checked;
+      });
+      if (!allChecked) return i + 1;
+    }
+    return totalSteps;
+  }
+
+  function render() {
+    var n = currentStep();
+    pill.innerHTML =
+      'Step <span class="focus-pill-n">' + n + '</span> of ' +
+      '<span class="focus-pill-m">' + totalSteps + '</span>';
+    bar.querySelectorAll(".progress-segment").forEach(function (seg, index) {
+      var stepN = index + 1;
+      seg.classList.remove("segment-filled", "segment-current", "segment-remaining");
+      if (stepN < n) seg.classList.add("segment-filled");
+      else if (stepN === n) seg.classList.add("segment-current");
+      else seg.classList.add("segment-remaining");
+    });
+  }
+
+  document.querySelectorAll(".step-check").forEach(function (cb) {
+    cb.addEventListener("change", render);
+  });
+})();
+</script>
 {% endif %}
 {% endblock %}
