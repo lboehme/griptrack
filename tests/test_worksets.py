@@ -157,6 +157,28 @@ def test_user_b_cannot_write_into_user_as_session(client):
     assert "L 30.0" not in detail
 
 
+def test_unknown_grip_type_is_rejected_and_writes_nothing(client):
+    setup_tested_user(client)
+
+    # An otherwise-valid payload with a grip_type_id that doesn't exist must
+    # be rejected before any DB write (matching the GET worksets page), not
+    # 500 or create an orphan WorkSet row.
+    response = client.post(
+        "/session/set",
+        data={
+            "grip_type_id": 999999,
+            "edge_mm": 20,
+            "date": "2026-07-04",
+            "set_number": 1,
+            "left_weight": "42.5",
+            "left_reps": "5",
+        },
+    )
+    assert response.status_code == 404
+
+    assert completed_detail(worksets_page(client).text, 1) is None
+
+
 # ---------- /session/workset stays the per-hand primitive ----------
 
 

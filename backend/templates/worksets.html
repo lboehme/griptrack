@@ -78,6 +78,7 @@
   <div class="set-actions">
     <button type="submit" class="set-done-btn">{{ "Save" if editing else "Set done" }}</button>
     <a class="btn btn-secondary set-cancel-btn" href="{{ cancel_url }}"{% if not editing %} hidden{% endif %}>Cancel</a>
+    <p class="set-error" id="set-error" role="alert" hidden></p>
   </div>
 </form>
 {% else %}
@@ -105,7 +106,8 @@
 
 <section class="completed-section">
   <h3 class="completed-heading">Completed</h3>
-  <div class="completed-list">
+  {% set edit_url_template = "/session/worksets?grip_type_id=" ~ grip.id ~ "&edge_mm=" ~ edge_mm ~ "&date=" ~ date ~ "&edit=__SET__" ~ (("&hand=" ~ hands[0]) if hands|length == 1 else "") ~ (("&session_number=" ~ session_number) if session_number else "") %}
+  <div class="completed-list" data-edit-url-template="{{ edit_url_template }}">
   {% for n in range(1, current_set_number) %}
     {% set edit_url = "/session/worksets?grip_type_id=" ~ grip.id ~ "&edge_mm=" ~ edge_mm ~ "&date=" ~ date ~ "&edit=" ~ n ~ (("&hand=" ~ hands[0]) if hands|length == 1 else "") ~ (("&session_number=" ~ session_number) if session_number else "") %}
     <a class="completed-row{% if editing and n == display_set_number %} completed-row-editing{% endif %}" data-set="{{ n }}" href="{{ edit_url }}">
@@ -358,7 +360,16 @@
         body: new FormData(form),
         headers: { "HX-Request": "true" },
       }).then(function (response) {
-        if (!response.ok) return;
+        if (!response.ok) {
+          // Don't fail silently: surface the server's validation message and
+          // leave the set where it is so the user can fix and retry. In
+          // practice the steppers keep values in range, so this is a
+          // last-resort guard rather than an everyday path.
+          return response.text().then(function (msg) {
+            showSetError(msg || "Could not save the set. Please try again.");
+          });
+        }
+        clearSetError();
         if (wasEditing) {
           // Same POST /session/set path as a normal commit (re-posting the
           // same set_number upserts in place) -- Save just returns focus
@@ -371,6 +382,8 @@
           // is a correction, not a rest, so it never reaches this branch.
           startRestCountdown();
         }
+      }).catch(function () {
+        showSetError("Could not save the set — check your connection and try again.");
       });
     });
 
@@ -395,6 +408,20 @@
       event.preventDefault();
       enterEditMode(parseInt(row.dataset.set, 10));
     });
+  }
+
+  function showSetError(message) {
+    var el = document.getElementById("set-error");
+    if (!el) return;
+    el.textContent = message;
+    el.hidden = false;
+  }
+
+  function clearSetError() {
+    var el = document.getElementById("set-error");
+    if (!el) return;
+    el.textContent = "";
+    el.hidden = true;
   }
 
   function captureFormValues() {
@@ -527,7 +554,11 @@
     var detail = buildDetailText(handsData);
     var row = document.createElement("a");
     row.className = "completed-row";
-    row.href = "#";
+    // Give the appended row the same real ?edit=N href the server renders,
+    // so once the form is removed (all sets logged) and the click handler
+    // stops intercepting, the row still falls back to the no-JS edit page.
+    var editTemplate = list.dataset.editUrlTemplate;
+    row.href = editTemplate ? editTemplate.replace("__SET__", setNumber) : "#";
     row.dataset.set = setNumber;
     row.innerHTML =
       '<span class="completed-check" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9.5 18 20 6.5"/></svg></span>' +

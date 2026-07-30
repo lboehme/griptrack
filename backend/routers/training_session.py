@@ -224,6 +224,11 @@ def save_focus_set(
             "At least one hand's weight and reps are required.", status_code=400
         )
 
+    # Reject an unknown grip_type_id before any DB write, matching the GET
+    # worksets page — otherwise an out-of-range id would 500 (or create an
+    # orphan WorkSet row) instead of a clean 404.
+    require_grip_type(session, grip_type_id)
+
     training_session = training_log.start_or_get_session(
         session, user, date, session_number
     )

@@ -715,7 +715,17 @@ input[type="number"]::-webkit-outer-spin-button {
 
 /* ---- edit mode (issue #80) ---- */
 
-.set-actions { display: flex; gap: .6rem; margin: 0; }
+.set-actions { display: flex; flex-wrap: wrap; gap: .6rem; margin: 0; }
+
+.set-error {
+  flex-basis: 100%;
+  margin: .2rem 0 0;
+  color: var(--danger);
+  font-size: .9rem;
+  font-weight: 600;
+}
+
+.set-error[hidden] { display: none; }
 
 .set-actions .set-done-btn { flex: 2 1 auto; }
 
