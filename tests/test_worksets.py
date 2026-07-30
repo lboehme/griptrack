@@ -245,6 +245,26 @@ def test_worksets_page_renders_header_spine_hand_cards_and_ladder(client):
     assert current_set_field(page, "left", "reps") == "5"
 
 
+def test_rest_countdown_markup_is_server_hidden_with_no_persisted_rest_field(client):
+    # Issue #82: the rest countdown is a client-only, throwaway enhancement.
+    # The server always renders "Set done" and a hidden countdown element --
+    # nothing about it is persisted, so the screen stays fully usable with
+    # JS disabled (the countdown just never appears).
+    setup_tested_user(client)
+
+    page = worksets_page(client).text
+    assert 'class="set-done-btn">Set done</button>' in page
+    assert re.search(r'id="rest-countdown"[^>]*\bhidden\b', page)
+
+    response = save_focus_set(
+        client, 1, left=("42.5", "5", None), right=("40", "5", None)
+    )
+    assert response.status_code == 200
+    # No hidden input or form field persists rest state -- the countdown
+    # never round-trips to the server.
+    assert 'name="rest' not in response.text
+
+
 def test_caption_shows_the_users_own_unit(client):
     register(client, unit_pref="lbs")
     log_max_test(client, "left", "half crimp", 20, "2026-07-01", "90")

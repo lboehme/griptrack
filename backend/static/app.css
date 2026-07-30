@@ -690,6 +690,49 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 
 .set-actions .set-cancel-btn[hidden] { display: none; }
+.set-actions .set-done-btn[hidden] { display: none; }
+
+/* ---- rest countdown (issue #82, throwaway pre-Wave-4) ---- */
+
+.rest-countdown {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  min-height: 3.5rem;
+  padding: 0 1.1rem;
+  margin: 0 0 .6rem;
+  background: var(--accent-soft);
+  border: 1.5px solid var(--accent);
+  border-radius: 16px;
+}
+
+.rest-countdown[hidden] { display: none; }
+
+.rest-countdown-label {
+  flex: none;
+  font-size: .74rem;
+  font-weight: 750;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.rest-countdown-time {
+  flex: 1 1 auto;
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+.rest-skip-btn {
+  flex: none;
+  width: auto;
+  min-height: 2.6rem;
+  padding: .4rem 1.05rem;
+  font-size: .88rem;
+}
 
 .focus-pill-editing {
   color: var(--accent-contrast);

@@ -3,7 +3,7 @@
 {% block content %}
 <div class="notice past-session-banner" data-session-date="{{ date }}" hidden>You're viewing a past session — edits change your history.</div>
 
-<div id="focus-screen" data-unit="{{ user.unit_pref }}">
+<div id="focus-screen" data-unit="{{ user.unit_pref }}" data-rest-seconds="180">
 
 <section class="focus-header">
   <div class="focus-header-row">
@@ -85,6 +85,16 @@
   <p class="muted" style="margin:0">All {{ total_sets }} set{{ "s" if total_sets != 1 }} logged for this combination. ＋ Add a set below to keep going.</p>
 </div>
 {% endif %}
+
+<!-- Rest countdown (issue #82): a throwaway, client-only enhancement layered
+     on top of the button area above. Hidden without JS -- the form's real
+     "Set done"/"Save" button and behavior are unchanged; this element only
+     ever appears once JS starts a rest after a normal (non-edit) commit. -->
+<div class="rest-countdown" id="rest-countdown" hidden>
+  <span class="rest-countdown-label">Rest</span>
+  <span class="rest-countdown-time" id="rest-countdown-time" aria-live="polite">3:00</span>
+  <button type="button" class="btn btn-secondary rest-skip-btn" id="rest-skip-btn">Skip rest</button>
+</div>
 
 <p class="add-set">
   <a class="btn btn-secondary" href="/session/worksets?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}&amp;sets={{ more_sets }}{% if hands|length == 1 %}&amp;hand={{ hands[0] }}{% endif %}{% if session_number %}&amp;session_number={{ session_number }}{% endif %}">＋ Add a set</a>
@@ -194,6 +204,55 @@
   var totalSets = form ? parseInt(form.dataset.totalSets, 10) : 0;
   var setDoneBtn = form ? form.querySelector(".set-done-btn") : null;
   var cancelBtn = form ? form.querySelector(".set-cancel-btn") : null;
+
+  // Rest countdown (issue #82): deliberately throwaway and client-only --
+  // a hardcoded 3:00, no persistence, dies on reload. Lives outside the
+  // <form> so it survives even when the last defined set's commit removes
+  // the form (see advanceTo below). REST_SECONDS reads a data attribute
+  // rather than being a bare constant only so the Playwright smoke spec can
+  // shorten it for a natural-expiry assertion -- there is no user-facing
+  // setting, still hardcoded server-side at 180 in the template.
+  var restCountdown = document.getElementById("rest-countdown");
+  var restCountdownTime = document.getElementById("rest-countdown-time");
+  var restSkipBtn = document.getElementById("rest-skip-btn");
+  var REST_SECONDS = (screen && parseInt(screen.dataset.restSeconds, 10)) || 180;
+  var restTimerId = null;
+
+  function formatRestTime(totalSeconds) {
+    var m = Math.floor(totalSeconds / 60);
+    var s = totalSeconds % 60;
+    return m + ":" + (s < 10 ? "0" : "") + s;
+  }
+
+  function stopRestCountdown() {
+    if (restTimerId !== null) {
+      clearInterval(restTimerId);
+      restTimerId = null;
+    }
+    if (restCountdown) restCountdown.hidden = true;
+    if (setDoneBtn) setDoneBtn.hidden = false;
+  }
+
+  function startRestCountdown() {
+    if (!restCountdown || !restCountdownTime) return;
+    var seconds = REST_SECONDS;
+    if (setDoneBtn) setDoneBtn.hidden = true;
+    restCountdownTime.textContent = formatRestTime(seconds);
+    restCountdown.hidden = false;
+    if (restTimerId !== null) clearInterval(restTimerId);
+    restTimerId = setInterval(function () {
+      seconds -= 1;
+      if (seconds <= 0) {
+        stopRestCountdown();
+        return;
+      }
+      restCountdownTime.textContent = formatRestTime(seconds);
+    }, 1000);
+  }
+
+  if (restSkipBtn) {
+    restSkipBtn.addEventListener("click", stopRestCountdown);
+  }
 
   // Edit mode (issue #80): editing/beforeEdit track whether the form
   // currently shows a COMPLETED set's saved values instead of the normal
@@ -308,6 +367,9 @@
         } else {
           appendCompleted(setNumber, handsData);
           advanceTo(setNumber + 1, totalSets);
+          // Normal advance-to-next-set commit only -- edit-mode Save above
+          // is a correction, not a rest, so it never reaches this branch.
+          startRestCountdown();
         }
       });
     });
@@ -400,6 +462,9 @@
   function enterEditMode(setNumber) {
     var setData = savedSets[setNumber];
     if (!setData) return; // not actually a completed set -- nothing to load
+    // Opening a correction mid-rest ends the rest immediately -- the user
+    // is back at the cards, not resting.
+    stopRestCountdown();
     if (!editing) {
       // Remember the in-progress set we were on so Save/Cancel can return
       // to it -- captured once, so hopping between several COMPLETED rows

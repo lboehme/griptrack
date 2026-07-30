@@ -37,6 +37,10 @@ def test_tapping_a_completed_row_enters_edit_mode_with_the_right_values(
     page.locator(".set-done-btn").click()
     expect(page.locator('.completed-row[data-set="1"]')).to_be_visible()
 
+    # Committing a set starts the rest countdown (issue #82), which hides
+    # the button; skip it to get back to "Set done" for set 2.
+    page.locator("#rest-skip-btn").click()
+
     # Bump set 2's weight again so it's a different value than set 1's,
     # then commit it too -- now set 1 is a COMPLETED row to tap back into.
     page.locator('.stepper-plus[data-field="weight"][data-hand="left"]').click()
