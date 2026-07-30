@@ -113,9 +113,15 @@ def worksets_page(
     hand: str | None = Query(default=None),
     sets: int | None = Query(default=None, ge=1, le=MAX_SET_NUMBER),
     session_number: int | None = Query(default=None, ge=1, le=MAX_SESSION_NUMBER),
+    edit: int | None = Query(default=None, ge=1, le=MAX_SET_NUMBER),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
+    """edit=N is the Focus screen's Edit mode (issue #80): re-renders the
+    same page with set N's saved values loaded into the hand cards instead
+    of the normal in-progress set -- the no-JS degradation of tapping a
+    COMPLETED row. Saving posts to the same /session/set as any other Set
+    commit; Cancel is just a plain link back to this page without edit=."""
     require_grip_type(session, grip_type_id)
     if needs_creation_confirmation(session, user, date, session_number):
         return confirm_creation_response(
@@ -123,7 +129,7 @@ def worksets_page(
             session_number,
         )
     view = training_log.worksets_view(
-        session, user, grip_type_id, edge_mm, date, hand, sets, session_number
+        session, user, grip_type_id, edge_mm, date, hand, sets, session_number, edit
     )
     return templates.TemplateResponse(
         request, "worksets.html", {"user": user, **view}

@@ -118,7 +118,7 @@ def pill_text(page_text):
     """The Focus screen's progress-pill text ("Set 1 of 3"), read off its
     data-pill-text attribute rather than the rendered HTML (which splits
     the numbers into nested <span>s for the JS to update in place)."""
-    match = re.search(r'class="focus-pill"[^>]*data-pill-text="([^"]*)"', page_text)
+    match = re.search(r'class="focus-pill[^"]*"[^>]*data-pill-text="([^"]*)"', page_text)
     return match.group(1) if match else None
 
 
@@ -136,7 +136,7 @@ def completed_detail(page_text, set_number):
     ("L 32.5 × 5 @ 8 · R 30.0 × 5 kg"). None if that set isn't complete
     yet (still the in-progress/current set, or not reached at all)."""
     match = re.search(
-        rf'<div class="completed-row" data-set="{set_number}">.*?'
+        rf'<a class="completed-row[^"]*" data-set="{set_number}"[^>]*>.*?'
         r'<span class="completed-detail">\s*(.*?)\s*</span>',
         page_text,
         re.DOTALL,

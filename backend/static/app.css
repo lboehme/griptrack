@@ -676,6 +676,26 @@ input[type="number"]::-webkit-outer-spin-button {
   border-radius: 16px;
 }
 
+/* ---- edit mode (issue #80) ---- */
+
+.set-actions { display: flex; gap: .6rem; margin: 0; }
+
+.set-actions .set-done-btn { flex: 2 1 auto; }
+
+.set-actions .set-cancel-btn {
+  flex: 1 1 auto;
+  width: auto;
+  min-height: 3.5rem;
+  border-radius: 16px;
+}
+
+.set-actions .set-cancel-btn[hidden] { display: none; }
+
+.focus-pill-editing {
+  color: var(--accent-contrast);
+  background: var(--accent-grad);
+}
+
 /* ---- completed list ---- */
 
 .completed-section { margin-top: 1.4rem; }
@@ -699,6 +719,16 @@ input[type="number"]::-webkit-outer-spin-button {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.completed-row:hover, .completed-row:focus-visible { border-color: var(--accent); }
+
+.completed-row-editing {
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .completed-check {

@@ -8,7 +8,11 @@
 <section class="focus-header">
   <div class="focus-header-row">
     <h2 class="focus-title">{{ grip.name }} · {{ edge_mm }} mm {{ grip.dimension_name }}</h2>
-    <span class="focus-pill" data-current-set="{{ current_set_number }}" data-total-sets="{{ total_sets }}" data-pill-text="Set {{ pill_set_number }} of {{ total_sets }}">Set <span class="focus-pill-n">{{ pill_set_number }}</span> of <span class="focus-pill-m">{{ total_sets }}</span></span>
+    {% if editing %}
+    <span class="focus-pill focus-pill-editing" data-current-set="{{ display_set_number }}" data-total-sets="{{ total_sets }}" data-editing="true" data-return-set="{{ current_set_number }}" data-pill-text="Editing set {{ display_set_number }}">Editing set {{ display_set_number }}</span>
+    {% else %}
+    <span class="focus-pill" data-current-set="{{ current_set_number }}" data-total-sets="{{ total_sets }}" data-editing="false" data-return-set="{{ current_set_number }}" data-pill-text="Set {{ pill_set_number }} of {{ total_sets }}">Set <span class="focus-pill-n">{{ pill_set_number }}</span> of <span class="focus-pill-m">{{ total_sets }}</span></span>
+    {% endif %}
   </div>
   <p class="page-sub focus-subtitle">{{ date }}{% if session_number and session_number > 1 %} · session {{ session_number }}{% endif %}{% if hands|length == 1 %} · <span class="hand-heading">{{ hands[0] }} hand</span>{% endif %}</p>
   <div class="focus-progress-bar" data-total-sets="{{ total_sets }}">
@@ -18,13 +22,14 @@
   </div>
 </section>
 
-{% if current_set_number <= total_sets %}
-<form method="post" action="/session/set" id="set-form" data-current-set="{{ current_set_number }}" data-total-sets="{{ total_sets }}">
+{% set cancel_url = "/session/worksets?grip_type_id=" ~ grip.id ~ "&edge_mm=" ~ edge_mm ~ "&date=" ~ date ~ (("&hand=" ~ hands[0]) if hands|length == 1 else "") ~ (("&session_number=" ~ session_number) if session_number else "") %}
+{% if editing or current_set_number <= total_sets %}
+<form method="post" action="/session/set" id="set-form" data-current-set="{{ display_set_number }}" data-total-sets="{{ total_sets }}" data-editing="{{ 'true' if editing else 'false' }}" data-return-set="{{ current_set_number }}">
   <input type="hidden" name="grip_type_id" value="{{ grip.id }}">
   <input type="hidden" name="edge_mm" value="{{ edge_mm }}">
   <input type="hidden" name="date" value="{{ date }}">
   {% if session_number %}<input type="hidden" name="session_number" value="{{ session_number }}">{% endif %}
-  <input type="hidden" name="set_number" value="{{ current_set_number }}" id="set-number-field">
+  <input type="hidden" name="set_number" value="{{ display_set_number }}" id="set-number-field">
 
   {% for hand in hands %}
   <div class="hand-card" data-hand="{{ hand }}">
@@ -70,7 +75,10 @@
   </div>
   {% endfor %}
 
-  <button type="submit" class="set-done-btn">Set done</button>
+  <div class="set-actions">
+    <button type="submit" class="set-done-btn">{{ "Save" if editing else "Set done" }}</button>
+    <a class="btn btn-secondary set-cancel-btn" href="{{ cancel_url }}"{% if not editing %} hidden{% endif %}>Cancel</a>
+  </div>
 </form>
 {% else %}
 <div class="card focus-all-done">
@@ -89,7 +97,8 @@
   <h3 class="completed-heading">Completed</h3>
   <div class="completed-list">
   {% for n in range(1, current_set_number) %}
-    <div class="completed-row" data-set="{{ n }}">
+    {% set edit_url = "/session/worksets?grip_type_id=" ~ grip.id ~ "&edge_mm=" ~ edge_mm ~ "&date=" ~ date ~ "&edit=" ~ n ~ (("&hand=" ~ hands[0]) if hands|length == 1 else "") ~ (("&session_number=" ~ session_number) if session_number else "") %}
+    <a class="completed-row{% if editing and n == display_set_number %} completed-row-editing{% endif %}" data-set="{{ n }}" href="{{ edit_url }}">
       <span class="completed-check" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9.5 18 20 6.5"/></svg></span>
       <span class="completed-set-label">Set {{ n }}</span>
       <span class="completed-detail">
@@ -100,7 +109,7 @@
           {% for h in hands %}{% set ws = saved.get((h, n)) %}{{ h[0]|upper }} {{ ws.weight }} × {{ ws.reps }}{% if ws.rpe is not none %} @ {{ ws.rpe }}{% endif %}{% if not loop.last %} · {% endif %}{% endfor %} {{ user.unit_pref }}
         {% endif %}
       </span>
-    </div>
+    </a>
   {% else %}
     <p class="muted completed-empty">No sets logged yet.</p>
   {% endfor %}
@@ -111,6 +120,8 @@
 </section>
 
 <script type="application/json" id="ladder-data">{{ ladder|tojson }}</script>
+<script type="application/json" id="saved-sets-data">{{ saved_json|tojson }}</script>
+<script type="application/json" id="resume-seed-data">{{ resume_seed|tojson }}</script>
 
 </div><!-- #focus-screen -->
 
@@ -171,9 +182,29 @@
 (function () {
   var screen = document.getElementById("focus-screen");
   var form = document.getElementById("set-form");
+  var pill = document.querySelector(".focus-pill");
   var ladderEl = document.getElementById("ladder-data");
   var ladder = ladderEl ? JSON.parse(ladderEl.textContent) : [0];
+  var savedSetsEl = document.getElementById("saved-sets-data");
+  var savedSets = savedSetsEl ? JSON.parse(savedSetsEl.textContent) : {};
   var unit = screen.dataset.unit;
+  var totalSets = form ? parseInt(form.dataset.totalSets, 10) : 0;
+  var setDoneBtn = form ? form.querySelector(".set-done-btn") : null;
+  var cancelBtn = form ? form.querySelector(".set-cancel-btn") : null;
+
+  // Edit mode (issue #80): editing/beforeEdit track whether the form
+  // currently shows a COMPLETED set's saved values instead of the normal
+  // in-progress set, and what to restore on Save/Cancel. If the page was
+  // itself loaded already in edit mode (the no-JS ?edit=N path, or a
+  // direct link), seed beforeEdit from the server-rendered resume data so
+  // Save/Cancel still know where to return without a reload.
+  var editing = form ? form.dataset.editing === "true" : false;
+  var beforeEdit = null;
+  if (editing) {
+    var resumeSeedEl = document.getElementById("resume-seed-data");
+    var resumeSeed = resumeSeedEl ? JSON.parse(resumeSeedEl.textContent) : {};
+    beforeEdit = { setNumber: parseInt(form.dataset.returnSet, 10), hands: resumeSeed };
+  }
 
   // Progressive enhancement: only once we know steppers work do we hide
   // the plain <input type=number> fallback and show the tap controls.
@@ -205,8 +236,10 @@
   }
 
   function formatRpe(value) {
-    if (value === null) return "–";
-    return Number.isInteger(value) ? String(value) : value.toFixed(1);
+    if (value === null || value === "" || value === undefined) return "–";
+    var num = typeof value === "number" ? value : parseFloat(value);
+    if (isNaN(num)) return "–";
+    return Number.isInteger(num) ? String(num) : num.toFixed(1);
   }
 
   function stepRpe(value, dir) {
@@ -255,19 +288,8 @@
     form.addEventListener("submit", function (event) {
       event.preventDefault();
       var setNumber = parseInt(form.dataset.currentSet, 10);
-      var totalSets = parseInt(form.dataset.totalSets, 10);
-      var handsData = {};
-      form.querySelectorAll(".hand-card").forEach(function (card) {
-        var hand = card.dataset.hand;
-        var weight = card.querySelector('[data-role="weight-input"]').value;
-        var reps = card.querySelector('[data-role="reps-input"]').value;
-        var rpe = card.querySelector('[data-role="rpe-input"]').value;
-        handsData[hand] = {
-          weight: weight,
-          reps: reps,
-          rpe: rpe === "" ? null : rpe,
-        };
-      });
+      var wasEditing = editing;
+      var handsData = captureFormValues();
 
       fetch(form.action, {
         method: "POST",
@@ -275,10 +297,158 @@
         headers: { "HX-Request": "true" },
       }).then(function (response) {
         if (!response.ok) return;
-        appendCompleted(setNumber, handsData);
-        advanceTo(setNumber + 1, totalSets);
+        if (wasEditing) {
+          // Same POST /session/set path as a normal commit (re-posting the
+          // same set_number upserts in place) -- Save just returns focus
+          // to the set the user was on instead of advancing.
+          exitEditMode(true, setNumber, handsData);
+        } else {
+          appendCompleted(setNumber, handsData);
+          advanceTo(setNumber + 1, totalSets);
+        }
       });
     });
+
+    if (cancelBtn) {
+      cancelBtn.addEventListener("click", function (event) {
+        event.preventDefault();
+        exitEditMode(false);
+      });
+    }
+  }
+
+  // Tapping a COMPLETED row is the correction path (issue #80): with JS,
+  // swap the already-known saved values into the hand cards client-side
+  // (no round trip); without JS -- or once all of this combo's sets are
+  // logged and the form isn't even on the page -- the row's real href
+  // falls back to the no-JS ?edit=N page render.
+  var completedList = document.querySelector(".completed-list");
+  if (completedList) {
+    completedList.addEventListener("click", function (event) {
+      var row = event.target.closest(".completed-row");
+      if (!row || !completedList.contains(row) || !form) return;
+      event.preventDefault();
+      enterEditMode(parseInt(row.dataset.set, 10));
+    });
+  }
+
+  function captureFormValues() {
+    var handsData = {};
+    form.querySelectorAll(".hand-card").forEach(function (card) {
+      var hand = card.dataset.hand;
+      var weight = card.querySelector('[data-role="weight-input"]').value;
+      var reps = card.querySelector('[data-role="reps-input"]').value;
+      var rpe = card.querySelector('[data-role="rpe-input"]').value;
+      handsData[hand] = {
+        weight: weight,
+        reps: reps,
+        rpe: rpe === "" ? null : rpe,
+      };
+    });
+    return handsData;
+  }
+
+  function setFormValues(card, hand, vals) {
+    var weightInput = card.querySelector('[data-role="weight-input"]');
+    var weightDisplay = card.querySelector('[data-role="weight-display"]');
+    if (weightInput) weightInput.value = vals.weight;
+    if (weightDisplay) weightDisplay.textContent = vals.weight;
+    var repsInput = card.querySelector('[data-role="reps-input"]');
+    var repsDisplay = card.querySelector('[data-role="reps-display"]');
+    if (repsInput) repsInput.value = vals.reps;
+    if (repsDisplay) repsDisplay.textContent = vals.reps;
+    var rpeInput = card.querySelector('[data-role="rpe-input"]');
+    var rpeDisplay = card.querySelector('[data-role="rpe-display"]');
+    var rpe = vals.rpe === undefined ? null : vals.rpe;
+    if (rpeInput) rpeInput.value = rpe === null ? "" : rpe;
+    if (rpeDisplay) rpeDisplay.textContent = formatRpe(rpe);
+  }
+
+  function buildDetailText(handsData) {
+    var hands = Object.keys(handsData);
+    if (hands.length === 1) {
+      var only = handsData[hands[0]];
+      return only.weight + " " + unit + " × " + only.reps + (only.rpe !== null ? " @ " + only.rpe : "");
+    }
+    return hands
+      .map(function (hand) {
+        var h = handsData[hand];
+        return hand[0].toUpperCase() + " " + h.weight + " × " + h.reps + (h.rpe !== null ? " @ " + h.rpe : "");
+      })
+      .join(" · ") + " " + unit;
+  }
+
+  function renderPillNormal(setNumber) {
+    if (!pill) return;
+    pill.dataset.editing = "false";
+    pill.dataset.currentSet = setNumber;
+    pill.innerHTML =
+      'Set <span class="focus-pill-n">' + Math.min(setNumber, totalSets) + '</span> of ' +
+      '<span class="focus-pill-m">' + totalSets + '</span>';
+  }
+
+  function renderPillEditing(setNumber) {
+    if (!pill) return;
+    pill.dataset.editing = "true";
+    pill.dataset.currentSet = setNumber;
+    pill.textContent = "Editing set " + setNumber;
+  }
+
+  function enterEditMode(setNumber) {
+    var setData = savedSets[setNumber];
+    if (!setData) return; // not actually a completed set -- nothing to load
+    if (!editing) {
+      // Remember the in-progress set we were on so Save/Cancel can return
+      // to it -- captured once, so hopping between several COMPLETED rows
+      // before Cancel still returns to the original spot.
+      beforeEdit = { setNumber: parseInt(form.dataset.currentSet, 10), hands: captureFormValues() };
+    }
+    form.querySelectorAll(".hand-card").forEach(function (card) {
+      var hand = card.dataset.hand;
+      var vals = setData[hand];
+      if (vals) setFormValues(card, hand, vals);
+    });
+    editing = true;
+    form.dataset.editing = "true";
+    form.dataset.currentSet = setNumber;
+    document.getElementById("set-number-field").value = setNumber;
+    renderPillEditing(setNumber);
+    if (setDoneBtn) setDoneBtn.textContent = "Save";
+    if (cancelBtn) cancelBtn.hidden = false;
+  }
+
+  function exitEditMode(justSaved, editedSetNumber, savedHandsData) {
+    if (!beforeEdit) return;
+    var resumeSet = beforeEdit.setNumber;
+    form.querySelectorAll(".hand-card").forEach(function (card) {
+      var hand = card.dataset.hand;
+      var vals = beforeEdit.hands[hand];
+      if (vals) setFormValues(card, hand, vals);
+    });
+    editing = false;
+    form.dataset.editing = "false";
+    if (justSaved) updateCompletedRow(editedSetNumber, savedHandsData);
+    beforeEdit = null;
+
+    if (resumeSet > totalSets) {
+      // Every defined set was already logged before we entered edit mode --
+      // back to the same "all done" state advanceTo() leaves behind.
+      form.remove();
+      return;
+    }
+    form.dataset.currentSet = resumeSet;
+    document.getElementById("set-number-field").value = resumeSet;
+    renderPillNormal(resumeSet);
+    if (setDoneBtn) setDoneBtn.textContent = "Set done";
+    if (cancelBtn) cancelBtn.hidden = true;
+  }
+
+  function updateCompletedRow(setNumber, handsData) {
+    savedSets[setNumber] = handsData;
+    var row = document.querySelector('.completed-row[data-set="' + setNumber + '"]');
+    if (!row) return;
+    var detailEl = row.querySelector(".completed-detail");
+    if (detailEl) detailEl.textContent = buildDetailText(handsData);
   }
 
   function appendCompleted(setNumber, handsData) {
@@ -286,35 +456,21 @@
     if (!list) return;
     var empty = list.querySelector(".completed-empty");
     if (empty) empty.remove();
-    var hands = Object.keys(handsData);
-    var detail;
-    if (hands.length === 1) {
-      var only = handsData[hands[0]];
-      detail = only.weight + " " + unit + " × " + only.reps + (only.rpe !== null ? " @ " + only.rpe : "");
-    } else {
-      detail = hands
-        .map(function (hand) {
-          var h = handsData[hand];
-          return hand[0].toUpperCase() + " " + h.weight + " × " + h.reps + (h.rpe !== null ? " @ " + h.rpe : "");
-        })
-        .join(" · ") + " " + unit;
-    }
-    var row = document.createElement("div");
+    var detail = buildDetailText(handsData);
+    var row = document.createElement("a");
     row.className = "completed-row";
+    row.href = "#";
     row.dataset.set = setNumber;
     row.innerHTML =
       '<span class="completed-check" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9.5 18 20 6.5"/></svg></span>' +
       '<span class="completed-set-label">Set ' + setNumber + '</span>' +
       '<span class="completed-detail">' + detail + '</span>';
     list.appendChild(row);
+    savedSets[setNumber] = handsData;
   }
 
   function advanceTo(nextSet, totalSets) {
-    var pill = document.querySelector(".focus-pill");
-    if (pill) {
-      pill.dataset.currentSet = nextSet;
-      pill.querySelector(".focus-pill-n").textContent = Math.min(nextSet, totalSets);
-    }
+    renderPillNormal(nextSet);
     document.querySelectorAll(".progress-segment").forEach(function (seg, index) {
       var n = index + 1;
       seg.classList.remove("segment-filled", "segment-current", "segment-remaining");

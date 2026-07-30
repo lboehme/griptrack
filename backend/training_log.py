@@ -142,6 +142,7 @@ def worksets_view(
     hand: str | None = None,
     sets_hint: int | None = None,
     session_number: int | None = None,
+    edit_set: int | None = None,
 ) -> dict:
     """Everything the work-sets (Focus) page shows: saved sets by
     (hand, set), prefills from CurrentMax and the TrainingProtocol, the row
@@ -151,7 +152,17 @@ def worksets_view(
     steppers.
 
     session_number=None resolves to the day's latest session, same as
-    warmup_view."""
+    warmup_view.
+
+    edit_set is the Focus screen's Edit mode (issue #80): tapping a
+    COMPLETED row re-requests this same view with edit_set=that set_number.
+    "current_set_number" always stays the normal in-progress pointer (the
+    lowest not-yet-fully-logged set) -- it never shifts to the set being
+    edited -- because it doubles as the "set the user was on" to return to
+    once Save/Cancel finishes. `display_set_number`/`seed` are what the
+    form actually renders (the edit target's saved values while editing),
+    while `resume_seed` and `saved_json` are handed to the client so it can
+    enter/exit edit mode for any COMPLETED row without a round trip."""
     hands = hands_for(user, hand)
     protocol = get_protocol(session, user)
     training_session = find_session(session, user, date, session_number)
@@ -169,12 +180,39 @@ def worksets_view(
     needed_rows = max(protocol.default_work_sets, highest_saved)
     row_count = max(needed_rows, sets_hint or 0)
     current_set_number = _current_set_number(hands, saved, row_count)
-    seed = {
+    resume_seed = {
         h: _seed_for_hand(
             h, current_set_number, saved, current_max, protocol.base_work_set_reps
         )
         for h in hands
     }
+    # A completed row is only ever rendered for a fully-logged set, so
+    # editing = True whenever *any* in-play hand has a saved row for
+    # edit_set; an out-of-range/bogus edit= param just falls back to the
+    # normal in-progress view instead of erroring.
+    editing = edit_set is not None and any((h, edit_set) in saved for h in hands)
+    display_set_number = edit_set if editing else current_set_number
+    if editing:
+        assert edit_set is not None  # implied by `editing`; narrows for mypy
+        seed = {
+            h: (
+                {
+                    "weight": saved[(h, edit_set)].weight,
+                    "reps": saved[(h, edit_set)].reps,
+                    "rpe": saved[(h, edit_set)].rpe,
+                }
+                if (h, edit_set) in saved
+                else resume_seed[h]
+            )
+            for h in hands
+        }
+    else:
+        seed = resume_seed
+    saved_json: dict[int, dict[str, dict]] = {}
+    for (h, n), ws in saved.items():
+        saved_json.setdefault(n, {})[h] = {
+            "weight": ws.weight, "reps": ws.reps, "rpe": ws.rpe,
+        }
     inventory = plates.inventory_for(session, user)
     return {
         "grip": session.get(GripType, grip_type_id),
@@ -200,6 +238,10 @@ def worksets_view(
         "pill_set_number": min(current_set_number, row_count),
         "seed": seed,
         "ladder": plates.loadable_ladder(inventory),
+        "editing": editing,
+        "display_set_number": display_set_number,
+        "resume_seed": resume_seed,
+        "saved_json": saved_json,
     }
 
 

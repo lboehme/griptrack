@@ -16,7 +16,9 @@ from tests.helpers import (
 )
 
 
-def worksets_page(client, grip="half crimp", edge_mm=20, date="2026-07-04", hand=None):
+def worksets_page(
+    client, grip="half crimp", edge_mm=20, date="2026-07-04", hand=None, edit=None
+):
     params = {
         "grip_type_id": grip_type_id(client, grip),
         "edge_mm": edge_mm,
@@ -24,6 +26,8 @@ def worksets_page(client, grip="half crimp", edge_mm=20, date="2026-07-04", hand
     }
     if hand is not None:
         params["hand"] = hand
+    if edit is not None:
+        params["edit"] = edit
     return get_session_page(client, "/session/worksets", params)
 
 
@@ -481,3 +485,140 @@ def test_pain_reports_and_session_meta_are_isolated_per_user(client):
     assert 'name="is_deload" checked' in a_page or 'checked name="is_deload"' in a_page
     assert "User B own tweak" not in a_page
     assert "User B notes" not in a_page
+
+
+# ---------- Edit mode (issue #80) ----------
+
+
+def test_edit_param_prefills_the_cards_with_that_sets_saved_values(client):
+    setup_tested_user(client)
+    save_focus_set(client, 1, left=("42.5", "5", "8"), right=("40.0", "5", "7.5"))
+    save_focus_set(client, 2, left=("45.0", "5", "9"), right=("41.0", "5", "8"))
+
+    page = worksets_page(client, edit=1).text
+
+    assert pill_text(page) == "Editing set 1"
+    assert current_set_field(page, "left", "weight") == "42.5"
+    assert current_set_field(page, "left", "reps") == "5"
+    assert current_set_field(page, "left", "rpe") == "8.0"
+    assert current_set_field(page, "right", "weight") == "40.0"
+    assert 'name="set_number" value="1" id="set-number-field"' in page
+    # The button reads "Save" and Cancel is available (not hidden).
+    assert re.search(r'class="set-done-btn">Save</button>', page)
+    assert re.search(r'set-cancel-btn" href="[^"]*">Cancel</a>', page)
+
+
+def test_saving_an_edited_set_updates_in_place_with_no_duplicate(client):
+    setup_tested_user(client)
+    save_focus_set(client, 1, left=("42.5", "5", "8"), right=("40.0", "5", "7.5"))
+    save_focus_set(client, 2, left=("45.0", "5", "9"), right=("41.0", "5", "8"))
+
+    edit_page = worksets_page(client, edit=1).text
+    assert pill_text(edit_page) == "Editing set 1"
+
+    # Save reuses POST /session/set (the same Set commit path, #79/ADR-0007) --
+    # re-posting set_number=1 upserts rather than duplicating.
+    response = save_focus_set(client, 1, left=("40.0", "4", "9"))
+    assert response.status_code == 200
+
+    history = client.get("/history").text
+    # One row per (hand, set) -- left set 1 is still exactly one row (the
+    # in-place upsert), not a second one alongside the original.
+    assert history.count('data-hand="left" data-set="1"') == 1
+    assert history.count('data-hand="right" data-set="1"') == 1
+    assert history.count('data-hand="left" data-set="2"') == 1
+
+    detail = completed_detail(worksets_page(client).text, 1)
+    assert "L 40.0 × 4 @ 9" in detail
+
+
+def test_saving_an_edited_set_returns_to_the_prior_in_progress_set(client):
+    setup_tested_user(client)
+    save_focus_set(client, 1, left=("42.5", "5", "8"), right=("40.0", "5", "7.5"))
+    save_focus_set(client, 2, left=("45.0", "5", "9"), right=("41.0", "5", "8"))
+    # Now on set 3 (in progress); protocol default is 3 sets.
+    assert pill_text(worksets_page(client).text) == "Set 3 of 3"
+
+    worksets_page(client, edit=1)  # enter edit mode for set 1
+    save_focus_set(client, 1, left=("40.0", "4", "9"))  # Save
+
+    assert pill_text(worksets_page(client).text) == "Set 3 of 3"
+
+
+def test_cancel_writes_nothing_and_returns_to_the_prior_set(client):
+    setup_tested_user(client)
+    save_focus_set(client, 1, left=("42.5", "5", "8"), right=("40.0", "5", "7.5"))
+    save_focus_set(client, 2, left=("45.0", "5", "9"), right=("41.0", "5", "8"))
+
+    edit_page = worksets_page(client, edit=1).text
+    assert pill_text(edit_page) == "Editing set 1"
+
+    # Cancel (no-JS) is just a plain link back -- no write happens.
+    normal_page = worksets_page(client).text
+    assert pill_text(normal_page) == "Set 3 of 3"
+    assert "L 42.5 × 5 @ 8" in completed_detail(normal_page, 1)
+
+
+def test_completed_row_href_degrades_to_the_edit_param_no_js(client):
+    """The real no-JS proof: the COMPLETED row's own href (not a
+    hand-crafted URL) lands on the edit view when followed."""
+    setup_tested_user(client)
+    save_focus_set(client, 1, left=("42.5", "5", "8"), right=("40.0", "5", "7.5"))
+    save_focus_set(client, 2, left=("45.0", "5", "9"), right=("41.0", "5", "8"))
+
+    page = worksets_page(client).text
+    match = re.search(
+        r'<a class="completed-row[^"]*" data-set="1" href="([^"]*)"', page
+    )
+    assert match, "no href found on the set-1 completed row"
+    href = match.group(1).replace("&amp;", "&")
+    assert "edit=1" in href
+
+    followed = client.get(href, follow_redirects=True).text
+    assert pill_text(followed) == "Editing set 1"
+    assert current_set_field(followed, "left", "weight") == "42.5"
+
+
+def test_sequential_hand_order_edit_scopes_to_one_hand(client):
+    setup_tested_user(client)
+    client.post("/profile", data={"hand_order_pref": "sequential"})
+    save_focus_set(client, 1, left=("42.5", "5", "8"))
+
+    page = worksets_page(client, edit=1).text
+
+    assert pill_text(page) == "Editing set 1"
+    assert page.count('class="hand-card"') == 1
+    assert 'data-hand="left"' in page
+    assert 'data-hand="right"' not in page
+    assert current_set_field(page, "left", "weight") == "42.5"
+
+
+def test_editing_a_set_that_was_never_saved_falls_back_to_the_normal_view(client):
+    setup_tested_user(client)
+    save_focus_set(client, 1, left=("42.5", "5", "8"), right=("40.0", "5", "7.5"))
+
+    # set 99 was never logged -- edit=99 is bogus/stale, so this must just
+    # render the normal in-progress view rather than a broken edit state.
+    page = worksets_page(client, edit=99).text
+    assert pill_text(page) == "Set 2 of 3"
+
+
+def test_edit_mode_still_works_once_every_default_set_is_logged(client):
+    setup_tested_user(client)
+    save_focus_set(client, 1, left=("42.5", "5", "8"), right=("40.0", "5", "7.5"))
+    save_focus_set(client, 2, left=("43.0", "5", "8"), right=("40.5", "5", "8"))
+    save_focus_set(client, 3, left=("44.0", "5", "8"), right=("41.0", "5", "8"))
+    # All 3 default sets logged -- the normal view shows the "all done"
+    # card with no form; editing an old set must still work regardless.
+    all_done_page = worksets_page(client).text
+    assert pill_text(all_done_page) == "Set 3 of 3"
+    assert "focus-all-done" in all_done_page
+
+    page = worksets_page(client, edit=2).text
+    assert pill_text(page) == "Editing set 2"
+    assert current_set_field(page, "left", "weight") == "43.0"
+
+    response = save_focus_set(client, 2, left=("46.0", "4", "9"))
+    assert response.status_code == 200
+    detail = completed_detail(worksets_page(client).text, 2)
+    assert "L 46.0 × 4 @ 9" in detail
