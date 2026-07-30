@@ -39,19 +39,22 @@ through an explicit design-interview session (the `grilling` +
   before revisiting any of the choices below; each explains a real
   trade-off that was deliberately made.
 
-**Current state (2026-07-09):** the full PRD (issue #1) plus Waves 0–2 of
-the post-review roadmap are implemented and deployed to Fly — auth (with
+**Current state (2026-07-30):** the full PRD (issue #1), Waves 0–2 of the
+post-review roadmap, and the Focus session-logging redesign (#76) are
+implemented and deployed to Fly — auth (with
 session revocation), profile, plates, max tests (guided routine, voidable),
 session logging (multi-session days, notes/deload/pain reports), boulder
 climb logging with loud grade feedback, history, CSV export, PWA
 (manifest + service worker with content-hash cache version), and the
 analytics dashboard (deload-aware volume trend, plateau, overtraining
-warning, Spearman %BW-vs-grade correlation with an n≥8 floor) — 173 tests
-at the HTTP seam plus ruff/mypy/pip-audit gates. Remaining open work: the
-Focus session-logging redesign (#76, grilled 2026-07-23, next up),
-Asymmetry Analytics (#45–#48), the Wave 4 retention PRD (#59, needs its
-own grill), and the deferred #20/#28. Work test-first (see the
-`tdd` skill) and keep migrations in lockstep with model changes.
+warning, Spearman %BW-vs-grade correlation with an n≥8 floor), and the
+Focus session screens (one-set-at-a-time hand cards, warmup card ladder,
+atomic set commit, edit mode, throwaway rest countdown) — 202 tests at the
+HTTP seam plus a thin `pytest-playwright` browser-smoke layer (5 specs) and
+ruff/mypy/pip-audit gates. Remaining open work: Asymmetry Analytics
+(#45–#48), the Wave 4 retention PRD (#59, needs its own grill), and the
+deferred #20/#28. Work test-first (see the `tdd` skill) and keep migrations
+in lockstep with model changes.
 
 ## Environment & running
 
@@ -305,17 +308,18 @@ dropped. Waves in order; GitHub issues are the source of truth for status.
   session-generation counter; admin password reset invalidates sessions) +
   rate-limit `/register`; Spearman + n≥8 floor for the strength–grade
   correlation; CSV export.
-- **Focus redesign — session-logging screens** (PRD #76). **← next up.**
-  Grilled 2026-07-23 from `design_handoff_griptrack_focus/` (Claude
-  design-tool handoff, concept `1c`). Replaces the work-sets table with
+- **Focus redesign — session-logging screens (shipped 2026-07-30, #76 /
+  slices #77–#83).** Grilled 2026-07-23 from `design_handoff_griptrack_focus/`
+  (Claude design-tool handoff, concept `1c`). Replaced the work-sets table with
   one-set-at-a-time hand cards and steppers, and the warmup table with a
   card ladder. Layout/interaction only — the existing orange token system
-  and dark mode stay. Brings forward an atomic `POST /session/set`
+  and dark mode stayed. Brought forward an atomic `POST /session/set`
   (ADR-0007), `plates.loadable_ladder`, a stubbed client-only rest
   countdown ahead of Wave 4's real one, and the `pytest-playwright`
   harness. Sequenced ahead of Wave 3 because it's the screen used every
   session, and real use is the only way to learn whether Focus works
-  between hangs.
+  between hangs. Warmup card-ladder design is invented (no spec) — expect to
+  iterate after real use.
 - **Wave 3 — Asymmetry Analytics** (PRD #45, slices #46–#48, ready-for-agent).
 - **Wave 4 — retention wave** (one feature surface, needs its own mini-grill
   first): RPE-driven Tier-1 deterministic autoregulation (RPE ≤ 7 twice →
