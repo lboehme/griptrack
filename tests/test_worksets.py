@@ -487,6 +487,102 @@ def test_pain_reports_and_session_meta_are_isolated_per_user(client):
     assert "User B notes" not in a_page
 
 
+# ---------- "How did it feel?" disclosure (issue #81) ----------
+
+
+def test_how_it_felt_disclosure_sits_below_completed_and_holds_notes_deload_pain(client):
+    setup_tested_user(client)
+    save_work_set(client, "left", 1, "40", "5", date="2026-07-04")
+
+    page = worksets_page(client, date="2026-07-04").text
+
+    completed_idx = page.index('class="completed-section"')
+    disclosure_idx = page.index('id="how-it-felt"')
+    assert disclosure_idx > completed_idx, (
+        "the disclosure must render below the COMPLETED list"
+    )
+
+    details_open = page.index("<details", disclosure_idx - 20)
+    details_close = page.index("</details>", details_open)
+    disclosure_html = page[details_open:details_close]
+
+    assert "How did it feel?" in disclosure_html
+    assert 'id="session-update-form"' in disclosure_html
+    assert 'name="is_deload"' in disclosure_html
+    assert 'name="notes"' in disclosure_html
+    assert 'id="pain-report-form"' in disclosure_html
+    assert 'name="hand"' in disclosure_html
+    assert 'name="severity"' in disclosure_html
+
+    # A single collapsed disclosure, not two nested ones -- the pain block
+    # no longer has its own <details>/<summary>.
+    assert disclosure_html.count("<details") == 1
+    assert disclosure_html.count("<summary") == 1
+
+
+def test_flow_links_sit_beneath_the_disclosure(client):
+    setup_tested_user(client)
+    save_work_set(client, "left", 1, "40", "5", date="2026-07-04")
+
+    page = worksets_page(client, date="2026-07-04").text
+
+    details_close = page.index("</details>")
+    flow_idx = page.index('class="flow-next"')
+    assert flow_idx > details_close
+
+    flow_html = page[flow_idx:]
+    assert "Back to warmup" in flow_html
+    assert "Done" in flow_html
+
+
+def test_switch_hand_link_absent_for_alternating_hand_order(client):
+    setup_tested_user(client)  # default hand_order_pref is alternating
+
+    page = worksets_page(client).text
+    assert "Switch to" not in page
+
+
+def test_switch_hand_link_present_for_sequential_hand_order(client):
+    setup_tested_user(client)
+    client.post("/profile", data={"hand_order_pref": "sequential"})
+
+    page = worksets_page(client).text
+    assert "Switch to right hand" in page
+
+
+def test_no_new_write_route_is_added_for_the_disclosure(client):
+    """The disclosure must reuse the existing autosave endpoints -- not add
+    a new route of its own. Pins the full /session/* route surface."""
+    from backend.main import create_app
+
+    def all_paths(routes):
+        for route in routes:
+            path = getattr(route, "path", None)
+            if path is not None:
+                yield path
+            nested = getattr(route, "original_router", None)
+            if nested is not None:
+                yield from all_paths(nested.routes)
+
+    app = create_app()
+    session_paths = {
+        path for path in all_paths(app.routes) if path.startswith("/session/")
+    }
+    assert session_paths == {
+        "/session/create",
+        "/session/new",
+        "/session/warmup",
+        "/session/worksets",
+        "/session/workset",
+        "/session/workset/delete",
+        "/session/set",
+        "/session/estimate",
+        "/session/check",
+        "/session/update",
+        "/session/pain-report",
+    }
+
+
 # ---------- Edit mode (issue #80) ----------
 
 
