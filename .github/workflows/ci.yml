@@ -36,3 +36,13 @@ jobs:
       # same script used locally, so CI and dev can't drift.
       - name: Lint, type-check, and dependency audit
         run: scripts/lint
+
+      # Distinct step so a flaky/slow browser install can't affect the
+      # fast suite or lint gates above. Unlike local dev containers (see
+      # scripts/test-browser), this runner has no pre-provisioned browser,
+      # so it installs the exact Chromium build pytest-playwright expects.
+      - name: Install Playwright browser
+        run: playwright install --with-deps chromium
+
+      - name: Browser smoke suite
+        run: scripts/test-browser

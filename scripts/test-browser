@@ -1,0 +1,18 @@
+#!/bin/sh
+# Run the pytest-playwright browser-smoke layer (tests/e2e), kept separate
+# from scripts/test so the fast HTTP-seam loop stays fast (see the comment
+# there). Uses the griptrack conda env when present (local dev); falls
+# back to pytest on PATH (CI). Same script both places, so local and CI
+# behavior can't drift.
+#
+# Requires Chromium to already be installed for the active pytest-playwright
+# version (CI: `playwright install --with-deps chromium`, see
+# .github/workflows/ci.yml; local dev: run that once yourself, or point
+# PLAYWRIGHT_BROWSERS_PATH at a pre-provisioned install). This script does
+# NOT install browsers itself.
+set -e
+cd "$(dirname "$0")/.."
+if command -v conda >/dev/null 2>&1 && conda env list 2>/dev/null | grep -q "^griptrack "; then
+    exec conda run --no-capture-output -n griptrack pytest tests/e2e --browser chromium "$@"
+fi
+exec pytest tests/e2e --browser chromium "$@"
