@@ -9,9 +9,11 @@ climbing grade.
 **TrainingSession**:
 One logged workout visit: a date plus the work sets performed in it. Owns
 many WorkSets. Exists in the database from the moment its first
-warmup/ramp step is checked off — every interaction autosaves immediately,
-there is no final "submit" step, so a TrainingSession can be, and often
-briefly is, incomplete. A (user, date) can hold more than one
+warmup/ramp step is checked off — session-level interactions (notes,
+deload flag, pain reports, warmup ticks) autosave immediately and there is
+no final "submit" step, so a TrainingSession can be, and often briefly is,
+incomplete. Its WorkSets arrive one Set commit at a time. A
+(user, date) can hold more than one
 TrainingSession — e.g. a morning and evening pull — distinguished by
 `session_number` (1, 2, ...; default 1). `(user_id, date, session_number)`
 is the identity key and must stay stable (future offline sync relies on
@@ -27,6 +29,38 @@ One set of the tracked work-set portion of a TrainingSession (hand,
 grip_type, edge_mm, weight_kg, reps, set_number, rpe). Warmup/ramp sets are
 never persisted as WorkSets — they're computed and shown, not logged.
 _Avoid_: Set, Rep set
+
+**Set commit**:
+The single gesture that writes a set — the "Set done" button on the Focus
+screen. Writes both hands' WorkSets for one set_number in one atomic
+request (`POST /session/set`), or one hand's under a sequential
+HandOrderPreference. Until it fires, the stepper values on screen are
+unsaved client state, so the set does not exist. Replaced the old
+per-cell autosave table, where each field saved on its own; see
+`docs/adr/0007-set-commit-over-per-cell-autosave.md`.
+_Avoid_: Save, submit (the screen has no form-submit model)
+
+**Edit mode**:
+The Focus screen's correction path. Tapping a row in the COMPLETED list
+reloads that set's values back into the hand cards; the progress pill
+reads "Editing set N" and the commit button becomes "Save" alongside a
+Cancel. Saving takes the same Set commit path and returns focus to the
+set the user was on. Exists so there is exactly one editing surface for a
+WorkSet rather than a second, smaller one embedded in the completed list.
+_Avoid_: Inline edit, edit form
+
+**Loadable ladder**:
+Every total weight a user's PlateInventory can actually make on the single
+pin, in ascending order — the full achievable set that
+`round_down_to_loadable` already computes internally and discards above
+its target. The Focus screen's weight steppers walk this ladder one rung
+per tap, so every reachable value is physically loadable. Embedded in the
+page as JSON so taps stay instant and work offline. A starting value that
+is off-ladder (a CurrentMax straight from a MaxWeightTest, or older
+free-entry history) snaps to the next rung in the direction of travel;
+both ends clamp. Bounded like every other numeric input, since the
+subset-sum behind it is the DoS-sensitive path.
+_Avoid_: Increment, step size (it is not a fixed step)
 
 **MaxWeightTest**:
 A dated record of the heaviest weight a user pulled for one specific
