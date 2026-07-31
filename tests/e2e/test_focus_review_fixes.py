@@ -1,6 +1,6 @@
 """Browser-smoke specs for the PR #85 review fixes.
 
-Two client-side bugs the Focus screen shipped with:
+Three client-side bugs the Focus screen shipped with:
 - appended COMPLETED rows carried href="#", so once every set is logged and
   the form (and its click handler) are gone, tapping a just-logged row no
   longer reached the no-JS ?edit=N page. The appended row must carry the
@@ -8,6 +8,9 @@ Two client-side bugs the Focus screen shipped with:
 - the set-commit fetch swallowed non-2xx responses (`if (!response.ok)
   return`), so a rejected /session/set failed silently. It must surface the
   error instead.
+- the weight stepper could walk down onto the ladder's 0.0 rung (the
+  "empty pin" fallback loadable_ladder always includes), producing an
+  invalid work-set weight the server is guaranteed to reject.
 
 Kept deliberately thin, like the rest of the e2e layer.
 """
@@ -72,3 +75,20 @@ def test_a_rejected_set_commit_surfaces_an_error(live_server, authenticated_page
     expect(error).to_contain_text("Weight out of range.")
     # Did not advance -- the user stays on set 1 to fix and retry.
     expect(pill).to_contain_text("Set 1 of")
+
+
+def test_weight_stepper_cannot_walk_down_onto_the_zero_rung(live_server, authenticated_page):
+    page = authenticated_page
+    _go_to_worksets(page, live_server)
+
+    minus_btn = page.locator('.stepper-minus[data-field="weight"][data-hand="left"]')
+    display = page.locator('[data-role="weight-display"][data-hand="left"]')
+
+    # Mash it well past the bottom of the ladder -- it must floor at the
+    # smallest positive rung, never land on 0.0 (the empty-pin fallback the
+    # server rejects as an invalid weight).
+    for _ in range(40):
+        minus_btn.click()
+
+    value = float(display.inner_text())
+    assert value > 0, value

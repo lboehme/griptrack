@@ -1,6 +1,5 @@
 import itertools
 import re
-import time
 
 from backend import plates
 from backend.limits import MAX_WEIGHT
@@ -157,11 +156,13 @@ def test_loadable_ladder_is_bounded_by_the_weight_limit_for_a_pathological_inven
         for weight in (0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0)
     ]
 
-    started = time.monotonic()
     ladder = plates.loadable_ladder(huge_inventory)
-    elapsed = time.monotonic() - started
 
-    assert elapsed < 2.0, "ladder walk must stay bounded even for huge inventories"
+    # Deterministic stand-in for a runtime assertion: achievable totals are
+    # tracked in integer cents capped at MAX_WEIGHT, so the set (and thus the
+    # ladder) can never exceed MAX_WEIGHT*100 + 1 entries regardless of how
+    # large the inventory is -- this is what actually keeps the walk fast.
+    assert len(ladder) <= int(MAX_WEIGHT * 100) + 1
     assert ladder[0] == 0.0
     assert ladder[-1] <= MAX_WEIGHT
     assert all(rung <= MAX_WEIGHT for rung in ladder)

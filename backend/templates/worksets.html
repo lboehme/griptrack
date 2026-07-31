@@ -288,10 +288,16 @@
       }
       return ladder[ladder.length - 1];
     }
+    // Floor at the smallest positive rung, not 0.0 (the "empty pin" rung
+    // loadable_ladder always includes) -- the server requires weight > 0,
+    // so landing on 0.0 would guarantee the next commit is rejected.
+    var floor = ladder[0] === 0 && ladder.length > 1 ? ladder[1] : ladder[0];
     for (var j = ladder.length - 1; j >= 0; j--) {
-      if (toCents(ladder[j]) < toCents(value)) return ladder[j];
+      if (toCents(ladder[j]) < toCents(value) && toCents(ladder[j]) >= toCents(floor)) {
+        return ladder[j];
+      }
     }
-    return ladder[0];
+    return floor;
   }
 
   function stepReps(value, dir) {
