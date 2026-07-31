@@ -49,8 +49,8 @@ climb logging with loud grade feedback, history, CSV export, PWA
 analytics dashboard (deload-aware volume trend, plateau, overtraining
 warning, Spearman %BW-vs-grade correlation with an n≥8 floor), and the
 Focus session screens (one-set-at-a-time hand cards, warmup card ladder,
-atomic set commit, edit mode, throwaway rest countdown) — 202 tests at the
-HTTP seam plus a thin `pytest-playwright` browser-smoke layer (5 specs) and
+atomic set commit, edit mode, throwaway rest countdown) — 203 tests at the
+HTTP seam plus a thin `pytest-playwright` browser-smoke layer (6 specs) and
 ruff/mypy/pip-audit gates. Remaining open work: Asymmetry Analytics
 (#45–#48), the Wave 4 retention PRD (#59, needs its own grill), and the
 deferred #20/#28. Work test-first (see the `tdd` skill) and keep migrations
