@@ -11,6 +11,9 @@ Three client-side bugs the Focus screen shipped with:
 - the weight stepper could walk down onto the ladder's 0.0 rung (the
   "empty pin" fallback loadable_ladder always includes), producing an
   invalid work-set weight the server is guaranteed to reject.
+- with no plates at all the ladder is just [0.0], so the stepper had no
+  valid rung to offer while js-enabled had already hidden the raw weight
+  input -- locking the user out of logging a set entirely.
 
 Kept deliberately thin, like the rest of the e2e layer.
 """
@@ -92,3 +95,37 @@ def test_weight_stepper_cannot_walk_down_onto_the_zero_rung(live_server, authent
 
     value = float(display.inner_text())
     assert value > 0, value
+
+
+def _remove_all_plates(page, live_server):
+    """Zero out the seeded default inventory, leaving the ladder as [0.0]."""
+    page.goto(f"{live_server}/plates")
+    remaining = page.locator("select[name='count']").count()
+    while remaining:
+        # Selecting "0 — remove" submits the row's form and reloads the page.
+        with page.expect_navigation():
+            page.locator("select[name='count']").first.select_option("0")
+        remaining -= 1
+        expect(page.locator("select[name='count']")).to_have_count(remaining)
+
+
+def test_an_empty_ladder_falls_back_to_free_weight_entry(live_server, authenticated_page):
+    page = authenticated_page
+    _remove_all_plates(page, live_server)
+    _go_to_worksets(page, live_server)
+
+    # The stepper has no rung it could offer, so it steps aside and the
+    # plain number input takes over -- the set must still be loggable.
+    raw_input = page.locator('.raw-input[data-role="weight-input"][data-hand="left"]')
+    expect(raw_input).to_be_visible()
+    expect(
+        page.locator('.stepper-plus[data-field="weight"][data-hand="left"]')
+    ).to_be_hidden()
+
+    raw_input.fill("32.5")
+    page.locator('.raw-input[data-role="weight-input"][data-hand="right"]').fill("32.5")
+    page.locator(".set-done-btn").click()
+
+    row = page.locator('.completed-row[data-set="1"]')
+    expect(row).to_be_visible()
+    expect(row).to_contain_text("32.5")

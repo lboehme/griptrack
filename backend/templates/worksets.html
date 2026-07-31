@@ -200,6 +200,10 @@
   var pill = document.querySelector(".focus-pill");
   var ladderEl = document.getElementById("ladder-data");
   var ladder = ladderEl ? JSON.parse(ladderEl.textContent) : [0];
+  // Only positive rungs are steppable: loadable_ladder always includes the
+  // 0.0 "empty pin" rung, and the server rejects weight <= 0. A user with
+  // no plates at all gets [0.0], i.e. no steppable rung -- see below.
+  var rungs = ladder.filter(function (rung) { return rung > 0; });
   var savedSetsEl = document.getElementById("saved-sets-data");
   var savedSets = savedSetsEl ? JSON.parse(savedSetsEl.textContent) : {};
   var unit = screen.dataset.unit;
@@ -273,6 +277,10 @@
   // Progressive enhancement: only once we know steppers work do we hide
   // the plain <input type=number> fallback and show the tap controls.
   screen.classList.add("js-enabled");
+  // ...except for weight when the ladder has no positive rung (a user who
+  // owns no plates): the stepper could only ever produce 0.0, which the
+  // server rejects, so weight stays free-entry via the raw input.
+  if (!rungs.length) screen.classList.add("no-ladder");
 
   function toCents(v) { return Math.round(v * 100); }
 
@@ -281,23 +289,20 @@
   // rung in the direction of travel; both ends clamp (see CONTEXT.md:
   // Loadable ladder).
   function stepWeight(value, dir) {
-    if (!ladder.length) return value;
+    // No positive rung: nothing to step to, so leave the typed value alone
+    // (the raw input is visible in this mode -- see .no-ladder above).
+    if (!rungs.length) return value;
     if (dir > 0) {
-      for (var i = 0; i < ladder.length; i++) {
-        if (toCents(ladder[i]) > toCents(value)) return ladder[i];
+      for (var i = 0; i < rungs.length; i++) {
+        if (toCents(rungs[i]) > toCents(value)) return rungs[i];
       }
-      return ladder[ladder.length - 1];
+      return rungs[rungs.length - 1];
     }
-    // Floor at the smallest positive rung, not 0.0 (the "empty pin" rung
-    // loadable_ladder always includes) -- the server requires weight > 0,
-    // so landing on 0.0 would guarantee the next commit is rejected.
-    var floor = ladder[0] === 0 && ladder.length > 1 ? ladder[1] : ladder[0];
-    for (var j = ladder.length - 1; j >= 0; j--) {
-      if (toCents(ladder[j]) < toCents(value) && toCents(ladder[j]) >= toCents(floor)) {
-        return ladder[j];
-      }
+    for (var j = rungs.length - 1; j >= 0; j--) {
+      if (toCents(rungs[j]) < toCents(value)) return rungs[j];
     }
-    return floor;
+    // Clamp at the smallest positive rung rather than falling to 0.0.
+    return rungs[0];
   }
 
   function stepReps(value, dir) {

@@ -9,8 +9,8 @@ from tests.helpers import login, register, register_second_user
 
 def expected_ladder(inventory, cap=MAX_WEIGHT):
     """Reference oracle: expand every plate into individual units and
-    enumerate all subset sums directly (independent of the bitset walk
-    plates.loadable_ladder uses), rounding to cents like the production
+    enumerate all subset sums directly (independent of the incremental
+    set walk plates.loadable_ladder uses), rounding to cents like the production
     code to avoid float-accumulation mismatches."""
     units = [
         int(round(item.weight * 100))

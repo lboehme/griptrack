@@ -705,6 +705,13 @@ input[type="number"]::-webkit-outer-spin-button {
    set. */
 .js-enabled .raw-input-label { display: none; }
 
+/* No positive ladder rung (user owns no plates): the weight stepper can't
+   produce a loadable value, so it steps aside and the plain number input
+   stays as the way to enter weight. Reps/RPE steppers are unaffected. */
+.js-enabled.no-ladder .weight-stepper .stepper-btn,
+.js-enabled.no-ladder .weight-stepper .weight-display { display: none; }
+.js-enabled.no-ladder .weight-stepper .raw-input-label { display: block; }
+
 .set-done-btn {
   min-height: 3.5rem;
   font-size: 1.05rem;
