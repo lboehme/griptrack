@@ -25,6 +25,10 @@
   --radius: 18px;
   --touch: 3rem;
   --tabbar-h: calc(4rem + env(safe-area-inset-bottom));
+  /* Right-hand badge on the Focus screen: a lighter tint of the accent
+     rather than a second hue — a deliberate override of the design
+     handoff's purple pair (see issue #79). */
+  --accent-right: color-mix(in srgb, var(--accent) 65%, white);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -426,21 +430,58 @@ ul.plain { list-style: none; margin: 0; padding: 0; }
 
 .session-started::before { content: "● "; font-size: .6rem; vertical-align: 2px; }
 
-.ramp-table td:first-child {
-  font-weight: 750;
+/* ---- card ladder (issue #83) ---- */
+
+.ramp-ladder { display: flex; flex-direction: column; gap: .8rem; margin: 0 0 .6rem; }
+
+.ramp-card { margin-bottom: 0; }
+
+.ramp-card-header { margin-bottom: .7rem; }
+
+.ramp-card-percent {
+  font-size: .78rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
   color: var(--muted);
-  font-size: .92rem;
-  white-space: nowrap;
 }
 
-.ramp-cell {
+.ramp-card-hands {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .6rem;
+}
+
+.ramp-card-hands-single { grid-template-columns: 1fr; }
+
+.ramp-tick {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: .8rem;
+  gap: .6rem;
+  min-height: var(--touch);
+  padding: .3rem .7rem;
+  background: var(--surface-2);
+  border-radius: 14px;
 }
 
-.ramp-cell form { margin: 0; display: flex; }
+.ramp-tick-label {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  min-width: 0;
+  min-height: var(--touch);
+  margin: 0;
+  cursor: pointer;
+}
+
+.ramp-check-form { margin: 0; display: flex; }
+
+/* The label association (for/id) covers most of the row's tap area; the
+   checkbox itself is enlarged here so its own hit box also clears the
+   44px touch-target floor (the shared custom-checkbox rule elsewhere
+   stays at a smaller default size for denser contexts). */
+.ramp-check-form input[type="checkbox"] { width: 2.75rem; height: 2.75rem; }
 
 .ramp-weight {
   font-size: 1.5rem;
@@ -451,30 +492,9 @@ ul.plain { list-style: none; margin: 0; padding: 0; }
 
 .ramp-unit { color: var(--muted); font-size: .78rem; font-weight: 650; }
 
-/* ---------- work sets ---------- */
+/* ---------- work sets (Focus screen, issue #79) ---------- */
 
 .table-scroll { overflow-x: auto; }
-
-.workset-cell form {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr auto;
-  gap: .4rem;
-  align-items: end;
-  margin: 0;
-}
-
-.workset-cell .set-done { margin-bottom: .4rem; }
-
-.workset-cell .mini { margin: 0; font-size: .66rem; }
-
-.workset-cell input {
-  min-height: 2.7rem;
-  min-width: 3.4rem;
-  width: 100%;
-  padding: .3rem .45rem;
-  font-size: .95rem;
-  border-radius: 10px;
-}
 
 /* Spin buttons eat width on desktop and clip the decimals ("20" for 20.5). */
 input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
@@ -492,19 +512,9 @@ input[type="number"]::-webkit-outer-spin-button {
   padding-right: 1.6rem;
 }
 
-.workset-cell noscript button {
-  min-height: 2.7rem;
-  width: auto;
-  padding: .3rem .95rem;
-  font-size: .88rem;
-  border-radius: 10px;
-}
+.add-set { margin: .6rem 0 1rem; display: flex; gap: .6rem; flex-wrap: wrap; }
 
-.set-label { font-weight: 800; color: var(--muted); }
-
-.add-set { margin: .6rem 0 0; }
-
-.add-set .btn { min-height: 2.6rem; font-size: .92rem; }
+.add-set .btn { min-height: 2.6rem; font-size: .92rem; width: auto; flex: 1 1 auto; }
 
 .hand-heading {
   font-size: .78rem;
@@ -513,6 +523,397 @@ input[type="number"]::-webkit-outer-spin-button {
   letter-spacing: .08em;
   color: var(--accent);
 }
+
+/* ---- header spine ---- */
+
+.focus-header { margin-bottom: 1.1rem; }
+
+.focus-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .8rem;
+}
+
+.focus-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+
+.focus-subtitle { margin: .2rem 0 0; }
+
+.focus-pill {
+  flex: none;
+  padding: .3rem .75rem;
+  font-size: .78rem;
+  font-weight: 750;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.focus-progress-bar {
+  display: flex;
+  gap: 5px;
+  margin-top: .75rem;
+}
+
+.progress-segment {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+}
+
+.progress-segment.segment-filled { background: var(--accent); }
+
+.progress-segment.segment-current {
+  background: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+/* ---- hand cards ---- */
+
+#set-form { display: flex; flex-direction: column; gap: .75rem; margin: 0 0 .6rem; }
+
+.hand-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1rem 1.15rem 1.1rem;
+}
+
+.hand-card-header { display: flex; align-items: center; gap: .5rem; }
+
+.hand-badge {
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: none;
+  display: grid;
+  place-content: center;
+  border-radius: 7px;
+  color: var(--accent-contrast);
+  font-size: .72rem;
+  font-weight: 800;
+}
+
+.hand-badge-left { background: var(--accent); }
+.hand-badge-right { background: var(--accent-right); }
+
+.hand-label { font-size: .88rem; font-weight: 700; }
+
+.weight-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.1rem;
+  margin-top: .65rem;
+}
+
+.stepper-btn {
+  flex: none;
+  width: 2.9rem;
+  height: 2.9rem;
+  min-height: 0;
+  display: inline-grid;
+  place-content: center;
+  padding: 0;
+  font-size: 1.4rem;
+  font-weight: 650;
+  color: var(--accent);
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: 999px;
+  box-shadow: none;
+}
+
+.stepper-btn:active { transform: scale(.93); }
+
+.weight-display { text-align: center; min-width: 6.5rem; }
+
+.weight-value {
+  display: block;
+  font-size: 2.5rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.weight-caption { display: block; margin-top: .2rem; font-size: .74rem; color: var(--muted); }
+
+.reps-rpe-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .9rem;
+  margin-top: 1rem;
+}
+
+.field-group { text-align: center; }
+
+.field-label {
+  display: block;
+  font-size: .68rem;
+  font-weight: 750;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.mini-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .75rem;
+  margin-top: .4rem;
+}
+
+.stepper-btn-sm {
+  flex: none;
+  width: 2.75rem;
+  height: 2.75rem;
+  min-height: 0;
+  display: inline-grid;
+  place-content: center;
+  padding: 0;
+  font-size: 1.05rem;
+  font-weight: 650;
+  color: var(--accent);
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: 999px;
+  box-shadow: none;
+}
+
+.stepper-btn-sm:active { transform: scale(.9); }
+
+.mini-value {
+  min-width: 2.3rem;
+  font-size: 1.35rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.raw-input-label { margin: .5rem 0 0; font-size: .75rem; }
+
+/* Progressive enhancement: the tap steppers replace the plain number
+   inputs only once JS has actually run (see worksets.html). Without JS
+   the raw inputs stay visible and a normal form submit still logs the
+   set. */
+.js-enabled .raw-input-label { display: none; }
+
+/* No positive ladder rung (user owns no plates): the weight stepper can't
+   produce a loadable value, so it steps aside and the plain number input
+   stays as the way to enter weight. Reps/RPE steppers are unaffected. */
+.js-enabled.no-ladder .weight-stepper .stepper-btn,
+.js-enabled.no-ladder .weight-stepper .weight-display { display: none; }
+.js-enabled.no-ladder .weight-stepper .raw-input-label { display: block; }
+
+.set-done-btn {
+  min-height: 3.5rem;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  border-radius: 16px;
+}
+
+/* ---- edit mode (issue #80) ---- */
+
+.set-actions { display: flex; flex-wrap: wrap; gap: .6rem; margin: 0; }
+
+.set-error {
+  flex-basis: 100%;
+  margin: .2rem 0 0;
+  color: var(--danger);
+  font-size: .9rem;
+  font-weight: 600;
+}
+
+.set-error[hidden] { display: none; }
+
+.set-actions .set-done-btn { flex: 2 1 auto; }
+
+.set-actions .set-cancel-btn {
+  flex: 1 1 auto;
+  width: auto;
+  min-height: 3.5rem;
+  border-radius: 16px;
+}
+
+.set-actions .set-cancel-btn[hidden] { display: none; }
+.set-actions .set-done-btn[hidden] { display: none; }
+
+/* ---- rest countdown (issue #82, throwaway pre-Wave-4) ---- */
+
+.rest-countdown {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  min-height: 3.5rem;
+  padding: 0 1.1rem;
+  margin: 0 0 .6rem;
+  background: var(--accent-soft);
+  border: 1.5px solid var(--accent);
+  border-radius: 16px;
+}
+
+.rest-countdown[hidden] { display: none; }
+
+.rest-countdown-label {
+  flex: none;
+  font-size: .74rem;
+  font-weight: 750;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.rest-countdown-time {
+  flex: 1 1 auto;
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+.rest-skip-btn {
+  flex: none;
+  width: auto;
+  min-height: 2.6rem;
+  padding: .4rem 1.05rem;
+  font-size: .88rem;
+}
+
+.focus-pill-editing {
+  color: var(--accent-contrast);
+  background: var(--accent-grad);
+}
+
+/* ---- completed list ---- */
+
+.completed-section { margin-top: 1.4rem; }
+
+.completed-heading {
+  margin: 0 0 .5rem;
+  font-size: .72rem;
+  font-weight: 750;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.completed-list { display: flex; flex-direction: column; gap: .4rem; }
+
+.completed-row {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .6rem .85rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.completed-row:hover, .completed-row:focus-visible { border-color: var(--accent); }
+
+.completed-row-editing {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.completed-check {
+  flex: none;
+  width: 1.35rem;
+  height: 1.35rem;
+  display: grid;
+  place-content: center;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.completed-check svg { width: 62%; height: 62%; }
+
+.completed-set-label { font-size: .88rem; font-weight: 700; }
+
+.completed-detail {
+  margin-left: auto;
+  font-size: .88rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.completed-empty { margin: 0; font-size: .88rem; }
+
+.up-next-row {
+  margin-top: .5rem;
+  padding: .6rem .85rem;
+  border: 1.5px dashed color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-radius: 12px;
+  color: var(--muted);
+  font-size: .85rem;
+}
+
+/* ---- "how did it feel?" disclosure (notes/deload/pain, issue #81) ---- */
+
+.how-it-felt-card { margin-top: 1.4rem; padding: 0; overflow: hidden; }
+
+.how-it-felt-card summary {
+  padding: 1.15rem;
+  font-size: .95rem;
+  font-weight: 750;
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.how-it-felt-card summary::-webkit-details-marker { display: none; }
+
+.how-it-felt-card summary::after {
+  content: "▾";
+  color: var(--muted);
+  transition: transform .15s ease;
+}
+
+.how-it-felt-card details[open] summary::after { transform: rotate(180deg); }
+
+.how-it-felt-card summary:hover,
+.how-it-felt-card summary:focus-visible { color: var(--accent); }
+
+.how-it-felt-body {
+  padding: 0 1.15rem 1.15rem;
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+}
+
+.how-it-felt-body form:not(:last-child) { margin-bottom: 1.1rem; }
+
+.deload-toggle {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  font-size: .88rem;
+}
+
+.pain-reports-heading {
+  margin: 0 0 .6rem;
+  font-size: .72rem;
+  font-weight: 750;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.pain-reports-table { margin-bottom: 1rem; }
 
 /* ---------- flow footer ---------- */
 

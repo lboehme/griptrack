@@ -9,3 +9,10 @@ Pillow==12.3.0
 ruff==0.15.20
 mypy==2.2.0
 pip-audit==2.10.1
+# scripts/test-browser: pytest-playwright browser-smoke layer (tests/e2e).
+# playwright is pinned explicitly (not just left as pytest-playwright's
+# transitive dep) because its version must match the installed browser
+# revision — `playwright install` downloads whatever revision this exact
+# playwright version expects.
+playwright==1.56.0
+pytest-playwright==0.8.0

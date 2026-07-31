@@ -1,5 +1,8 @@
+import bisect
+
 from sqlmodel import Session, select
 
+from backend.limits import MAX_WEIGHT
 from backend.models import PlateInventoryItem, User
 
 # Sensible starter sets; plates are denominated in the user's own unit
@@ -16,25 +19,44 @@ def seed_default_inventory(session: Session, user: User) -> None:
     session.commit()
 
 
-def round_down_to_loadable(
-    target_weight: float, inventory: list[PlateInventoryItem]
-) -> float:
-    """Closest total <= target that the user's plates can actually make.
+def loadable_ladder(inventory: list[PlateInventoryItem]) -> list[float]:
+    """Every total weight the user's plates can actually make on the single
+    pin (ADR-0002), ascending and deduped -- the "loadable ladder".
 
-    The inventory is a single stack on one pin (ADR-0002), so this is a
-    bounded subset-sum: work in integer hundredths to avoid float drift,
-    track every achievable total, and take the best one under the target.
-    Returns 0.0 when nothing fits (empty pin).
+    Bounded subset-sum: work in integer hundredths to avoid float drift,
+    track every achievable total, and cap the walk at MAX_WEIGHT (not at a
+    per-call target) so the achievable set can never grow past a fixed size
+    regardless of how large the inventory is -- this is the DoS-sensitive
+    path (backend.limits). An empty inventory still makes 0 (nothing
+    loaded), so the ladder is never empty -- [0.0] is the defined fallback.
     """
-    target = int(round(target_weight * 100))
+    cap = int(round(MAX_WEIGHT * 100))
     achievable = {0}
     for item in inventory:
         step = int(round(item.weight * 100))
         for _ in range(item.count):
             achievable |= {
-                total + step for total in achievable if total + step <= target
+                total + step for total in achievable if total + step <= cap
             }
-    return max(achievable) / 100
+    return sorted(total / 100 for total in achievable)
+
+
+def round_down_to_loadable(
+    target_weight: float, inventory: list[PlateInventoryItem]
+) -> float:
+    """Closest total <= target that the user's plates can actually make.
+
+    Consumes the shared loadable_ladder and picks the largest rung at or
+    below the target. Returns 0.0 when nothing fits (empty pin, or a
+    target below even the smallest -- zero -- rung).
+    """
+    target = int(round(target_weight * 100))
+    ladder = loadable_ladder(inventory)
+    cents = [int(round(rung * 100)) for rung in ladder]
+    idx = bisect.bisect_right(cents, target) - 1
+    if idx < 0:
+        return 0.0
+    return ladder[idx]
 
 
 def set_plate(session: Session, user: User, weight: float, count: int) -> None:

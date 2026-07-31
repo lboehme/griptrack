@@ -1,10 +1,16 @@
 #!/bin/sh
-# Run the test suite. Uses the griptrack conda env when present (local dev);
-# falls back to pytest on PATH (CI). Pass any pytest args through, e.g.:
+# Run the fast HTTP-seam test suite. Uses the griptrack conda env when
+# present (local dev); falls back to pytest on PATH (CI). Pass any pytest
+# args through, e.g.:
 #   scripts/test tests/test_names.py -q
+#
+# tests/e2e (the pytest-playwright browser-smoke layer, see scripts/
+# test-browser) is excluded here on purpose: it boots a real server and a
+# real browser per test, which is much slower than the HTTP seam, so it's
+# kept out of this loop's default collection and run as its own gate.
 set -e
 cd "$(dirname "$0")/.."
 if command -v conda >/dev/null 2>&1 && conda env list 2>/dev/null | grep -q "^griptrack "; then
-    exec conda run --no-capture-output -n griptrack pytest "$@"
+    exec conda run --no-capture-output -n griptrack pytest --ignore=tests/e2e "$@"
 fi
-exec pytest "$@"
+exec pytest --ignore=tests/e2e "$@"

@@ -113,9 +113,15 @@ def worksets_page(
     hand: str | None = Query(default=None),
     sets: int | None = Query(default=None, ge=1, le=MAX_SET_NUMBER),
     session_number: int | None = Query(default=None, ge=1, le=MAX_SESSION_NUMBER),
+    edit: int | None = Query(default=None, ge=1, le=MAX_SET_NUMBER),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
+    """edit=N is the Focus screen's Edit mode (issue #80): re-renders the
+    same page with set N's saved values loaded into the hand cards instead
+    of the normal in-progress set -- the no-JS degradation of tapping a
+    COMPLETED row. Saving posts to the same /session/set as any other Set
+    commit; Cancel is just a plain link back to this page without edit=."""
     require_grip_type(session, grip_type_id)
     if needs_creation_confirmation(session, user, date, session_number):
         return confirm_creation_response(
@@ -123,7 +129,7 @@ def worksets_page(
             session_number,
         )
     view = training_log.worksets_view(
-        session, user, grip_type_id, edge_mm, date, hand, sets, session_number
+        session, user, grip_type_id, edge_mm, date, hand, sets, session_number, edit
     )
     return templates.TemplateResponse(
         request, "worksets.html", {"user": user, **view}
@@ -159,6 +165,86 @@ def save_work_set(
     if request.headers.get("HX-Request"):
         return Response(status_code=204)
     return combo_redirect("worksets", grip_type_id, edge_mm, date, hand, session_number)
+
+
+@router.post("/session/set")
+def save_focus_set(
+    request: Request,
+    grip_type_id: int = Form(),
+    edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
+    date: date_type = Form(),
+    set_number: int = Form(ge=1, le=MAX_SET_NUMBER),
+    session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
+    left_weight: float | None = Form(default=None),
+    left_reps: int | None = Form(default=None),
+    left_rpe: float | None = Form(default=None),
+    right_weight: float | None = Form(default=None),
+    right_reps: int | None = Form(default=None),
+    right_rpe: float | None = Form(default=None),
+    user: User = Depends(auth.current_user),
+    session: Session = Depends(get_session),
+):
+    """Set commit (docs/adr/0007-set-commit-over-per-cell-autosave.md):
+    writes both hands' WorkSets for one set_number in a single atomic
+    request instead of two calls to the per-hand /session/workset — a
+    half-failure on flaky gym wifi must never log one hand and not the
+    other.
+
+    Every present hand's payload is fully validated (same bounds and RPE
+    grid as /session/workset) *before* anything touches the session or the
+    database, so an invalid or partial payload writes nothing at all. Once
+    validation passes, both hands are staged with record_work_set(commit=
+    False) and committed together in one transaction. Re-posting the same
+    (session, hand, set_number) upserts in place (also the edit-mode path,
+    #80) rather than duplicating."""
+    raw = {
+        "left": (left_weight, left_reps, left_rpe),
+        "right": (right_weight, right_reps, right_rpe),
+    }
+    hands_payload: dict[str, tuple[float, int, float | None]] = {}
+    for hand, (weight, reps, rpe) in raw.items():
+        if weight is None and reps is None and rpe is None:
+            continue  # this hand wasn't submitted (sequential hand order)
+        if weight is None or reps is None:
+            return HTMLResponse(
+                f"{hand} hand needs both weight and reps.", status_code=400
+            )
+        if not (0 < weight <= MAX_WEIGHT):
+            return HTMLResponse("Weight out of range.", status_code=400)
+        if not (1 <= reps <= MAX_REPS):
+            return HTMLResponse("Reps out of range.", status_code=400)
+        if rpe is not None and not (1.0 <= rpe <= 10.0 and (rpe * 2) == int(rpe * 2)):
+            return HTMLResponse(
+                "RPE must be between 1 and 10 in 0.5 steps.", status_code=400
+            )
+        hands_payload[hand] = (weight, reps, rpe)
+
+    if not hands_payload:
+        return HTMLResponse(
+            "At least one hand's weight and reps are required.", status_code=400
+        )
+
+    # Reject an unknown grip_type_id before any DB write, matching the GET
+    # worksets page — otherwise an out-of-range id would 500 (or create an
+    # orphan WorkSet row) instead of a clean 404.
+    require_grip_type(session, grip_type_id)
+
+    training_session = training_log.start_or_get_session(
+        session, user, date, session_number
+    )
+    for hand, (weight, reps, rpe) in hands_payload.items():
+        training_log.record_work_set(
+            session, training_session, hand, grip_type_id, edge_mm, set_number,
+            weight, reps, rpe, commit=False,
+        )
+    session.commit()
+
+    if request.headers.get("HX-Request"):
+        return Response(status_code=204)
+    redirect_hand = next(iter(hands_payload)) if len(hands_payload) == 1 else ""
+    return combo_redirect(
+        "worksets", grip_type_id, edge_mm, date, redirect_hand, session_number
+    )
 
 
 @router.post("/session/workset/delete")

@@ -1,100 +1,190 @@
 {% extends "base.html" %}
 {% block title %}Work sets — GripTrack{% endblock %}
 {% block content %}
-<h2>Work sets</h2>
-<p class="page-sub">{{ grip.name }} · {{ edge_mm }} mm {{ grip.dimension_name }} · {{ date }}{% if session_number and session_number > 1 %} · session {{ session_number }}{% endif %}{% if hands|length == 1 %} · <span class="hand-heading">{{ hands[0] }} hand</span>{% endif %}</p>
 <div class="notice past-session-banner" data-session-date="{{ date }}" hidden>You're viewing a past session — edits change your history.</div>
-<div class="card">
-<p class="muted" style="margin:0 0 .6rem; font-size:.82rem">Tick a set when you've done it — edits to ticked sets save automatically, and a weight change carries down to later unticked sets.</p>
-<div class="table-scroll">
-<table>
-  <thead>
-    <tr>
-      <th>Set</th>
-      {% for hand in hands %}<th>{{ hand[0]|upper }} — {{ user.unit_pref }} × reps @ RPE</th>{% endfor %}
-    </tr>
-  </thead>
-  <tbody>
-    {% for set_number in set_numbers %}
-    <tr>
-      <td class="set-label">{{ set_number }}</td>
-      {% for hand in hands %}
-      {% set ws = saved.get((hand, set_number)) %}
-      <td class="workset-cell" data-hand="{{ hand }}" data-set="{{ set_number }}">
-        <form method="post" action="/session/workset">
-          {% include "_combo_fields.html" %}
-          <input type="hidden" name="set_number" value="{{ set_number }}">
-          <label class="mini">{{ user.unit_pref }}
-            <input type="number" name="weight" value="{{ ws.weight if ws else current_max[hand] }}" step="0.25" min="0.25" required>
-          </label>
-          <label class="mini">reps
-            <input type="number" name="reps" value="{{ ws.reps if ws else default_reps }}" step="1" min="1" required>
-          </label>
-          <label class="mini">RPE
-            <input type="number" name="rpe" value="{{ ws.rpe if ws and ws.rpe is not none else '' }}" step="0.5" min="1" max="10" placeholder="–">
-          </label>
-          <input type="checkbox" class="set-done" data-hand="{{ hand }}" data-set="{{ set_number }}"{% if ws %} checked{% endif %} aria-label="Set {{ set_number }} {{ hand }} done">
-          <noscript><button type="submit">Save</button></noscript>
-        </form>
-      </td>
-      {% endfor %}
-    </tr>
+
+<div id="focus-screen" data-unit="{{ user.unit_pref }}" data-rest-seconds="180">
+
+<section class="focus-header">
+  <div class="focus-header-row">
+    <h2 class="focus-title">{{ grip.name }} · {{ edge_mm }} mm {{ grip.dimension_name }}</h2>
+    {% if editing %}
+    <span class="focus-pill focus-pill-editing" data-current-set="{{ display_set_number }}" data-total-sets="{{ total_sets }}" data-editing="true" data-return-set="{{ current_set_number }}" data-pill-text="Editing set {{ display_set_number }}">Editing set {{ display_set_number }}</span>
+    {% else %}
+    <span class="focus-pill" data-current-set="{{ current_set_number }}" data-total-sets="{{ total_sets }}" data-editing="false" data-return-set="{{ current_set_number }}" data-pill-text="Set {{ pill_set_number }} of {{ total_sets }}">Set <span class="focus-pill-n">{{ pill_set_number }}</span> of <span class="focus-pill-m">{{ total_sets }}</span></span>
+    {% endif %}
+  </div>
+  <p class="page-sub focus-subtitle">{{ date }}{% if session_number and session_number > 1 %} · session {{ session_number }}{% endif %}{% if hands|length == 1 %} · <span class="hand-heading">{{ hands[0] }} hand</span>{% endif %}</p>
+  <div class="focus-progress-bar" data-total-sets="{{ total_sets }}">
+    {% for n in set_numbers %}
+    <span class="progress-segment {% if n < current_set_number %}segment-filled{% elif n == current_set_number %}segment-current{% else %}segment-remaining{% endif %}"></span>
     {% endfor %}
-  </tbody>
-</table>
+  </div>
+</section>
+
+{% set cancel_url = "/session/worksets?grip_type_id=" ~ grip.id ~ "&edge_mm=" ~ edge_mm ~ "&date=" ~ date ~ (("&hand=" ~ hands[0]) if hands|length == 1 else "") ~ (("&session_number=" ~ session_number) if session_number else "") %}
+{% if editing or current_set_number <= total_sets %}
+<form method="post" action="/session/set" id="set-form" data-current-set="{{ display_set_number }}" data-total-sets="{{ total_sets }}" data-editing="{{ 'true' if editing else 'false' }}" data-return-set="{{ current_set_number }}">
+  <input type="hidden" name="grip_type_id" value="{{ grip.id }}">
+  <input type="hidden" name="edge_mm" value="{{ edge_mm }}">
+  <input type="hidden" name="date" value="{{ date }}">
+  {% if session_number %}<input type="hidden" name="session_number" value="{{ session_number }}">{% endif %}
+  <input type="hidden" name="set_number" value="{{ display_set_number }}" id="set-number-field">
+
+  {% for hand in hands %}
+  <div class="hand-card" data-hand="{{ hand }}">
+    <div class="hand-card-header">
+      <span class="hand-badge hand-badge-{{ hand }}">{{ hand[0]|upper }}</span>
+      <span class="hand-label">{{ hand|capitalize }} hand</span>
+    </div>
+    <div class="weight-stepper">
+      <button type="button" class="stepper-btn stepper-minus" data-field="weight" data-hand="{{ hand }}" aria-label="Decrease {{ hand }} weight">−</button>
+      <div class="weight-display">
+        <span class="weight-value" data-role="weight-display" data-hand="{{ hand }}">{{ seed[hand].weight }}</span>
+        <span class="weight-caption">{{ user.unit_pref }} · plate-loadable</span>
+      </div>
+      <button type="button" class="stepper-btn stepper-plus" data-field="weight" data-hand="{{ hand }}" aria-label="Increase {{ hand }} weight">＋</button>
+      <label class="raw-input-label">{{ user.unit_pref }}
+        <input type="number" name="{{ hand }}_weight" value="{{ seed[hand].weight }}" step="0.25" min="0.25" required class="raw-input" data-role="weight-input" data-hand="{{ hand }}">
+      </label>
+    </div>
+    <div class="reps-rpe-grid">
+      <div class="field-group">
+        <span class="field-label">Reps</span>
+        <div class="mini-stepper">
+          <button type="button" class="stepper-btn-sm stepper-minus" data-field="reps" data-hand="{{ hand }}" aria-label="Decrease {{ hand }} reps">−</button>
+          <span class="mini-value" data-role="reps-display" data-hand="{{ hand }}">{{ seed[hand].reps }}</span>
+          <button type="button" class="stepper-btn-sm stepper-plus" data-field="reps" data-hand="{{ hand }}" aria-label="Increase {{ hand }} reps">＋</button>
+        </div>
+        <label class="raw-input-label">reps
+          <input type="number" name="{{ hand }}_reps" value="{{ seed[hand].reps }}" step="1" min="1" required class="raw-input" data-role="reps-input" data-hand="{{ hand }}">
+        </label>
+      </div>
+      <div class="field-group">
+        <span class="field-label">RPE</span>
+        <div class="mini-stepper">
+          <button type="button" class="stepper-btn-sm stepper-minus" data-field="rpe" data-hand="{{ hand }}" aria-label="Decrease {{ hand }} RPE">−</button>
+          <span class="mini-value" data-role="rpe-display" data-hand="{{ hand }}">{{ seed[hand].rpe if seed[hand].rpe is not none else "–" }}</span>
+          <button type="button" class="stepper-btn-sm stepper-plus" data-field="rpe" data-hand="{{ hand }}" aria-label="Increase {{ hand }} RPE">＋</button>
+        </div>
+        <label class="raw-input-label">RPE
+          <input type="number" name="{{ hand }}_rpe" value="{{ seed[hand].rpe if seed[hand].rpe is not none else '' }}" step="0.5" min="1" max="10" placeholder="–" class="raw-input" data-role="rpe-input" data-hand="{{ hand }}">
+        </label>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+
+  <div class="set-actions">
+    <button type="submit" class="set-done-btn">{{ "Save" if editing else "Set done" }}</button>
+    <a class="btn btn-secondary set-cancel-btn" href="{{ cancel_url }}"{% if not editing %} hidden{% endif %}>Cancel</a>
+    <p class="set-error" id="set-error" role="alert" hidden></p>
+  </div>
+</form>
+{% else %}
+<div class="card focus-all-done">
+  <p class="muted" style="margin:0">All {{ total_sets }} set{{ "s" if total_sets != 1 }} logged for this combination. ＋ Add a set below to keep going.</p>
 </div>
+{% endif %}
+
+<!-- Rest countdown (issue #82): a throwaway, client-only enhancement layered
+     on top of the button area above. Hidden without JS -- the form's real
+     "Set done"/"Save" button and behavior are unchanged; this element only
+     ever appears once JS starts a rest after a normal (non-edit) commit. -->
+<div class="rest-countdown" id="rest-countdown" hidden>
+  <span class="rest-countdown-label">Rest</span>
+  <span class="rest-countdown-time" id="rest-countdown-time" aria-live="polite">3:00</span>
+  <button type="button" class="btn btn-secondary rest-skip-btn" id="rest-skip-btn">Skip rest</button>
+</div>
+
 <p class="add-set">
-  <a class="btn btn-secondary" href="/session/worksets?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}&amp;sets={{ more_sets }}{% if hands|length == 1 %}&amp;hand={{ hands[0] }}{% endif %}{% if session_number %}&amp;session_number={{ session_number }}{% endif %}">＋ Add another set</a>
+  <a class="btn btn-secondary" href="/session/worksets?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}&amp;sets={{ more_sets }}{% if hands|length == 1 %}&amp;hand={{ hands[0] }}{% endif %}{% if session_number %}&amp;session_number={{ session_number }}{% endif %}">＋ Add a set</a>
   {% if removable_to %}
   <a class="btn btn-secondary remove-empty-set" href="/session/worksets?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}&amp;sets={{ removable_to }}{% if hands|length == 1 %}&amp;hand={{ hands[0] }}{% endif %}{% if session_number %}&amp;session_number={{ session_number }}{% endif %}">－ Remove empty set</a>
   {% endif %}
 </p>
-</div>
-<div class="card session-meta">
-  <form id="session-update-form" method="post" action="/session/update">
-    {% include "_combo_fields.html" %}
-    <input type="hidden" name="session_number" value="{{ session_number if session_number else '' }}">
-    <label>
-      <input type="checkbox" name="is_deload" {% if training_session and training_session.is_deload %}checked{% endif %}>
-      Planned light session (deload)
-    </label>
-    <label>Session Notes
-      <textarea name="notes" rows="3" placeholder="How did it feel?">{{ training_session.notes if training_session and training_session.notes else '' }}</textarea>
-    </label>
-  </form>
 
-  <details style="margin-top: 1rem;">
-    <summary>Any tweaks? (Pain reports)</summary>
-    {% if pain_reports %}
-    <table style="margin-bottom: 1rem;">
-      <thead><tr><th>Hand</th><th>Severity</th><th>Note</th></tr></thead>
-      <tbody>
-        {% for pr in pain_reports %}
-        <tr><td>{{ pr.hand }}</td><td>{{ pr.severity }}</td><td>{{ pr.note or '' }}</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    {% endif %}
-    <!-- Auto-saves when severity is selected (if hand is set) or note is changed -->
-    <form id="pain-report-form" method="post" action="/session/pain-report">
-      {% include "_combo_fields.html" %}
-      <input type="hidden" name="session_number" value="{{ session_number if session_number else '' }}">
-      <div class="form-row">
-        <label>Hand
-          <select name="hand" required>
-            <option value="left">Left</option>
-            <option value="right">Right</option>
-            <option value="both">Both</option>
-          </select>
+<section class="completed-section">
+  <h3 class="completed-heading">Completed</h3>
+  {% set edit_url_template = "/session/worksets?grip_type_id=" ~ grip.id ~ "&edge_mm=" ~ edge_mm ~ "&date=" ~ date ~ "&edit=__SET__" ~ (("&hand=" ~ hands[0]) if hands|length == 1 else "") ~ (("&session_number=" ~ session_number) if session_number else "") %}
+  <div class="completed-list" data-edit-url-template="{{ edit_url_template }}">
+  {% for n in range(1, current_set_number) %}
+    {% set edit_url = "/session/worksets?grip_type_id=" ~ grip.id ~ "&edge_mm=" ~ edge_mm ~ "&date=" ~ date ~ "&edit=" ~ n ~ (("&hand=" ~ hands[0]) if hands|length == 1 else "") ~ (("&session_number=" ~ session_number) if session_number else "") %}
+    <a class="completed-row{% if editing and n == display_set_number %} completed-row-editing{% endif %}" data-set="{{ n }}" href="{{ edit_url }}">
+      <span class="completed-check" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9.5 18 20 6.5"/></svg></span>
+      <span class="completed-set-label">Set {{ n }}</span>
+      <span class="completed-detail">
+        {% if hands|length == 1 %}
+          {% set ws = saved.get((hands[0], n)) %}
+          {{ ws.weight }} {{ user.unit_pref }} × {{ ws.reps }}{% if ws.rpe is not none %} @ {{ ws.rpe }}{% endif %}
+        {% else %}
+          {% for h in hands %}{% set ws = saved.get((h, n)) %}{{ h[0]|upper }} {{ ws.weight }} × {{ ws.reps }}{% if ws.rpe is not none %} @ {{ ws.rpe }}{% endif %}{% if not loop.last %} · {% endif %}{% endfor %} {{ user.unit_pref }}
+        {% endif %}
+      </span>
+    </a>
+  {% else %}
+    <p class="muted completed-empty">No sets logged yet.</p>
+  {% endfor %}
+  </div>
+  {% if current_set_number < total_sets %}
+  <div class="up-next-row">Sets {{ current_set_number + 1 }}–{{ total_sets }} up next · same load carries down</div>
+  {% endif %}
+</section>
+
+<script type="application/json" id="ladder-data">{{ ladder|tojson }}</script>
+<script type="application/json" id="saved-sets-data">{{ saved_json|tojson }}</script>
+<script type="application/json" id="resume-seed-data">{{ resume_seed|tojson }}</script>
+
+</div><!-- #focus-screen -->
+
+<section class="card how-it-felt-card">
+  <details id="how-it-felt">
+    <summary>How did it feel?</summary>
+    <div class="how-it-felt-body">
+      <form id="session-update-form" method="post" action="/session/update">
+        {% include "_combo_fields.html" %}
+        <input type="hidden" name="session_number" value="{{ session_number if session_number else '' }}">
+        <label class="deload-toggle">
+          <input type="checkbox" name="is_deload" {% if training_session and training_session.is_deload %}checked{% endif %}>
+          Planned light session (deload)
         </label>
-        <label>Severity (1-3)
-          <input type="number" name="severity" min="1" max="3" required placeholder="e.g. 1">
+        <label>Session notes
+          <textarea name="notes" rows="3" placeholder="How did it feel?">{{ training_session.notes if training_session and training_session.notes else '' }}</textarea>
         </label>
+      </form>
+
+      <div class="pain-reports">
+        <h4 class="pain-reports-heading">Any tweaks? (Pain reports)</h4>
+        <table class="pain-reports-table" id="pain-reports-table"{% if not pain_reports %} hidden{% endif %}>
+          <thead><tr><th>Hand</th><th>Severity</th><th>Note</th></tr></thead>
+          <tbody id="pain-reports-body">
+            {% for pr in pain_reports %}
+            <tr data-hand="{{ pr.hand }}"><td>{{ pr.hand }}</td><td>{{ pr.severity }}</td><td>{{ pr.note or '' }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <!-- Auto-saves when severity is selected (if hand is set) or note is changed -->
+        <form id="pain-report-form" method="post" action="/session/pain-report">
+          {% include "_combo_fields.html" %}
+          <input type="hidden" name="session_number" value="{{ session_number if session_number else '' }}">
+          <div class="form-row">
+            <label>Hand
+              <select name="hand" required>
+                <option value="left">Left</option>
+                <option value="right">Right</option>
+                <option value="both">Both</option>
+              </select>
+            </label>
+            <label>Severity (1-3)
+              <input type="number" name="severity" min="1" max="3" required placeholder="e.g. 1">
+            </label>
+          </div>
+          <label>Note <input type="text" name="note" placeholder="Optional"></label>
+        </form>
       </div>
-      <label>Note <input type="text" name="note" placeholder="Optional"></label>
-    </form>
+    </div>
   </details>
-</div>
+</section>
 <div class="flow-next">
   <a class="btn btn-secondary" href="/session/warmup?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}{% if hands|length == 1 %}&amp;hand={{ hands[0] }}{% endif %}{% if session_number %}&amp;session_number={{ session_number }}{% endif %}">← Back to warmup</a>
   {% if hands|length == 1 %}
@@ -104,66 +194,490 @@
   <a class="btn" href="/">Done — back home</a>
 </div>
 <script>
-document.querySelectorAll(".workset-cell").forEach((cell) => {
-  const form = cell.querySelector("form");
-  const done = cell.querySelector(".set-done");
-  const post = (action) =>
-    fetch(action, {
-      method: "POST",
-      body: new FormData(form),
-      headers: { "HX-Request": "true" },
-    });
+(function () {
+  var screen = document.getElementById("focus-screen");
+  var form = document.getElementById("set-form");
+  var pill = document.querySelector(".focus-pill");
+  var ladderEl = document.getElementById("ladder-data");
+  var ladder = ladderEl ? JSON.parse(ladderEl.textContent) : [0];
+  // Only positive rungs are steppable: loadable_ladder always includes the
+  // 0.0 "empty pin" rung, and the server rejects weight <= 0. A user with
+  // no plates at all gets [0.0], i.e. no steppable rung -- see below.
+  var rungs = ladder.filter(function (rung) { return rung > 0; });
+  var savedSetsEl = document.getElementById("saved-sets-data");
+  var savedSets = savedSetsEl ? JSON.parse(savedSetsEl.textContent) : {};
+  var unit = screen.dataset.unit;
+  var totalSets = form ? parseInt(form.dataset.totalSets, 10) : 0;
+  var setDoneBtn = form ? form.querySelector(".set-done-btn") : null;
+  var cancelBtn = form ? form.querySelector(".set-cancel-btn") : null;
 
-  done.addEventListener("change", () => {
-    post(done.checked ? "/session/workset" : "/session/workset/delete");
-  });
+  // Rest countdown (issue #82): deliberately throwaway and client-only --
+  // a hardcoded 3:00, no persistence, dies on reload. Lives outside the
+  // <form> so it survives even when the last defined set's commit removes
+  // the form (see advanceTo below). REST_SECONDS reads a data attribute
+  // rather than being a bare constant only so the Playwright smoke spec can
+  // shorten it for a natural-expiry assertion -- there is no user-facing
+  // setting, still hardcoded server-side at 180 in the template.
+  var restCountdown = document.getElementById("rest-countdown");
+  var restCountdownTime = document.getElementById("rest-countdown-time");
+  var restSkipBtn = document.getElementById("rest-skip-btn");
+  var REST_SECONDS = (screen && parseInt(screen.dataset.restSeconds, 10)) || 180;
+  var restTimerId = null;
 
-  form.querySelectorAll('input[type="number"]').forEach((input) => {
-    input.addEventListener("change", () => {
-      if (done.checked) post("/session/workset");
-      if (input.name === "weight") {
-        // Carry the new weight down to later, not-yet-done sets of this hand.
-        const hand = cell.dataset.hand;
-        const setNumber = parseInt(cell.dataset.set, 10);
-        document
-          .querySelectorAll(`.workset-cell[data-hand="${hand}"]`)
-          .forEach((other) => {
-            const otherDone = other.querySelector(".set-done");
-            if (parseInt(other.dataset.set, 10) > setNumber && !otherDone.checked) {
-              other.querySelector('input[name="weight"]').value = input.value;
-            }
-          });
+  function formatRestTime(totalSeconds) {
+    var m = Math.floor(totalSeconds / 60);
+    var s = totalSeconds % 60;
+    return m + ":" + (s < 10 ? "0" : "") + s;
+  }
+
+  function stopRestCountdown() {
+    if (restTimerId !== null) {
+      clearInterval(restTimerId);
+      restTimerId = null;
+    }
+    if (restCountdown) restCountdown.hidden = true;
+    if (setDoneBtn) setDoneBtn.hidden = false;
+  }
+
+  function startRestCountdown() {
+    if (!restCountdown || !restCountdownTime) return;
+    var seconds = REST_SECONDS;
+    if (setDoneBtn) setDoneBtn.hidden = true;
+    restCountdownTime.textContent = formatRestTime(seconds);
+    restCountdown.hidden = false;
+    if (restTimerId !== null) clearInterval(restTimerId);
+    restTimerId = setInterval(function () {
+      seconds -= 1;
+      if (seconds <= 0) {
+        stopRestCountdown();
+        return;
       }
-    });
-  });
-});
+      restCountdownTime.textContent = formatRestTime(seconds);
+    }, 1000);
+  }
 
-const metaForm = document.getElementById("session-update-form");
-if (metaForm) {
-  const saveMeta = () => {
-    fetch(metaForm.action, {
-      method: "POST",
-      body: new FormData(metaForm),
-      headers: { "HX-Request": "true" }
-    });
-  };
-  metaForm.querySelector('textarea[name="notes"]').addEventListener('change', saveMeta);
-  metaForm.querySelector('input[name="is_deload"]').addEventListener('change', saveMeta);
-}
+  if (restSkipBtn) {
+    restSkipBtn.addEventListener("click", stopRestCountdown);
+  }
 
-const painForm = document.getElementById("pain-report-form");
-if (painForm) {
-  const savePain = () => {
-    const sev = painForm.querySelector('input[name="severity"]').value;
-    if (sev) {
+  // Edit mode (issue #80): editing/beforeEdit track whether the form
+  // currently shows a COMPLETED set's saved values instead of the normal
+  // in-progress set, and what to restore on Save/Cancel. If the page was
+  // itself loaded already in edit mode (the no-JS ?edit=N path, or a
+  // direct link), seed beforeEdit from the server-rendered resume data so
+  // Save/Cancel still know where to return without a reload.
+  var editing = form ? form.dataset.editing === "true" : false;
+  var beforeEdit = null;
+  if (editing) {
+    var resumeSeedEl = document.getElementById("resume-seed-data");
+    var resumeSeed = resumeSeedEl ? JSON.parse(resumeSeedEl.textContent) : {};
+    beforeEdit = { setNumber: parseInt(form.dataset.returnSet, 10), hands: resumeSeed };
+  }
+
+  // Progressive enhancement: only once we know steppers work do we hide
+  // the plain <input type=number> fallback and show the tap controls.
+  screen.classList.add("js-enabled");
+  // ...except for weight when the ladder has no positive rung (a user who
+  // owns no plates): the stepper could only ever produce 0.0, which the
+  // server rejects, so weight stays free-entry via the raw input.
+  if (!rungs.length) screen.classList.add("no-ladder");
+
+  function toCents(v) { return Math.round(v * 100); }
+
+  // Walk the loadable ladder one rung per tap. An off-ladder starting
+  // value (raw CurrentMax, older free-entry history) snaps to the next
+  // rung in the direction of travel; both ends clamp (see CONTEXT.md:
+  // Loadable ladder).
+  function stepWeight(value, dir) {
+    // No positive rung: nothing to step to, so leave the typed value alone
+    // (the raw input is visible in this mode -- see .no-ladder above).
+    if (!rungs.length) return value;
+    if (dir > 0) {
+      for (var i = 0; i < rungs.length; i++) {
+        if (toCents(rungs[i]) > toCents(value)) return rungs[i];
+      }
+      return rungs[rungs.length - 1];
+    }
+    for (var j = rungs.length - 1; j >= 0; j--) {
+      if (toCents(rungs[j]) < toCents(value)) return rungs[j];
+    }
+    // Clamp at the smallest positive rung rather than falling to 0.0.
+    return rungs[0];
+  }
+
+  function stepReps(value, dir) {
+    var next = value + dir;
+    return next < 1 ? 1 : next;
+  }
+
+  function formatRpe(value) {
+    if (value === null || value === "" || value === undefined) return "–";
+    var num = typeof value === "number" ? value : parseFloat(value);
+    if (isNaN(num)) return "–";
+    return Number.isInteger(num) ? String(num) : num.toFixed(1);
+  }
+
+  function stepRpe(value, dir) {
+    if (dir > 0) {
+      if (value === null) return 1.0;
+      var up = Math.round((value + 0.5) * 10) / 10;
+      return up > 10 ? 10 : up;
+    }
+    if (value === null) return null;
+    if (value <= 1) return null;
+    var down = Math.round((value - 0.5) * 10) / 10;
+    return down < 1 ? 1 : down;
+  }
+
+  if (form) {
+    form.querySelectorAll(".stepper-btn, .stepper-btn-sm").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var field = btn.dataset.field;
+        var hand = btn.dataset.hand;
+        var dir = btn.classList.contains("stepper-plus") ? 1 : -1;
+        var input = form.querySelector(
+          '.raw-input[data-role="' + field + '-input"][data-hand="' + hand + '"]'
+        );
+        var display = form.querySelector(
+          '[data-role="' + field + '-display"][data-hand="' + hand + '"]'
+        );
+        if (field === "weight") {
+          var current = parseFloat(input.value) || 0;
+          var next = stepWeight(current, dir);
+          input.value = next;
+          display.textContent = next;
+        } else if (field === "reps") {
+          var currentReps = parseInt(input.value, 10) || 1;
+          var nextReps = stepReps(currentReps, dir);
+          input.value = nextReps;
+          display.textContent = nextReps;
+        } else if (field === "rpe") {
+          var currentRpe = input.value === "" ? null : parseFloat(input.value);
+          var nextRpe = stepRpe(currentRpe, dir);
+          input.value = nextRpe === null ? "" : nextRpe;
+          display.textContent = formatRpe(nextRpe);
+        }
+      });
+    });
+
+    form.addEventListener("submit", function (event) {
+      event.preventDefault();
+      var setNumber = parseInt(form.dataset.currentSet, 10);
+      var wasEditing = editing;
+      var handsData = captureFormValues();
+
+      fetch(form.action, {
+        method: "POST",
+        body: new FormData(form),
+        headers: { "HX-Request": "true" },
+      }).then(function (response) {
+        if (!response.ok) {
+          // Don't fail silently: surface the server's validation message and
+          // leave the set where it is so the user can fix and retry. In
+          // practice the steppers keep values in range, so this is a
+          // last-resort guard rather than an everyday path.
+          return response.text().then(function (msg) {
+            showSetError(msg || "Could not save the set. Please try again.");
+          });
+        }
+        clearSetError();
+        if (wasEditing) {
+          // Same POST /session/set path as a normal commit (re-posting the
+          // same set_number upserts in place) -- Save just returns focus
+          // to the set the user was on instead of advancing.
+          exitEditMode(true, setNumber, handsData);
+        } else {
+          appendCompleted(setNumber, handsData);
+          advanceTo(setNumber + 1, totalSets);
+          // Normal advance-to-next-set commit only -- edit-mode Save above
+          // is a correction, not a rest, so it never reaches this branch.
+          startRestCountdown();
+        }
+      }).catch(function () {
+        showSetError("Could not save the set — check your connection and try again.");
+      });
+    });
+
+    if (cancelBtn) {
+      cancelBtn.addEventListener("click", function (event) {
+        event.preventDefault();
+        exitEditMode(false);
+      });
+    }
+  }
+
+  // Tapping a COMPLETED row is the correction path (issue #80): with JS,
+  // swap the already-known saved values into the hand cards client-side
+  // (no round trip); without JS -- or once all of this combo's sets are
+  // logged and the form isn't even on the page -- the row's real href
+  // falls back to the no-JS ?edit=N page render.
+  var completedList = document.querySelector(".completed-list");
+  if (completedList) {
+    completedList.addEventListener("click", function (event) {
+      var row = event.target.closest(".completed-row");
+      if (!row || !completedList.contains(row) || !form) return;
+      event.preventDefault();
+      enterEditMode(parseInt(row.dataset.set, 10));
+    });
+  }
+
+  function showSetError(message) {
+    var el = document.getElementById("set-error");
+    if (!el) return;
+    el.textContent = message;
+    el.hidden = false;
+  }
+
+  function clearSetError() {
+    var el = document.getElementById("set-error");
+    if (!el) return;
+    el.textContent = "";
+    el.hidden = true;
+  }
+
+  function captureFormValues() {
+    var handsData = {};
+    form.querySelectorAll(".hand-card").forEach(function (card) {
+      var hand = card.dataset.hand;
+      var weight = card.querySelector('[data-role="weight-input"]').value;
+      var reps = card.querySelector('[data-role="reps-input"]').value;
+      var rpe = card.querySelector('[data-role="rpe-input"]').value;
+      handsData[hand] = {
+        weight: weight,
+        reps: reps,
+        rpe: rpe === "" ? null : rpe,
+      };
+    });
+    return handsData;
+  }
+
+  function setFormValues(card, hand, vals) {
+    var weightInput = card.querySelector('[data-role="weight-input"]');
+    var weightDisplay = card.querySelector('[data-role="weight-display"]');
+    if (weightInput) weightInput.value = vals.weight;
+    if (weightDisplay) weightDisplay.textContent = vals.weight;
+    var repsInput = card.querySelector('[data-role="reps-input"]');
+    var repsDisplay = card.querySelector('[data-role="reps-display"]');
+    if (repsInput) repsInput.value = vals.reps;
+    if (repsDisplay) repsDisplay.textContent = vals.reps;
+    var rpeInput = card.querySelector('[data-role="rpe-input"]');
+    var rpeDisplay = card.querySelector('[data-role="rpe-display"]');
+    var rpe = vals.rpe === undefined ? null : vals.rpe;
+    if (rpeInput) rpeInput.value = rpe === null ? "" : rpe;
+    if (rpeDisplay) rpeDisplay.textContent = formatRpe(rpe);
+  }
+
+  function buildDetailText(handsData) {
+    var hands = Object.keys(handsData);
+    if (hands.length === 1) {
+      var only = handsData[hands[0]];
+      return only.weight + " " + unit + " × " + only.reps + (only.rpe !== null ? " @ " + only.rpe : "");
+    }
+    return hands
+      .map(function (hand) {
+        var h = handsData[hand];
+        return hand[0].toUpperCase() + " " + h.weight + " × " + h.reps + (h.rpe !== null ? " @ " + h.rpe : "");
+      })
+      .join(" · ") + " " + unit;
+  }
+
+  function renderPillNormal(setNumber) {
+    if (!pill) return;
+    pill.dataset.editing = "false";
+    pill.dataset.currentSet = setNumber;
+    pill.innerHTML =
+      'Set <span class="focus-pill-n">' + Math.min(setNumber, totalSets) + '</span> of ' +
+      '<span class="focus-pill-m">' + totalSets + '</span>';
+  }
+
+  function renderPillEditing(setNumber) {
+    if (!pill) return;
+    pill.dataset.editing = "true";
+    pill.dataset.currentSet = setNumber;
+    pill.textContent = "Editing set " + setNumber;
+  }
+
+  function enterEditMode(setNumber) {
+    var setData = savedSets[setNumber];
+    if (!setData) return; // not actually a completed set -- nothing to load
+    // Opening a correction mid-rest ends the rest immediately -- the user
+    // is back at the cards, not resting.
+    stopRestCountdown();
+    if (!editing) {
+      // Remember the in-progress set we were on so Save/Cancel can return
+      // to it -- captured once, so hopping between several COMPLETED rows
+      // before Cancel still returns to the original spot.
+      beforeEdit = { setNumber: parseInt(form.dataset.currentSet, 10), hands: captureFormValues() };
+    }
+    form.querySelectorAll(".hand-card").forEach(function (card) {
+      var hand = card.dataset.hand;
+      var vals = setData[hand];
+      if (vals) setFormValues(card, hand, vals);
+    });
+    editing = true;
+    form.dataset.editing = "true";
+    form.dataset.currentSet = setNumber;
+    document.getElementById("set-number-field").value = setNumber;
+    renderPillEditing(setNumber);
+    if (setDoneBtn) setDoneBtn.textContent = "Save";
+    if (cancelBtn) cancelBtn.hidden = false;
+  }
+
+  function exitEditMode(justSaved, editedSetNumber, savedHandsData) {
+    if (!beforeEdit) return;
+    var resumeSet = beforeEdit.setNumber;
+    form.querySelectorAll(".hand-card").forEach(function (card) {
+      var hand = card.dataset.hand;
+      var vals = beforeEdit.hands[hand];
+      if (vals) setFormValues(card, hand, vals);
+    });
+    editing = false;
+    form.dataset.editing = "false";
+    if (justSaved) updateCompletedRow(editedSetNumber, savedHandsData);
+    beforeEdit = null;
+
+    if (resumeSet > totalSets) {
+      // Every defined set was already logged before we entered edit mode --
+      // back to the same "all done" state advanceTo() leaves behind.
+      form.remove();
+      return;
+    }
+    form.dataset.currentSet = resumeSet;
+    document.getElementById("set-number-field").value = resumeSet;
+    renderPillNormal(resumeSet);
+    if (setDoneBtn) setDoneBtn.textContent = "Set done";
+    if (cancelBtn) cancelBtn.hidden = true;
+  }
+
+  function updateCompletedRow(setNumber, handsData) {
+    savedSets[setNumber] = handsData;
+    var row = document.querySelector('.completed-row[data-set="' + setNumber + '"]');
+    if (!row) return;
+    var detailEl = row.querySelector(".completed-detail");
+    if (detailEl) detailEl.textContent = buildDetailText(handsData);
+  }
+
+  function appendCompleted(setNumber, handsData) {
+    var list = document.querySelector(".completed-list");
+    if (!list) return;
+    var empty = list.querySelector(".completed-empty");
+    if (empty) empty.remove();
+    var detail = buildDetailText(handsData);
+    var row = document.createElement("a");
+    row.className = "completed-row";
+    // Give the appended row the same real ?edit=N href the server renders,
+    // so once the form is removed (all sets logged) and the click handler
+    // stops intercepting, the row still falls back to the no-JS edit page.
+    var editTemplate = list.dataset.editUrlTemplate;
+    row.href = editTemplate ? editTemplate.replace("__SET__", setNumber) : "#";
+    row.dataset.set = setNumber;
+    row.innerHTML =
+      '<span class="completed-check" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9.5 18 20 6.5"/></svg></span>' +
+      '<span class="completed-set-label">Set ' + setNumber + '</span>' +
+      '<span class="completed-detail">' + detail + '</span>';
+    list.appendChild(row);
+    savedSets[setNumber] = handsData;
+  }
+
+  function advanceTo(nextSet, totalSets) {
+    renderPillNormal(nextSet);
+    document.querySelectorAll(".progress-segment").forEach(function (seg, index) {
+      var n = index + 1;
+      seg.classList.remove("segment-filled", "segment-current", "segment-remaining");
+      if (n < nextSet) seg.classList.add("segment-filled");
+      else if (n === nextSet) seg.classList.add("segment-current");
+      else seg.classList.add("segment-remaining");
+    });
+
+    var upNext = document.querySelector(".up-next-row");
+    if (nextSet >= totalSets) {
+      if (upNext) upNext.remove();
+    } else if (upNext) {
+      upNext.textContent = "Sets " + (nextSet + 1) + "–" + totalSets + " up next · same load carries down";
+    }
+
+    if (nextSet > totalSets) {
+      // All defined sets are logged — the form can't advance further
+      // until "＋ Add a set" extends the denominator (a full page nav).
+      if (form) form.remove();
+      return;
+    }
+
+    if (!form) return;
+    form.dataset.currentSet = nextSet;
+    document.getElementById("set-number-field").value = nextSet;
+    // Carry the just-committed weight/reps down to the new current set;
+    // RPE always starts blank again (see CONTEXT.md: Loadable ladder).
+    form.querySelectorAll('[data-role="rpe-input"]').forEach(function (input) {
+      input.value = "";
+    });
+    form.querySelectorAll('[data-role="rpe-display"]').forEach(function (el) {
+      el.textContent = "–";
+    });
+  }
+})();
+
+// "How did it feel?" disclosure (issue #81): notes/deload and pain reports
+// keep autosaving per interaction -- unlike the set form above, there is
+// no commit button and no client-side edit-mode dance. Each control fires
+// its own POST on change to the pre-existing autosave routes (unchanged
+// since before the Focus redesign); pain-report rows are upserted into the
+// table in place so a save doesn't collapse the disclosure the user just
+// opened.
+(function () {
+  var metaForm = document.getElementById("session-update-form");
+  if (metaForm) {
+    var saveMeta = function () {
+      fetch(metaForm.action, {
+        method: "POST",
+        body: new FormData(metaForm),
+        headers: { "HX-Request": "true" },
+      });
+    };
+    metaForm.querySelector('textarea[name="notes"]').addEventListener("change", saveMeta);
+    metaForm.querySelector('input[name="is_deload"]').addEventListener("change", saveMeta);
+  }
+
+  var painForm = document.getElementById("pain-report-form");
+  if (painForm) {
+    var painTable = document.getElementById("pain-reports-table");
+    var painBody = document.getElementById("pain-reports-body");
+
+    var upsertPainRow = function (hand, severity, note) {
+      var row = painBody.querySelector('tr[data-hand="' + hand + '"]');
+      if (!row) {
+        row = document.createElement("tr");
+        row.dataset.hand = hand;
+        painBody.appendChild(row);
+      }
+      row.replaceChildren();
+      [hand, severity, note || ""].forEach(function (text) {
+        var td = document.createElement("td");
+        td.textContent = text;
+        row.appendChild(td);
+      });
+      if (painTable) painTable.hidden = false;
+    };
+
+    var savePain = function () {
+      // The backend requires hand + severity together (same upsert-by-hand
+      // rule as before, docs/adr n/a -- see CLAUDE.md pain_reports); the
+      // hand <select> always has a value, so severity is the real gate.
+      var severity = painForm.querySelector('input[name="severity"]').value;
+      if (!severity) return;
+      var hand = painForm.querySelector('select[name="hand"]').value;
+      var note = painForm.querySelector('input[name="note"]').value;
       fetch(painForm.action, {
         method: "POST",
-        body: new FormData(painForm)
-      }).then(() => window.location.reload());
-    }
-  };
-  painForm.querySelector('input[name="severity"]').addEventListener('change', savePain);
-  painForm.querySelector('input[name="note"]').addEventListener('change', savePain);
-}
+        body: new FormData(painForm),
+        headers: { "HX-Request": "true" },
+      }).then(function (response) {
+        if (response.ok) upsertPainRow(hand, severity, note);
+      });
+    };
+    painForm.querySelector('input[name="severity"]').addEventListener("change", savePain);
+    painForm.querySelector('input[name="note"]').addEventListener("change", savePain);
+  }
+})();
 </script>
 {% endblock %}
