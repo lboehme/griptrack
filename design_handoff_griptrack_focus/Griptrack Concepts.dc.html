@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <style>
+    body { margin: 0; background: #e9e7e2; font-family: Helvetica, Arial, sans-serif; }
+    a { color: #14181f; }
+    a:hover { color: #e8532c; }
+    @keyframes none-placeholder { from { opacity: 1; } to { opacity: 1; } }
+  </style>
+</helmet>
+
+<section style="padding: 48px 56px 96px;">
+  <div style="margin-bottom: 36px;">
+    <div style="font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: #8b877e; font-weight: 700;">Turn 1 · Work sets screen · light · mid-fi</div>
+    <h1 style="font-size: 28px; font-weight: 800; letter-spacing: -0.02em; margin: 6px 0 0; color: #1c1a16;">Griptrack — current design + 5 concepts</h1>
+  </div>
+
+  <div style="display: flex; flex-wrap: wrap; gap: 56px; align-items: flex-start;">
+
+    <!-- ══════════════ 1a — CURRENT (recreation) ══════════════ -->
+    <div id="1a" style="width: 402px; flex-shrink: 0;">
+      <div style="display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px;">
+        <span style="background: #1c1a16; color: #fff; font-size: 12px; font-weight: 800; padding: 3px 9px; border-radius: 6px;">1a</span>
+        <span style="font-weight: 800; font-size: 15px; color: #1c1a16;">Current design</span>
+        <span style="font-size: 12px; color: #8b877e;">faithful recreation, for reference</span>
+      </div>
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+        <div data-screen-label="1a Current" style="min-height: 100%; display: flex; flex-direction: column; background: radial-gradient(1100px 480px at 85% -8%, rgba(232,83,44,.05), transparent 65%), radial-gradient(800px 400px at -10% 110%, rgba(232,83,44,.05), transparent 60%), #f3f4f6; color: #14181f; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 17px; line-height: 1.55;">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 62px 17.6px 10.4px; border-bottom: 1px solid rgba(227,230,234,.7); background: rgba(243,244,246,.78);">
+            <div style="font-size: 19.2px; font-weight: 800; letter-spacing: -0.03em;">GripTrack<span style="background: linear-gradient(135deg, #ff7a3d 0%, #e8532c 55%, #e0302a 100%); -webkit-background-clip: text; background-clip: text; color: transparent;">.</span></div>
+            <div style="min-height: 35px; display: inline-flex; align-items: center; padding: 3px 14px; font-size: 13px; font-weight: 650; color: #68727f; background: rgba(238,240,243,.8); border: 1px solid #e3e6ea; border-radius: 999px;">Log out</div>
+          </div>
+          <div style="flex: 1; padding: 17.6px 17.6px 26px;">
+            <h2 style="font-size: 26.4px; font-weight: 800; letter-spacing: -0.035em; margin: 6px 0 5.6px;">Work sets</h2>
+            <p style="color: #68727f; margin: 0 0 18.4px; font-size: 14.9px;">Half crimp · 20 mm edge · 2026-07-13</p>
+            <div style="background: #ffffff; border: 1px solid #e3e6ea; border-radius: 18px; box-shadow: 0 1px 2px rgba(20,24,31,.06), 0 8px 24px -8px rgba(20,24,31,.12); padding: 18.4px; margin-bottom: 16px;">
+              <p style="color: #68727f; margin: 0 0 9.6px; font-size: 13.1px;">Tick a set when you've done it — edits to ticked sets save automatically.</p>
+              <div style="display: grid; grid-template-columns: auto 1fr; border-bottom: 1px solid #e3e6ea;">
+                <div style="font-size: 11.2px; font-weight: 750; text-transform: uppercase; letter-spacing: .07em; color: #68727f; padding: 7.2px 8.8px;">Set</div>
+                <div style="font-size: 11.2px; font-weight: 750; text-transform: uppercase; letter-spacing: .07em; color: #68727f; padding: 7.2px 8.8px;">L — kg × reps @ RPE</div>
+              </div>
+              <sc-for list="{{ currentSets }}" as="s" hint-placeholder-count="3">
+                <div style="display: grid; grid-template-columns: auto 1fr; border-bottom: 1px solid #e3e6ea; align-items: center;">
+                  <div style="padding: 10.4px 8.8px; font-weight: 800; color: #68727f;">{{ s.n }}</div>
+                  <div style="padding: 10.4px 8.8px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 6.4px; align-items: end;">
+                      <div style="font-size: 10.6px; font-weight: 650; color: #68727f;">kg
+                        <div style="margin-top: 5px; min-height: 43px; display: flex; align-items: center; padding: 5px 7px; font-size: 15.2px; color: #14181f; background: #eef0f3; border-radius: 10px; font-variant-numeric: tabular-nums;">{{ s.kg }}</div>
+                      </div>
+                      <div style="font-size: 10.6px; font-weight: 650; color: #68727f;">reps
+                        <div style="margin-top: 5px; min-height: 43px; display: flex; align-items: center; padding: 5px 7px; font-size: 15.2px; color: #14181f; background: #eef0f3; border-radius: 10px; font-variant-numeric: tabular-nums;">{{ s.reps }}</div>
+                      </div>
+                      <div style="font-size: 10.6px; font-weight: 650; color: #68727f;">RPE
+                        <div style="margin-top: 5px; min-height: 43px; display: flex; align-items: center; padding: 5px 7px; font-size: 15.2px; color: #14181f; background: #eef0f3; border-radius: 10px; font-variant-numeric: tabular-nums;">{{ s.rpe }}</div>
+                      </div>
+                      <sc-if value="{{ s.done }}" hint-placeholder-val="{{ true }}">
+                        <div style="width: 30.4px; height: 30.4px; margin-bottom: 6.4px; border-radius: 10px; background: linear-gradient(135deg, #ff7a3d 0%, #e8532c 55%, #e0302a 100%); box-shadow: 0 10px 28px -8px rgba(232,83,44,.55); display: grid; place-content: center;">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9.5 18 20 6.5"></path></svg>
+                        </div>
+                      </sc-if>
+                      <sc-if value="{{ s.notDone }}" hint-placeholder-val="{{ false }}">
+                        <div style="width: 30.4px; height: 30.4px; margin-bottom: 6.4px; border-radius: 10px; background: #eef0f3; border: 2px solid #e3e6ea;"></div>
+                      </sc-if>
+                    </div>
+                  </div>
+                </div>
+              </sc-for>
+              <div style="display: flex; gap: 8px; margin-top: 9.6px;">
+                <div style="display: inline-flex; align-items: center; justify-content: center; min-height: 41.6px; padding: 5px 15px; font-size: 14.7px; font-weight: 750; letter-spacing: -0.01em; color: #14181f; background: #ffffff; border: 1.5px solid #e3e6ea; border-radius: 13px; box-shadow: 0 1px 2px rgba(20,24,31,.06), 0 8px 24px -8px rgba(20,24,31,.12);">＋ Add another set</div>
+              </div>
+            </div>
+            <div style="background: #ffffff; border: 1px solid #e3e6ea; border-radius: 18px; box-shadow: 0 1px 2px rgba(20,24,31,.06), 0 8px 24px -8px rgba(20,24,31,.12); padding: 18.4px; margin-bottom: 16px;">
+              <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15.2px; font-size: 13.1px; font-weight: 650; color: #68727f;">
+                <div style="width: 30.4px; height: 30.4px; border-radius: 10px; background: #eef0f3; border: 2px solid #e3e6ea; flex-shrink: 0;"></div>
+                Planned light session (deload)
+              </div>
+              <div style="font-size: 13.1px; font-weight: 650; color: #68727f;">Session Notes
+                <div style="margin-top: 5px; min-height: 76px; padding: 10px 13.6px; font-size: 16.8px; color: #9aa3ae; background: #eef0f3; border-radius: 12px;">How did it feel?</div>
+              </div>
+              <div style="margin-top: 16px; font-size: 15.2px; color: #14181f;">▸ Any tweaks? (Pain reports)</div>
+            </div>
+            <div style="display: grid; gap: 10.4px; margin-top: 18.4px;">
+              <div style="display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 8px 17.6px; font-size: 16.3px; font-weight: 750; letter-spacing: -0.01em; color: #14181f; background: #ffffff; border: 1.5px solid #e3e6ea; border-radius: 13px; box-shadow: 0 1px 2px rgba(20,24,31,.06), 0 8px 24px -8px rgba(20,24,31,.12);">← Back to warmup</div>
+              <div style="display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 8px 17.6px; font-size: 16.3px; font-weight: 750; letter-spacing: -0.01em; color: #ffffff; background: linear-gradient(135deg, #ff7a3d 0%, #e8532c 55%, #e0302a 100%); border-radius: 13px; box-shadow: 0 10px 28px -8px rgba(232,83,44,.55);">Done — back home</div>
+            </div>
+          </div>
+          <div style="position: sticky; bottom: 0; display: flex; height: 64px; background: rgba(255,255,255,.82); backdrop-filter: blur(18px); border-top: 1px solid rgba(227,230,234,.7); padding-bottom: 14px;">
+            <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2.9px; font-size: 10.7px; font-weight: 650; color: #68727f;">
+              <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" style="padding: 3px 10px; box-sizing: content-box;"><path d="M3 10.5 12 3l9 7.5V21h-6v-6h-6v6H3z"></path></svg>
+              Home
+            </div>
+            <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2.9px; font-size: 10.7px; font-weight: 650; color: #e8532c;">
+              <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" style="padding: 3px 10px; box-sizing: content-box; border-radius: 999px; background: #fdece5;"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"></path></svg>
+              Session
+            </div>
+            <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2.9px; font-size: 10.7px; font-weight: 650; color: #68727f;">
+              <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="padding: 3px 10px; box-sizing: content-box;"><path d="M4 19 10 12l4 4 6-8"></path><circle cx="10" cy="12" r="1.2"></circle><circle cx="14" cy="16" r="1.2"></circle></svg>
+              Trends
+            </div>
+            <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2.9px; font-size: 10.7px; font-weight: 650; color: #68727f;">
+              <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" style="padding: 3px 10px; box-sizing: content-box;"><path d="M3 20 10 8l4 6 3-4 4 10H3z"></path></svg>
+              Climbs
+            </div>
+            <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2.9px; font-size: 10.7px; font-weight: 650; color: #68727f;">
+              <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="padding: 3px 10px; box-sizing: content-box;"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c0-4 4-6 8-6s8 2 8 6"></path></svg>
+              Profile
+            </div>
+          </div>
+        </div>
+      </x-import>
+    </div>
+
+    <!-- ══════════════ 1b — LEDGER ══════════════ -->
+    <div id="1b" style="width: 402px; flex-shrink: 0;">
+      <div style="display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px;">
+        <span style="background: #0f7b86; color: #fff; font-size: 12px; font-weight: 800; padding: 3px 9px; border-radius: 6px;">1b</span>
+        <span style="font-weight: 800; font-size: 15px; color: #1c1a16;">Ledger</span>
+        <span style="font-size: 12px; color: #8b877e;">instrument-dense, both hands per row</span>
+      </div>
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+        <div data-screen-label="1b Ledger" style="min-height: 100%; display: flex; flex-direction: column; background: #fbfcfd; color: #16191d; font-family: Helvetica, Arial, sans-serif;">
+          <div style="padding: 66px 20px 12px; display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid #16191d;">
+            <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 13px; font-weight: 700; letter-spacing: 0.22em;">GRIPTRACK</div>
+            <div style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #6d7683; letter-spacing: 0.1em;">2026-07-13</div>
+          </div>
+          <div style="flex: 1; padding: 20px 20px 26px;">
+            <div style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; letter-spacing: 0.2em; color: #0f7b86; font-weight: 700;">SESSION / WORK SETS</div>
+            <div style="font-size: 24px; font-weight: 700; letter-spacing: -0.02em; margin: 6px 0 2px;">Half crimp · 20 mm</div>
+            <div style="font-size: 13px; color: #6d7683;">edge depth · both hands · tap a value to edit</div>
+
+            <div style="margin-top: 22px; border-top: 1px solid #16191d;">
+              <div style="display: grid; grid-template-columns: 34px 1fr 1fr; padding: 8px 0; border-bottom: 1px solid #e2e6ea; font-family: ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: 0.16em; color: #6d7683;">
+                <div>SET</div><div>LEFT</div><div>RIGHT</div>
+              </div>
+              <sc-for list="{{ ledgerSets }}" as="s" hint-placeholder-count="4">
+                <div style="display: grid; grid-template-columns: 34px 1fr 1fr; align-items: center; padding: 13px 0; border-bottom: 1px solid #e2e6ea;">
+                  <div style="font-family: ui-monospace, Menlo, monospace; font-size: 13px; color: #6d7683;">{{ s.n }}</div>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <div style="width: 10px; height: 10px; background: {{ s.lMark }}; border: 1.5px solid #16191d; flex-shrink: 0;"></div>
+                    <div style="font-family: ui-monospace, Menlo, monospace; font-size: 14px; font-variant-numeric: tabular-nums;"><strong>{{ s.lKg }}</strong><span style="color: #6d7683;">×{{ s.lReps }}</span> <span style="color: #0f7b86;">@{{ s.lRpe }}</span></div>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <div style="width: 10px; height: 10px; background: {{ s.rMark }}; border: 1.5px solid #16191d; flex-shrink: 0;"></div>
+                    <div style="font-family: ui-monospace, Menlo, monospace; font-size: 14px; font-variant-numeric: tabular-nums;"><strong>{{ s.rKg }}</strong><span style="color: #6d7683;">×{{ s.rReps }}</span> <span style="color: #0f7b86;">@{{ s.rRpe }}</span></div>
+                  </div>
+                </div>
+              </sc-for>
+              <div style="display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 2px solid #16191d; font-family: ui-monospace, Menlo, monospace; font-size: 12px;">
+                <span style="letter-spacing: 0.14em; color: #6d7683;">VOLUME Σ</span>
+                <span style="font-variant-numeric: tabular-nums;"><strong>612.5</strong> kg·reps</span>
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 22px; margin-top: 14px; font-family: ui-monospace, Menlo, monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.12em;">
+              <span style="color: #0f7b86; border-bottom: 2px solid #0f7b86; padding-bottom: 2px;">+ ADD SET</span>
+              <span style="color: #6d7683;">− REMOVE EMPTY</span>
+            </div>
+
+            <div style="margin-top: 28px; border-top: 1px solid #16191d; padding-top: 14px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0;">
+                <span style="font-size: 13px;">Planned light session (deload)</span>
+                <div style="width: 34px; height: 20px; border: 1.5px solid #16191d; padding: 2px; box-sizing: border-box;"><div style="width: 13px; height: 13px; background: #e2e6ea;"></div></div>
+              </div>
+              <div style="font-family: ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: 0.16em; color: #6d7683; margin-top: 10px;">NOTES</div>
+              <div style="border-bottom: 1px solid #e2e6ea; padding: 8px 0 10px; font-size: 13px; color: #9aa3ae;">How did it feel?</div>
+            </div>
+
+            <div style="margin-top: 26px; display: grid; gap: 8px;">
+              <div style="display: flex; align-items: center; justify-content: center; height: 48px; border: 1.5px solid #16191d; font-family: ui-monospace, Menlo, monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.14em;">← BACK TO WARMUP</div>
+              <div style="display: flex; align-items: center; justify-content: center; height: 48px; background: #16191d; color: #fbfcfd; font-family: ui-monospace, Menlo, monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.14em;">DONE — END SESSION</div>
+            </div>
+          </div>
+          <div style="position: sticky; bottom: 0; display: flex; height: 58px; background: #fbfcfd; border-top: 2px solid #16191d; padding-bottom: 12px; font-family: ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: 0.12em;">
+            <div style="flex: 1; display: flex; align-items: center; justify-content: center; color: #6d7683;">HOME</div>
+            <div style="flex: 1; display: flex; align-items: center; justify-content: center; color: #0f7b86; font-weight: 700; border-bottom: 3px solid #0f7b86;">SESSION</div>
+            <div style="flex: 1; display: flex; align-items: center; justify-content: center; color: #6d7683;">TRENDS</div>
+            <div style="flex: 1; display: flex; align-items: center; justify-content: center; color: #6d7683;">CLIMBS</div>
+            <div style="flex: 1; display: flex; align-items: center; justify-content: center; color: #6d7683;">PROFILE</div>
+          </div>
+        </div>
+      </x-import>
+    </div>
+
+    <!-- ══════════════ 1c — FOCUS STEPPER ══════════════ -->
+    <div id="1c" style="width: 402px; flex-shrink: 0;">
+      <div style="display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px;">
+        <span style="background: #5b4b8a; color: #fff; font-size: 12px; font-weight: 800; padding: 3px 9px; border-radius: 6px;">1c</span>
+        <span style="font-weight: 800; font-size: 15px; color: #1c1a16;">Focus</span>
+        <span style="font-size: 12px; color: #8b877e;">one set at a time, steppers not typing</span>
+      </div>
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+        <div data-screen-label="1c Focus" style="min-height: 100%; display: flex; flex-direction: column; background: #f6f4f9; color: #241f33; font-family: Helvetica, Arial, sans-serif;">
+          <div style="padding: 64px 22px 0;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div style="font-size: 15px; font-weight: 700; letter-spacing: -0.01em;">Half crimp · 20 mm</div>
+              <div style="font-size: 12px; font-weight: 700; color: #5b4b8a; background: #eae5f4; padding: 4px 11px; border-radius: 999px;">Set 3 of 6</div>
+            </div>
+            <div style="display: flex; gap: 5px; margin-top: 12px;">
+              <div style="flex: 1; height: 4px; border-radius: 2px; background: #5b4b8a;"></div>
+              <div style="flex: 1; height: 4px; border-radius: 2px; background: #5b4b8a;"></div>
+              <div style="flex: 1; height: 4px; border-radius: 2px; background: #cfc6e2;"></div>
+              <div style="flex: 1; height: 4px; border-radius: 2px; background: #e4dff0;"></div>
+              <div style="flex: 1; height: 4px; border-radius: 2px; background: #e4dff0;"></div>
+              <div style="flex: 1; height: 4px; border-radius: 2px; background: #e4dff0;"></div>
+            </div>
+          </div>
+          <div style="flex: 1; padding: 18px 22px 26px;">
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+              <sc-for list="{{ focusHands }}" as="h" hint-placeholder-count="2">
+                <div style="background: #ffffff; border-radius: 20px; padding: 16px 20px 18px; box-shadow: 0 2px 16px -6px rgba(36,31,51,.14);">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <div style="width: 24px; height: 24px; border-radius: 7px; background: {{ h.tint }}; color: #fff; display: grid; place-content: center; font-size: 12px; font-weight: 800; flex-shrink: 0;">{{ h.tag }}</div>
+                    <div style="font-size: 14px; font-weight: 700;">{{ h.label }}</div>
+                  </div>
+                  <div style="display: flex; align-items: center; justify-content: center; gap: 18px; margin-top: 10px;">
+                    <div style="width: 46px; height: 46px; border-radius: 999px; border: 2px solid #ded7ec; display: grid; place-content: center; font-size: 24px; color: #5b4b8a; font-weight: 600;">−</div>
+                    <div style="text-align: center;">
+                      <div style="font-size: 42px; font-weight: 800; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; line-height: 1;">{{ h.weight }}</div>
+                      <div style="font-size: 12px; color: #7a7194; margin-top: 3px;">kg · plate-loadable</div>
+                    </div>
+                    <div style="width: 46px; height: 46px; border-radius: 999px; border: 2px solid #ded7ec; display: grid; place-content: center; font-size: 24px; color: #5b4b8a; font-weight: 600;">＋</div>
+                  </div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px;">
+                    <div>
+                      <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.14em; color: #7a7194; text-align: center;">REPS</div>
+                      <div style="display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 6px;">
+                        <div style="width: 32px; height: 32px; border-radius: 999px; border: 2px solid #ded7ec; display: grid; place-content: center; font-size: 17px; color: #5b4b8a;">−</div>
+                        <div style="font-size: 23px; font-weight: 800; font-variant-numeric: tabular-nums;">{{ h.reps }}</div>
+                        <div style="width: 32px; height: 32px; border-radius: 999px; border: 2px solid #ded7ec; display: grid; place-content: center; font-size: 17px; color: #5b4b8a;">＋</div>
+                      </div>
+                    </div>
+                    <div>
+                      <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.14em; color: #7a7194; text-align: center;">RPE</div>
+                      <div style="display: flex; justify-content: center; gap: 6px; margin-top: 9px;">
+                        <div style="padding: 6px 10px; border-radius: 8px; background: #f1eef7; font-size: 13px; font-weight: 700; color: #7a7194;">7</div>
+                        <div style="padding: 6px 10px; border-radius: 8px; background: #5b4b8a; color: #fff; font-size: 13px; font-weight: 700;">8</div>
+                        <div style="padding: 6px 10px; border-radius: 8px; background: #f1eef7; font-size: 13px; font-weight: 700; color: #7a7194;">9</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </sc-for>
+              <div style="display: flex; align-items: center; justify-content: center; height: 56px; border-radius: 16px; background: #5b4b8a; color: #ffffff; font-size: 17px; font-weight: 800; letter-spacing: -0.01em;">Set done — rest 3:00</div>
+            </div>
+            <div style="margin-top: 22px;">
+              <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.14em; color: #7a7194; margin-bottom: 8px;">COMPLETED</div>
+              <sc-for list="{{ focusDone }}" as="s" hint-placeholder-count="2">
+                <div style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: #ffffff; border-radius: 12px; margin-bottom: 6px;">
+                  <div style="width: 22px; height: 22px; border-radius: 999px; background: #5b4b8a; display: grid; place-content: center; flex-shrink: 0;">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9.5 18 20 6.5"></path></svg>
+                  </div>
+                  <div style="font-size: 14px; font-weight: 700;">Set {{ s.n }}</div>
+                  <div style="font-size: 14px; color: #7a7194; font-variant-numeric: tabular-nums; margin-left: auto;">{{ s.detail }}</div>
+                </div>
+              </sc-for>
+              <div style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1.5px dashed #cfc6e2; border-radius: 12px; color: #7a7194; font-size: 14px;">Sets 4–6 up next · same load carries down</div>
+            </div>
+          </div>
+          <div style="position: sticky; bottom: 0; display: flex; height: 62px; background: rgba(255,255,255,.9); backdrop-filter: blur(14px); border-top: 1px solid #e4dff0; padding-bottom: 12px; font-size: 10.5px; font-weight: 700;">
+            <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: #7a7194;"><div style="width: 20px; height: 20px; border-radius: 6px; border: 2px solid currentColor;"></div>Home</div>
+            <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: #5b4b8a;"><div style="width: 20px; height: 20px; border-radius: 6px; background: #5b4b8a;"></div>Session</div>
+            <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: #7a7194;"><div style="width: 20px; height: 20px; border-radius: 999px; border: 2px solid currentColor;"></div>Trends</div>
+            <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: #7a7194;"><div style="width: 20px; height: 20px; border-radius: 6px 6px 0 0; border: 2px solid currentColor; border-bottom: none;"></div>Climbs</div>
+            <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: #7a7194;"><div style="width: 20px; height: 20px; border-radius: 999px; border: 2px solid currentColor;"></div>Profile</div>
+          </div>
+        </div>
+      </x-import>
+    </div>
+
+    <!-- ══════════════ 1d — SPLIT HANDS ══════════════ -->
+    <div id="1d" style="width: 402px; flex-shrink: 0;">
+      <div style="display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px;">
+        <span style="background: #2054e3; color: #fff; font-size: 12px; font-weight: 800; padding: 3px 9px; border-radius: 6px;">1d</span>
+        <span style="font-weight: 800; font-size: 15px; color: #1c1a16;">Split hands</span>
+        <span style="font-size: 12px; color: #8b877e;">sporty, L/R columns, big ticks</span>
+      </div>
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+        <div data-screen-label="1d Split hands" style="min-height: 100%; display: flex; flex-direction: column; background: #f4f6fb; color: #10162b; font-family: Helvetica, Arial, sans-serif;">
+          <div style="padding: 64px 20px 16px; background: #10162b; color: #ffffff;">
+            <div style="display: flex; justify-content: space-between; align-items: baseline;">
+              <div style="font-size: 26px; font-weight: 900; font-style: italic; letter-spacing: -0.03em; text-transform: uppercase;">Work sets</div>
+              <div style="font-size: 12px; font-weight: 700; color: #9fb4f5;">Half crimp · 20 mm</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px; margin-top: 12px;">
+              <div style="flex: 1; height: 8px; border-radius: 4px; background: rgba(255,255,255,.16); overflow: hidden;"><div style="width: 58%; height: 100%; background: linear-gradient(90deg, #2054e3, #5f8bff); border-radius: 4px;"></div></div>
+              <div style="font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums;">7 / 12</div>
+            </div>
+            <div style="font-size: 11px; color: #8d9ac0; margin-top: 6px;">sets done · volume 612 kg·reps · autosaving</div>
+          </div>
+          <div style="flex: 1; padding: 18px 20px 26px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div>
+                <div style="display: flex; align-items: center; justify-content: center; height: 34px; border-radius: 10px; background: #2054e3; color: #fff; font-size: 13px; font-weight: 900; letter-spacing: 0.1em; margin-bottom: 10px;">LEFT</div>
+                <sc-for list="{{ splitLeft }}" as="s" hint-placeholder-count="3">
+                  <div style="background: #ffffff; border-radius: 14px; padding: 12px; margin-bottom: 8px; border: 2px solid {{ s.border }};">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                      <div style="font-size: 11px; font-weight: 800; color: #7c86a3;">SET {{ s.n }}</div>
+                      <sc-if value="{{ s.done }}" hint-placeholder-val="{{ true }}">
+                        <div style="width: 26px; height: 26px; border-radius: 999px; background: #2054e3; display: grid; place-content: center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9.5 18 20 6.5"></path></svg></div>
+                      </sc-if>
+                      <sc-if value="{{ s.notDone }}" hint-placeholder-val="{{ false }}">
+                        <div style="width: 26px; height: 26px; border-radius: 999px; border: 2.5px solid #cdd6ec;"></div>
+                      </sc-if>
+                    </div>
+                    <div style="font-size: 24px; font-weight: 900; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; margin-top: 4px;">{{ s.kg }}<span style="font-size: 12px; font-weight: 700; color: #7c86a3;"> kg</span></div>
+                    <div style="font-size: 12px; font-weight: 700; color: #7c86a3; font-variant-numeric: tabular-nums;">× {{ s.reps }} reps · RPE {{ s.rpe }}</div>
+                  </div>
+                </sc-for>
+              </div>
+              <div>
+                <div style="display: flex; align-items: center; justify-content: center; height: 34px; border-radius: 10px; background: #ffffff; color: #2054e3; border: 2px solid #2054e3; font-size: 13px; font-weight: 900; letter-spacing: 0.1em; margin-bottom: 10px;">RIGHT</div>
+                <sc-for list="{{ splitRight }}" as="s" hint-placeholder-count="3">
+                  <div style="background: #ffffff; border-radius: 14px; padding: 12px; margin-bottom: 8px; border: 2px solid {{ s.border }};">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                      <div style="font-size: 11px; font-weight: 800; color: #7c86a3;">SET {{ s.n }}</div>
+                      <sc-if value="{{ s.done }}" hint-placeholder-val="{{ true }}">
+                        <div style="width: 26px; height: 26px; border-radius: 999px; background: #2054e3; display: grid; place-content: center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9.5 18 20 6.5"></path></svg></div>
+                      </sc-if>
+                      <sc-if value="{{ s.notDone }}" hint-placeholder-val="{{ false }}">
+                        <div style="width: 26px; height: 26px; border-radius: 999px; border: 2.5px solid #cdd6ec;"></div>
+                      </sc-if>
+                    </div>
+                    <div style="font-size: 24px; font-weight: 900; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; margin-top: 4px;">{{ s.kg }}<span style="font-size: 12px; font-weight: 700; color: #7c86a3;"> kg</span></div>
+                    <div style="font-size: 12px; font-weight: 700; color: #7c86a3; font-variant-numeric: tabular-nums;">× {{ s.reps }} reps · RPE {{ s.rpe }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: center; height: 44px; border-radius: 12px; border: 2px dashed #b9c6e6; color: #2054e3; font-size: 14px; font-weight: 800; margin-top: 6px;">＋ Add set to both hands</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px;">
+              <div style="display: flex; align-items: center; justify-content: center; height: 50px; border-radius: 12px; background: #ffffff; border: 2px solid #10162b; font-size: 14px; font-weight: 900;">← WARMUP</div>
+              <div style="display: flex; align-items: center; justify-content: center; height: 50px; border-radius: 12px; background: #2054e3; color: #fff; font-size: 14px; font-weight: 900;">FINISH ✓</div>
+            </div>
+          </div>
+          <div style="position: sticky; bottom: 0; display: flex; height: 60px; background: #10162b; color: #8d9ac0; padding-bottom: 12px; font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em;">
+            <div style="flex: 1; display: flex; align-items: center; justify-content: center;">HOME</div>
+            <div style="flex: 1; display: flex; align-items: center; justify-content: center; color: #ffffff; border-top: 3px solid #5f8bff;">SESSION</div>
+            <div style="flex: 1; display: flex; align-items: center; justify-content: center;">TRENDS</div>
+            <div style="flex: 1; display: flex; align-items: center; justify-content: center;">CLIMBS</div>
+            <div style="flex: 1; display: flex; align-items: center; justify-content: center;">PROFILE</div>
+          </div>
+        </div>
+      </x-import>
+    </div>
+
+    <!-- ══════════════ 1e — LOGBOOK ══════════════ -->
+    <div id="1e" style="width: 402px; flex-shrink: 0;">
+      <div style="display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px;">
+        <span style="background: #6f7d3f; color: #fff; font-size: 12px; font-weight: 800; padding: 3px 9px; border-radius: 6px;">1e</span>
+        <span style="font-weight: 800; font-size: 15px; color: #1c1a16;">Logbook</span>
+        <span style="font-size: 12px; color: #8b877e;">calm paper, printed-log feel</span>
+      </div>
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+        <div data-screen-label="1e Logbook" style="min-height: 100%; display: flex; flex-direction: column; background: #faf8f3; color: #2b2620; font-family: Georgia, 'Times New Roman', serif;">
+          <div style="padding: 66px 24px 0; text-align: center;">
+            <div style="font-size: 12px; letter-spacing: 0.3em; font-family: Helvetica, Arial, sans-serif; font-weight: 700; color: #8a8272;">GRIPTRACK</div>
+            <div style="font-size: 30px; font-style: italic; margin-top: 10px;">Work sets</div>
+            <div style="font-size: 13px; color: #8a8272; margin-top: 6px;">Half crimp — 20 mm edge — 13 July 2026</div>
+            <div style="width: 48px; height: 1px; background: #2b2620; margin: 18px auto 0;"></div>
+          </div>
+          <div style="flex: 1; padding: 10px 24px 26px;">
+            <sc-for list="{{ logbookSets }}" as="s" hint-placeholder-count="3">
+              <div style="padding: 16px 0; border-bottom: 1px solid #e6e1d4;">
+                <div style="display: flex; align-items: baseline; gap: 12px;">
+                  <div style="font-style: italic; font-size: 15px; width: 44px; flex-shrink: 0;">Set {{ s.n }}</div>
+                  <div style="flex: 1;">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between;">
+                      <div style="font-size: 16px;"><span style="font-family: Helvetica, Arial, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: #6f7d3f;">L</span>&nbsp; {{ s.lKg }} kg × {{ s.lReps }} <span style="color: #8a8272; font-size: 13px;">rpe {{ s.lRpe }}</span></div>
+                      <sc-if value="{{ s.lDone }}" hint-placeholder-val="{{ true }}"><div style="width: 20px; height: 20px; border-radius: 999px; border: 1.5px solid #6f7d3f; display: grid; place-content: center;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#6f7d3f" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9.5 18 20 6.5"></path></svg></div></sc-if>
+                      <sc-if value="{{ s.lOpen }}" hint-placeholder-val="{{ false }}"><div style="width: 20px; height: 20px; border-radius: 999px; border: 1.5px solid #cfc8b6;"></div></sc-if>
+                    </div>
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; margin-top: 8px;">
+                      <div style="font-size: 16px;"><span style="font-family: Helvetica, Arial, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: #6f7d3f;">R</span>&nbsp; {{ s.rKg }} kg × {{ s.rReps }} <span style="color: #8a8272; font-size: 13px;">rpe {{ s.rRpe }}</span></div>
+                      <sc-if value="{{ s.rDone }}" hint-placeholder-val="{{ true }}"><div style="width: 20px; height: 20px; border-radius: 999px; border: 1.5px solid #6f7d3f; display: grid; place-content: center;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#6f7d3f" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9.5 18 20 6.5"></path></svg></div></sc-if>
+                      <sc-if value="{{ s.rOpen }}" hint-placeholder-val="{{ false }}"><div style="width: 20px; height: 20px; border-radius: 999px; border: 1.5px solid #cfc8b6;"></div></sc-if>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </sc-for>
+            <div style="text-align: center; margin-top: 16px; font-family: Helvetica, Arial, sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 0.12em; color: #6f7d3f; text-decoration: underline; text-underline-offset: 4px;">+ ADD A SET</div>
+            <div style="margin-top: 30px;">
+              <div style="font-style: italic; font-size: 15px; margin-bottom: 6px;">Notes</div>
+              <div style="height: 1px; background: #e6e1d4; margin: 22px 0;"></div>
+              <div style="height: 1px; background: #e6e1d4; margin: 22px 0;"></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-top: 26px; font-family: Helvetica, Arial, sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 0.1em;">
+              <span style="color: #8a8272;">← WARMUP</span>
+              <span style="color: #2b2620; border-bottom: 2px solid #6f7d3f; padding-bottom: 3px;">CLOSE THE DAY →</span>
+            </div>
+          </div>
+          <div style="position: sticky; bottom: 0; display: flex; height: 56px; background: #faf8f3; border-top: 1px solid #e6e1d4; padding-bottom: 12px; font-family: Helvetica, Arial, sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 0.14em; color: #8a8272;">
+            <div style="flex: 1; display: flex; align-items: center; justify-content: center;">HOME</div>
+            <div style="flex: 1; display: flex; align-items: center; justify-content: center; color: #2b2620;">· SESSION ·</div>
+            <div style="flex: 1; display: flex; align-items: center; justify-content: center;">TRENDS</div>
+            <div style="flex: 1; display: flex; align-items: center; justify-content: center;">CLIMBS</div>
+            <div style="flex: 1; display: flex; align-items: center; justify-content: center;">PROFILE</div>
+          </div>
+        </div>
+      </x-import>
+    </div>
+
+    <!-- ══════════════ 1f — CRAG SLAB ══════════════ -->
+    <div id="1f" style="width: 402px; flex-shrink: 0;">
+      <div style="display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px;">
+        <span style="background: #47603f; color: #fff; font-size: 12px; font-weight: 800; padding: 3px 9px; border-radius: 6px;">1f</span>
+        <span style="font-weight: 800; font-size: 15px; color: #1c1a16;">Crag slab</span>
+        <span style="font-size: 12px; color: #8b877e;">rugged, hard edges, tactile toggles</span>
+      </div>
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+        <div data-screen-label="1f Crag slab" style="min-height: 100%; display: flex; flex-direction: column; background: #edeae4; color: #201d18; font-family: Helvetica, Arial, sans-serif;">
+          <div style="padding: 64px 20px 14px; border-bottom: 3px solid #201d18;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+              <div>
+                <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.2em; color: #47603f;">GRIPTRACK / SESSION</div>
+                <div style="font-size: 32px; font-weight: 900; letter-spacing: -0.03em; text-transform: uppercase; line-height: 1; margin-top: 6px;">Work sets</div>
+              </div>
+              <div style="border: 2px solid #201d18; padding: 6px 10px; font-size: 11px; font-weight: 800; background: #fff; box-shadow: 3px 3px 0 #201d18;">20 MM<br>HALF CRIMP</div>
+            </div>
+          </div>
+          <div style="flex: 1; padding: 18px 20px 26px;">
+            <sc-for list="{{ cragSets }}" as="s" hint-placeholder-count="3">
+              <div style="display: flex; align-items: stretch; gap: 0; background: #ffffff; border: 2px solid #201d18; box-shadow: 4px 4px 0 rgba(32,29,24,.85); margin-bottom: 12px;">
+                <div style="width: 44px; display: grid; place-content: center; background: #201d18; color: #edeae4; font-size: 16px; font-weight: 900;">{{ s.n }}</div>
+                <div style="flex: 1; padding: 12px 14px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="font-size: 22px; font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: -0.02em;">{{ s.lKg }} <span style="font-size: 12px; font-weight: 800; color: #7d776b;">KG</span></div>
+                    <div style="font-size: 12px; font-weight: 800; color: #7d776b; font-variant-numeric: tabular-nums;">L · ×{{ s.lReps }} · RPE {{ s.lRpe }}</div>
+                  </div>
+                  <div style="height: 2px; background: #e3dfd6; margin: 8px 0;"></div>
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="font-size: 22px; font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: -0.02em;">{{ s.rKg }} <span style="font-size: 12px; font-weight: 800; color: #7d776b;">KG</span></div>
+                    <div style="font-size: 12px; font-weight: 800; color: #7d776b; font-variant-numeric: tabular-nums;">R · ×{{ s.rReps }} · RPE {{ s.rRpe }}</div>
+                  </div>
+                </div>
+                <sc-if value="{{ s.done }}" hint-placeholder-val="{{ true }}">
+                  <div style="width: 52px; display: grid; place-content: center; background: #47603f; border-left: 2px solid #201d18;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#edeae4" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9.5 18 20 6.5"></path></svg>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ s.notDone }}" hint-placeholder-val="{{ false }}">
+                  <div style="width: 52px; display: grid; place-content: center; background: #edeae4; border-left: 2px solid #201d18; font-size: 10px; font-weight: 800; color: #7d776b; text-align: center;">TAP<br>DONE</div>
+                </sc-if>
+              </div>
+            </sc-for>
+            <div style="display: flex; align-items: center; justify-content: center; height: 46px; border: 2px dashed #201d18; font-size: 13px; font-weight: 900; letter-spacing: 0.08em; margin-top: 4px;">＋ ADD SET</div>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 20px; padding: 12px 14px; background: #ffffff; border: 2px solid #201d18;">
+              <span style="font-size: 13px; font-weight: 800;">DELOAD SESSION</span>
+              <div style="width: 52px; height: 28px; border: 2px solid #201d18; padding: 2px; box-sizing: border-box; background: #edeae4;"><div style="width: 20px; height: 20px; background: #201d18;"></div></div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1.4fr; gap: 12px; margin-top: 20px;">
+              <div style="display: flex; align-items: center; justify-content: center; height: 54px; background: #ffffff; border: 2px solid #201d18; box-shadow: 3px 3px 0 #201d18; font-size: 13px; font-weight: 900;">← WARMUP</div>
+              <div style="display: flex; align-items: center; justify-content: center; height: 54px; background: #47603f; color: #edeae4; border: 2px solid #201d18; box-shadow: 3px 3px 0 #201d18; font-size: 13px; font-weight: 900; letter-spacing: 0.06em;">SEND IT — DONE</div>
+            </div>
+          </div>
+          <div style="position: sticky; bottom: 0; display: flex; height: 58px; background: #201d18; color: #9a927f; padding-bottom: 12px; font-size: 10px; font-weight: 900; letter-spacing: 0.12em;">
+            <div style="flex: 1; display: flex; align-items: center; justify-content: center;">HOME</div>
+            <div style="flex: 1; display: flex; align-items: center; justify-content: center; background: #47603f; color: #edeae4;">SESSION</div>
+            <div style="flex: 1; display: flex; align-items: center; justify-content: center;">TRENDS</div>
+            <div style="flex: 1; display: flex; align-items: center; justify-content: center;">CLIMBS</div>
+            <div style="flex: 1; display: flex; align-items: center; justify-content: center;">PROFILE</div>
+          </div>
+        </div>
+      </x-import>
+    </div>
+
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      currentSets: [
+        { n: 1, kg: '32.5', reps: '5', rpe: '8', done: true, notDone: false },
+        { n: 2, kg: '32.5', reps: '5', rpe: '8.5', done: true, notDone: false },
+        { n: 3, kg: '32.5', reps: '5', rpe: '–', done: false, notDone: true },
+      ],
+      ledgerSets: [
+        { n: '01', lKg: '32.5', lReps: '5', lRpe: '8', lMark: '#0f7b86', rKg: '30.0', rReps: '5', rRpe: '7.5', rMark: '#0f7b86' },
+        { n: '02', lKg: '32.5', lReps: '5', lRpe: '8.5', lMark: '#0f7b86', rKg: '30.0', rReps: '5', rRpe: '8', rMark: '#0f7b86' },
+        { n: '03', lKg: '32.5', lReps: '4', lRpe: '9', lMark: '#0f7b86', rKg: '30.0', rReps: '5', rRpe: '8', rMark: 'transparent' },
+        { n: '04', lKg: '32.5', lReps: '5', lRpe: '–', lMark: 'transparent', rKg: '30.0', rReps: '5', rRpe: '–', rMark: 'transparent' },
+      ],
+      focusHands: [
+        { tag: 'L', label: 'Left hand', weight: '32.5', reps: '5', tint: '#5b4b8a' },
+        { tag: 'R', label: 'Right hand', weight: '30.0', reps: '5', tint: '#8577b0' },
+      ],
+      focusDone: [
+        { n: 1, detail: '32.5 kg × 5 @ 8' },
+        { n: 2, detail: '32.5 kg × 5 @ 8.5' },
+      ],
+      splitLeft: [
+        { n: 1, kg: '32.5', reps: 5, rpe: '8', done: true, notDone: false, border: '#2054e3' },
+        { n: 2, kg: '32.5', reps: 5, rpe: '8.5', done: true, notDone: false, border: '#2054e3' },
+        { n: 3, kg: '32.5', reps: 5, rpe: '–', done: false, notDone: true, border: '#e3e8f5' },
+      ],
+      splitRight: [
+        { n: 1, kg: '30.0', reps: 5, rpe: '7.5', done: true, notDone: false, border: '#2054e3' },
+        { n: 2, kg: '30.0', reps: 5, rpe: '8', done: true, notDone: false, border: '#2054e3' },
+        { n: 3, kg: '30.0', reps: 5, rpe: '–', done: false, notDone: true, border: '#e3e8f5' },
+      ],
+      logbookSets: [
+        { n: 1, lKg: '32.5', lReps: 5, lRpe: 8, lDone: true, lOpen: false, rKg: '30', rReps: 5, rRpe: 7.5, rDone: true, rOpen: false },
+        { n: 2, lKg: '32.5', lReps: 5, lRpe: 8.5, lDone: true, lOpen: false, rKg: '30', rReps: 5, rRpe: 8, rDone: true, rOpen: false },
+        { n: 3, lKg: '32.5', lReps: 5, lRpe: '—', lDone: false, lOpen: true, rKg: '30', rReps: 5, rRpe: '—', rDone: false, rOpen: true },
+      ],
+      cragSets: [
+        { n: 1, lKg: '32.5', lReps: 5, lRpe: 8, rKg: '30.0', rReps: 5, rRpe: 7.5, done: true, notDone: false },
+        { n: 2, lKg: '32.5', lReps: 5, lRpe: 8.5, rKg: '30.0', rReps: 5, rRpe: 8, done: true, notDone: false },
+        { n: 3, lKg: '32.5', lReps: 5, lRpe: '–', rKg: '30.0', rReps: 5, rRpe: '–', done: false, notDone: true },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>
