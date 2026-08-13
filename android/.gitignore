@@ -1,7 +1,6 @@
 # Android/Gradle build outputs — not checked in.
 .gradle/
 build/
-app/build/
 local.properties
 *.iml
 .idea/

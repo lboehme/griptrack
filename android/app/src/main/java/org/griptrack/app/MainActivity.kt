@@ -47,10 +47,12 @@ class MainActivity : AppCompatActivity() {
         val module = Python.getInstance().getModule("feasibility_check")
 
         val lines = mutableListOf<String>()
-        var allPassed = true
 
-        allPassed = runCheck(module, "check_bcrypt", "bcrypt", lines) && allPassed
-        allPassed = runCheck(module, "check_pydantic_core", "pydantic_core", lines) && allPassed
+        // Both checks always run, independent of each other's outcome — a
+        // FAIL on one shouldn't hide whether the other also fails.
+        val bcryptPassed = runCheck(module, "check_bcrypt", "bcrypt", lines)
+        val pydanticCorePassed = runCheck(module, "check_pydantic_core", "pydantic_core", lines)
+        val allPassed = bcryptPassed && pydanticCorePassed
 
         lines.add("")
         lines.add(

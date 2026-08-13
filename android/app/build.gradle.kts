@@ -10,7 +10,7 @@
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android") version "2.0.21"
+    id("org.jetbrains.kotlin.android")
     id("com.chaquo.python")
 }
 
@@ -31,8 +31,6 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0-feasibility"
-
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Feasibility scope is arm64 only — that's the real device ABI this
         // ticket needs to prove (per #97/#93: "targeting an arm64 APK").

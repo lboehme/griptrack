@@ -9,7 +9,11 @@
 //   - Chaquopy 17.0.0 (2025-12-01) — supports AGP 7.3-9.2, Python 3.10-3.14.
 //     https://chaquo.com/chaquopy/doc/current/versions.html
 //     https://chaquo.com/chaquopy/doc/current/changelog.html
+//   - Kotlin 2.0.21 — stable release compatible with AGP 8.7 / Gradle 8.9;
+//     not load-bearing to the feasibility question, so not sourced as
+//     closely as the three above.
 plugins {
     id("com.android.application") version "8.7.0" apply false
+    id("org.jetbrains.kotlin.android") version "2.0.21" apply false
     id("com.chaquo.python") version "17.0.0" apply false
 }
