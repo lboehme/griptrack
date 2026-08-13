@@ -1,26 +1,19 @@
 import csv
 import io
+import json
 import zipfile
 from datetime import date as date_type
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from backend import auth, training_log
 from backend.db import get_session
+from backend.export_spec import ARCHIVE_MEMBERS, FORMAT_VERSION, MANIFEST_FILENAME, scoped_query
 from backend.limits import MAX_NAME_LENGTH, MAX_WEIGHT
-from backend.models import (
-    BodyWeightLog,
-    Climb,
-    MaxWeightTest,
-    PainReport,
-    SessionMaxEstimate,
-    TrainingSession,
-    User,
-    WarmupStepCheck,
-    WorkSet,
-)
+from backend.models import BodyWeightLog, TrainingSession, User
 from backend.templating import templates
 
 router = APIRouter()
@@ -86,85 +79,57 @@ def export_data(
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
+    """A versioned ZIP archive: `manifest.json` + one CSV per
+    `backend.export_spec.ARCHIVE_MEMBERS` entry (ADR-0008). The member
+    list, weight columns, and per-model user-scoping are the single shared
+    spec the future importer (#102) will read too -- this function only
+    turns that spec into bytes."""
+
+    def neutralize(value):
+        # A text cell starting with = + - or @ would execute as a formula
+        # when the CSV is opened in a spreadsheet; prefix with a quote so
+        # a shared export can't carry a payload.
+        if isinstance(value, str) and value.startswith(("=", "+", "-", "@")):
+            return "'" + value
+        return value
+
+    def add_csv(zf: zipfile.ZipFile, filename: str, rows, fieldnames: list[str]):
+        csv_buffer = io.StringIO()
+        writer = csv.DictWriter(csv_buffer, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({k: neutralize(v) for k, v in row.items()})
+        zf.writestr(filename, csv_buffer.getvalue())
+
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-        def neutralize(value):
-            # A text cell starting with = + - or @ would execute as a
-            # formula when the CSV is opened in a spreadsheet; prefix with
-            # a quote so a shared export can't carry a payload.
-            if isinstance(value, str) and value.startswith(("=", "+", "-", "@")):
-                return "'" + value
-            return value
+        manifest = {
+            "format_version": FORMAT_VERSION,
+            "unit": user.unit_pref,
+            "exported_at": datetime.now(timezone.utc).isoformat(),
+        }
+        zf.writestr(MANIFEST_FILENAME, json.dumps(manifest, indent=2))
 
-        def add_csv(filename: str, rows, fieldnames: list[str]):
-            csv_buffer = io.StringIO()
-            writer = csv.DictWriter(csv_buffer, fieldnames=fieldnames)
-            writer.writeheader()
-            for row in rows:
-                writer.writerow({k: neutralize(v) for k, v in row.items()})
-            zf.writestr(filename, csv_buffer.getvalue())
-
-        def dump_with_units(model, query, weight_cols):
+        # TRAINING_SESSION-scoped members (PainReport, WarmupStepCheck,
+        # SessionMaxEstimate, WorkSet) need the user's TrainingSession ids
+        # to scope their query. ARCHIVE_MEMBERS lists TrainingSession
+        # before all of them (see export_spec.py), so one forward pass
+        # both dumps every member and, in passing, captures those ids the
+        # moment the TrainingSession member itself is reached -- no
+        # separate lookup pass.
+        training_session_ids: list[int] = []
+        for member in ARCHIVE_MEMBERS:
+            query = scoped_query(member, user, training_session_ids)
             rows = session.exec(query).all()
-            fields = list(model.model_fields.keys())
-            renames = {col: f"{col} ({user.unit_pref})" for col in weight_cols}
-            out_fields = [renames.get(f, f) for f in fields]
-            
-            if not rows:
-                add_csv(f"{model.__name__}.csv", [], out_fields)
-                return
-                
-            out_rows = []
-            for r in rows:
-                d = r.model_dump()
-                out_dict = {}
-                for f in fields:
-                    if f in weight_cols:
-                        out_dict[renames[f]] = d[f]
-                    else:
-                        out_dict[f] = d[f]
-                out_rows.append(out_dict)
-            add_csv(f"{model.__name__}.csv", out_rows, out_fields)
-
-        # Scoped to user directly
-        dump_with_units(BodyWeightLog, select(BodyWeightLog).where(BodyWeightLog.user_id == user.id), ["weight"])
-        dump_with_units(Climb, select(Climb).where(Climb.user_id == user.id), [])
-        dump_with_units(MaxWeightTest, select(MaxWeightTest).where(MaxWeightTest.user_id == user.id), ["weight"])
-        
-        # Scoped to user via TrainingSession
-        ts_rows = session.exec(select(TrainingSession).where(TrainingSession.user_id == user.id)).all()
-        if ts_rows:
-            add_csv(
-                "TrainingSession.csv",
-                [r.model_dump() for r in ts_rows],
-                list(TrainingSession.model_fields.keys())
-            )
-            ts_ids = [ts.id for ts in ts_rows]
-            
-            dump_with_units(
-                PainReport,
-                select(PainReport).where(PainReport.training_session_id.in_(ts_ids)),
-                [],
-            )
-            dump_with_units(
-                WarmupStepCheck,
-                select(WarmupStepCheck).where(
-                    WarmupStepCheck.training_session_id.in_(ts_ids)
-                ),
-                [],
-            )
-            dump_with_units(
-                SessionMaxEstimate,
-                select(SessionMaxEstimate).where(
-                    SessionMaxEstimate.training_session_id.in_(ts_ids)
-                ),
-                ["weight"],
-            )
-            dump_with_units(
-                WorkSet,
-                select(WorkSet).where(WorkSet.training_session_id.in_(ts_ids)),
-                ["weight"],
-            )
+            if member.model is TrainingSession:
+                training_session_ids = [r.id for r in rows]
+            renames = {col: f"{col} ({user.unit_pref})" for col in member.weight_cols}
+            out_fields = [renames.get(f, f) for f in member.csv_fields]
+            out_rows = [
+                {renames.get(f, f): d[f] for f in member.csv_fields}
+                for d in (r.model_dump() for r in rows)
+            ]
+            add_csv(zf, member.filename, out_rows, out_fields)
 
     return Response(
         content=zip_buffer.getvalue(),
