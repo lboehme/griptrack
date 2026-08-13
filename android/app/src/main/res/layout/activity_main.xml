@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Minimal test screen for issue #97's feasibility probe. Not app UI —
+    the real Focus/WebView UI arrives in #98. A ScrollView because the
+    PASS/FAIL detail lines (including exception messages on FAIL) can run
+    long.
+-->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <TextView
+        android:id="@+id/resultText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="24dp"
+        android:textSize="14sp"
+        android:fontFamily="monospace"
+        android:text="@string/checking_placeholder" />
+
+</ScrollView>

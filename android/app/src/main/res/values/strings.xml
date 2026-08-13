@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">GripTrack Feasibility</string>
+    <string name="checking_placeholder">Running bcrypt / pydantic_core checks…</string>
+</resources>
