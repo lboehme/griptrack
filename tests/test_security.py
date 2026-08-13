@@ -296,3 +296,116 @@ def test_register_is_rate_limited(client):
     # Even a valid registration is blocked while rate-limited
     valid = register(client, "newuser@example.com", "long-pw", invite_code=code)
     assert valid.status_code == 429
+
+
+def test_import_discards_a_spoofed_file_supplied_user_id(client):
+    """A restored row must always attach to the importing user, never to a
+    user_id embedded in the file (issue #102, ADR-0008) -- otherwise one
+    account's archive (or a tampered one) could write rows that appear to
+    belong to a different user_id."""
+    import io
+    import zipfile
+
+    from tests.helpers import export_archive, generate_invite, import_archive, log_climb
+
+    register(client, "founder@example.com", "test-pw-1234")
+    log_climb(client, "2026-07-04", "V5", notes="founders climb")
+    archive_bytes = export_archive(client)
+
+    with zipfile.ZipFile(io.BytesIO(archive_bytes)) as z:
+        members = {name: z.read(name) for name in z.namelist()}
+    lines = members["Climb.csv"].decode().splitlines()
+    header = lines[0].split(",")
+    row = lines[1].split(",")
+    row[header.index("user_id")] = "1"  # an attempted spoof of founder's own id
+    lines[1] = ",".join(row)
+    members["Climb.csv"] = ("\n".join(lines) + "\n").encode()
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+        for name, data in members.items():
+            z.writestr(name, data)
+    archive_bytes = out.getvalue()
+
+    code = generate_invite(client)
+    register(client, "friend@example.com", "test-pw-5678", invite_code=code)
+
+    response = import_archive(client, archive_bytes)
+    assert response.status_code == 303
+
+    # Landed under the importing user (friend) ...
+    assert "founders climb" in client.get("/climbs").text
+
+    # ... and founder's own data was neither duplicated nor overwritten.
+    client.post("/logout")
+    from tests.helpers import login
+
+    login(client, "founder@example.com", "test-pw-1234")
+    founder_climbs = client.get("/climbs").text
+    assert founder_climbs.count("founders climb") == 1
+
+
+def test_import_upload_size_is_bounded(client, monkeypatch):
+    import backend.import_restore as import_restore
+    from tests.helpers import export_archive, generate_invite, import_archive
+
+    register(client, "founder@example.com", "test-pw-1234")
+    archive_bytes = export_archive(client)
+
+    code = generate_invite(client)
+    register(client, "friend@example.com", "test-pw-5678", invite_code=code)
+
+    monkeypatch.setattr(import_restore, "MAX_IMPORT_UPLOAD_BYTES", 100)
+    response = import_archive(client, archive_bytes)
+    assert response.status_code == 400
+    assert "large" in response.text.lower()
+
+
+def test_import_per_member_decompressed_size_is_bounded(client, monkeypatch):
+    import backend.import_restore as import_restore
+    from tests.helpers import export_archive, generate_invite, import_archive
+
+    register(client, "founder@example.com", "test-pw-1234")
+    archive_bytes = export_archive(client)
+
+    code = generate_invite(client)
+    register(client, "friend@example.com", "test-pw-5678", invite_code=code)
+
+    monkeypatch.setattr(import_restore, "MAX_IMPORT_MEMBER_BYTES", 5)
+    response = import_archive(client, archive_bytes)
+    assert response.status_code == 400
+    assert "exceeds" in response.text.lower()
+
+
+def test_import_member_count_is_bounded(client, monkeypatch):
+    import backend.import_restore as import_restore
+    from tests.helpers import export_archive, generate_invite, import_archive
+
+    register(client, "founder@example.com", "test-pw-1234")
+    archive_bytes = export_archive(client)
+
+    code = generate_invite(client)
+    register(client, "friend@example.com", "test-pw-5678", invite_code=code)
+
+    monkeypatch.setattr(import_restore, "MAX_IMPORT_MEMBERS", 3)
+    response = import_archive(client, archive_bytes)
+    assert response.status_code == 400
+    assert "too many files" in response.text.lower()
+
+
+def test_import_row_count_per_member_is_bounded(client, monkeypatch):
+    import backend.import_restore as import_restore
+    from tests.helpers import export_archive, generate_invite, import_archive, log_climb
+
+    register(client, "founder@example.com", "test-pw-1234")
+    log_climb(client, "2026-07-04", "V5")
+    log_climb(client, "2026-07-05", "V6")
+    log_climb(client, "2026-07-06", "V7")
+    archive_bytes = export_archive(client)
+
+    code = generate_invite(client)
+    register(client, "friend@example.com", "test-pw-5678", invite_code=code)
+
+    monkeypatch.setattr(import_restore, "MAX_IMPORT_ROWS_PER_MEMBER", 2)
+    response = import_archive(client, archive_bytes)
+    assert response.status_code == 400
+    assert "too many rows" in response.text.lower()

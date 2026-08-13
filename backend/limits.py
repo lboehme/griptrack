@@ -19,3 +19,12 @@ MAX_PLATE_COUNT = 100
 # 20 is generous headroom while still bounding the session_number route
 # params against absurd values.
 MAX_SESSION_NUMBER = 20
+
+# Import (backend.import_restore, #102) is an untrusted-file ingress point:
+# a personal instrument's own export archive is tiny, so these bounds are
+# generous headroom, not a real-usage estimate — they exist to cap the work
+# a malicious or corrupted upload can force (zip-bomb guard, ADR-0008).
+MAX_IMPORT_UPLOAD_BYTES = 20 * 1024 * 1024   # 20 MB compressed archive
+MAX_IMPORT_MEMBER_BYTES = 50 * 1024 * 1024   # per-CSV decompressed cap
+MAX_IMPORT_MEMBERS = 32                      # manifest + the fixed archive member set, with headroom
+MAX_IMPORT_ROWS_PER_MEMBER = 50_000
