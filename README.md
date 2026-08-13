@@ -127,13 +127,12 @@ the intended scale.
 
 ```mermaid
 flowchart LR
-    B["Browser<br/>Jinja2 + htmx, no build step"] --> R["FastAPI routers<br/>(thin HTTP adapters)"]
+    B["Browser<br/>Jinja2 + htmx, no build step<br/>+ uPlot for charts"] --> R["FastAPI routers<br/>(thin HTTP adapters)"]
     R --> AU[auth]
     R --> TL[training_log]
     R --> GM[guided_max_test]
     R --> AN[analytics]
     TL --> PL[plates]
-    AN --> CH["charts<br/>matplotlib → SVG"]
     AU --> DB[("SQLite (WAL)")]
     TL --> DB
     AN --> DB
@@ -148,10 +147,11 @@ function, render a template. Some choices that raise eyebrows, and why:
   autosave. htmx does that in a few attributes with zero build step; a
   SPA would add a toolchain and a client state model to keep in sync
   with the server for no visible gain on a phone at the gym.
-- **Server-rendered SVG charts instead of a JS charting library.**
-  matplotlib renders each trend chart to SVG on request and the page
-  embeds it as an `<img>`. Charts stay testable from Python, styling is
-  centralized, and the client ships no charting code.
+- **Client-side charts with uPlot, vendored as a plain static file.**
+  The server ships the ordered `(date, volume)` series into the
+  dashboard DOM as JSON, and a small vanilla-JS module draws one chart
+  per (hand, grip_type, edge_mm) combo — no build step, no CDN, and it
+  shrank the dependency footprint by dropping matplotlib/pandas (#87–#89).
 - **SQLite, WAL mode, one file.** A handful of users, one process, one
   volume — a database server would be operational overhead with no
   benefit. Continuous off-box backup comes from Litestream instead.
