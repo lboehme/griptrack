@@ -16,8 +16,7 @@ recorded decisions in `docs/adr/`; agent-facing conventions in `CLAUDE.md`.*
 | Database | SQLite | One file on a persistent volume |
 | Templates | Jinja2 + htmx | No build step, no SPA framework |
 | Client JS | htmx 2 (vendored) + small inline handlers | Vanilla JS only where htmx can't reach |
-| Charts | matplotlib → server-rendered SVG | No client-side charting library |
-| Analytics deps | pandas, matplotlib | |
+| Charts | uPlot (vendored, client-side) | matplotlib/pandas dropped in #87–#89 |
 | Auth | `bcrypt` package directly + Starlette `SessionMiddleware` | Not passlib (unmaintained, incompatible with bcrypt ≥ 4.1) |
 | Packaging | Docker (`Dockerfile` + `docker-entrypoint.sh`) | Host-agnostic |
 | Backup | Litestream (baked into image, env-gated) | Continuous S3-compatible replication + boot-time restore |
@@ -42,7 +41,6 @@ backend/
   training_log.py    deepest module: CurrentMax, ramp plans, autosave persistence
   guided_max_test.py deep module: stateless guided-test ladder + state tokens
   analytics.py       deep module: volume trend, plateau, overtraining, correlation
-  charts.py          matplotlib SVG rendering (theme palettes, no pyplot state)
   templating.py      shared Jinja2 environment
   routers/           shallow HTTP adapters, one file per page/feature area
   templates/         Jinja2 pages + htmx partials (_-prefixed)
@@ -97,9 +95,10 @@ function, render a template — depth never lives in a router.
   bodyweight vs V-number; Font→V lookup table; needs ≥ 3 points with
   variance; Pearson r via `statistics.correlation`). Thresholds are
   module constants, flagged as revisit-once-real-data-exists.
-- **`backend.charts`** — SVG rendering with matplotlib's `Figure` API
-  (not pyplot, so no global state under concurrent requests); light/dark
-  palettes tuned per the dataviz guidance.
+  Chart rendering moved client-side to uPlot in #88, and the
+  matplotlib-based `backend.charts` module was retired along with the
+  `pandas`/`matplotlib` dependencies in #89; see "Frontend approach"
+  below for the current mechanism.
 
 Per the testing decision, these modules are **not** unit-tested in
 isolation — all 131 tests cross the external HTTP seam via `TestClient`.
@@ -196,8 +195,11 @@ no build step. Session logging is two consolidated pages (warmup
 checklist, work-sets table), laid out per `hand_order_pref` — alternating
 renders L/R columns per row; sequential runs one hand's full flow then the
 other. **Every interaction autosaves** via htmx POSTs; there is no submit
-step anywhere in session logging. Charts arrive as `<img src=…/volume.svg>`
-with a theme query param matching light/dark.
+step anywhere in session logging. Analytics charts are drawn client-side
+by uPlot (vendored, no build step): the server ships the ordered
+`(date, volume)` series per combo into the dashboard DOM as JSON, and a
+small vanilla-JS module renders one chart per combo, picking its palette
+from `prefers-color-scheme`.
 
 ### PWA (Tier 1)
 

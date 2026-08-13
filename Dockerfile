@@ -1,9 +1,6 @@
 FROM python:3.12-slim
 
-# matplotlib needs a writable, non-interactive config dir and no GUI backend.
-ENV MPLBACKEND=Agg \
-    MPLCONFIGDIR=/tmp/mpl \
-    PYTHONUNBUFFERED=1 \
+ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
 
 WORKDIR /app
