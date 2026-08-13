@@ -88,12 +88,20 @@ def export_data(
 ):
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        def neutralize(value):
+            # A text cell starting with = + - or @ would execute as a
+            # formula when the CSV is opened in a spreadsheet; prefix with
+            # a quote so a shared export can't carry a payload.
+            if isinstance(value, str) and value.startswith(("=", "+", "-", "@")):
+                return "'" + value
+            return value
+
         def add_csv(filename: str, rows, fieldnames: list[str]):
             csv_buffer = io.StringIO()
             writer = csv.DictWriter(csv_buffer, fieldnames=fieldnames)
             writer.writeheader()
             for row in rows:
-                writer.writerow(row)
+                writer.writerow({k: neutralize(v) for k, v in row.items()})
             zf.writestr(filename, csv_buffer.getvalue())
 
         def dump_with_units(model, query, weight_cols):
