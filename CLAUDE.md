@@ -10,7 +10,7 @@ Issues and PRDs live as GitHub issues at `lboehme/griptrack` (private repo). Ext
 
 ### Triage labels
 
-Standard five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), label strings unchanged from the skill defaults — not yet created in the GitHub repo. See `docs/agents/triage-labels.md`.
+Standard five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), label strings unchanged from the skill defaults. See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
@@ -289,6 +289,66 @@ decision: GripTrack stays a personal instrument (owner + invited friends),
 open-sourcing is the candidate growth path, the public-launch track is
 dropped. Waves in order; GitHub issues are the source of truth for status.
 
+**2026-08-13 re-plan — the Android pivot.** The owner has soured on web
+hosting and wants GripTrack running entirely on their own phone, no online
+server (PRD #93). This layers three new tracks on top of the waves below and
+becomes the priority spine; Wave 3 (Asymmetry) and Wave 4 (retention) still
+stand but run parallel/after. The linchpin is **runtime slimming (#87)** —
+independently useful *and* the gate for the Android feasibility spike. The
+dependency spine:
+
+- **Runtime slimming (#87, PRD):** `#88` migrate the TrainingVolume chart to
+  client-side uPlot, then `#89` drop matplotlib + pandas and update the charts
+  docs. Lighter deploy today, and it shrinks the native-wheel surface to
+  `bcrypt` + `pydantic-core` — the prerequisite for #97 below.
+- **Android app (#93, PRD):** thin Chaquopy shell embedding the *unchanged*
+  FastAPI backend on `127.0.0.1` behind a WebView; on-device SQLite, migrations
+  run on first launch (reproduces `docker-entrypoint.sh`). Slices: `#94` plain
+  uvicorn (drop `[standard]`) and `#95` skip service-worker registration (both
+  zero-dep, start anytime); `#96` on-device launch/bootstrap helper (blocked by
+  #94); `#97` Chaquopy skeleton + native-dep feasibility (blocked by #87 —
+  **go/no-go gate**: if `bcrypt`/`pydantic-core` won't build under Chaquopy on
+  arm64, revisit the whole approach before shell work); `#98` embed backend +
+  boot server + WebView reaches login (blocked by #95/#96/#97); `#99` first-run
+  + persistence + lifecycle + airplane-mode verification + manual smoke
+  checklist (blocked by #98).
+- **CSV import — data-portability bridge (#100, ADR-0008):** round-trips the
+  Export archive back into an *empty* account (no merge), so the phone can be
+  seeded from the Fly export before the device cutover. Slices: `#101` extend
+  the export format (manifest + `GripType.csv` + `PlateInventoryItem.csv`);
+  `#102` restore-into-empty happy path (blocked by #101); then `#103` hardening
+  /security and `#104` profile-page UI (both blocked by #102). Mechanically
+  independent of the tracks above — sequence it to land before the cutover.
+
+**Hosting reframing:** once #99 proves the phone app, the Fly deploy and the
+owner-gated Litestream/Oracle backup work below become **legacy/optional**, not
+active roadmap. Retiring the web/Docker/Fly deployment is a later decision (out
+of scope for #93); it keeps working meanwhile.
+
+The dependency spine
+
+#87 Slim runtime ──────────────┐
+  #88 chart→uPlot → #89 drop mpl/pandas ─→ #97 Chaquopy feasibility ─┐
+                                                                      ├─→ #98 embed+boot → #99 first-run/offline
+  #94 plain uvicorn → #96 launch helper ──────────────────────────────┤
+  #95 SW-skip ────────────────────────────────────────────────────────┘
+
+#100 CSV import:  #101 export-format ext → #102 restore happy-path → { #103 hardening | #104 UI }
+
+Phased plan
+
+Phase A — Slim the runtime (#87). #88 (chart → client-side uPlot) then #89 (drop matplotlib/pandas, update docs). Valuable on its own (lighter deploy today) and it's the prerequisite for the Android feasibility spike — it shrinks the native-wheel surface to bcrypt + pydantic-core. This is the real gating front; start it first.
+
+Phase B — Android app (#93). #94 and #95 have no dependencies — start them in parallel with Phase A to de-risk. #94 → #96. #97 (Chaquopy feasibility) runs the moment Phase A lands and is a go/no-go gate: if bcrypt/pydantic-core won't build under Chaquopy on arm64, stop and revisit the approach before #98. Then #98 (needs #95 + #96 + #97) → #99 (offline/persistence verification).
+
+Phase C — Data-portability bridge (#100). Mechanically independent of A/B, but sequence it to land before the device cutover so you can seed the phone from your Fly export. #101 → #102 → {#103 hardening, #104 UI} (the last two parallelize).
+
+Parallel / anytime (no dependency on A/B/C — slot into spare capacity):
+- Wave 3 Asymmetry Analytics (#45 → #46 → #47 → #48)
+- Quick cleanups: #86 (grip-type validation bug), #91 (land the test-hardening draft PR #74)
+
+
+
 - **Wave 0 — hardening PR (shipped 2026-07-09, #50/PR #62):** SQLite WAL mode + `busy_timeout`; ruff + mypy +
   pip-audit in CI; derive the service worker's `CACHE_VERSION` from a
   content hash (kills the manual-bump rule).
@@ -331,7 +391,9 @@ dropped. Waves in order; GitHub issues are the source of truth for status.
   wake lock, audio/notification strategy) — replacing the Focus
   redesign's deliberately throwaway client-only countdown. RPE stepper
   input ships earlier, with the Focus redesign.
-- **Owner-gated, parallel:** Oracle switch when the account unblocks —
+- **Owner-gated, parallel** (much of this is now *legacy/optional* under the
+  2026-08-13 Android pivot above — it only matters while the Fly deploy is the
+  primary target): Oracle switch when the account unblocks —
   Litestream enable + restore drill is step one (if the ticket is still
   stuck after ~a week, revisit decoupling backups to R2/B2); PWA phone test
   with an accessibility mini-pass (chart ARIA titles, non-color-only
