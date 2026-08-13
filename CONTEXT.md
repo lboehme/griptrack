@@ -239,3 +239,21 @@ The row is never deleted, but voided tests are excluded from CurrentMax
 and every consumer of it; voiding a combination's only test returns that
 combination to "needs test/estimate".
 _Avoid_: Deleted test
+
+**Export archive**:
+The versioned ZIP produced by `GET /profile/export` and consumed by import — a
+`manifest.json` (`format_version`, `unit`, `exported_at`) plus one CSV per
+exported model. Grips are carried by name (`GripType.csv`), not by raw id, and
+weights are stamped in the account's native UnitPreference (see ADR-0003, -0008).
+The manifest, not the column-header suffix, is the authority on the archive's
+unit.
+_Avoid_: Backup (it isn't an off-box/automated backup), CSV dump (it's a
+structured, versioned archive, not loose CSVs)
+
+**Account restore**:
+Loading an Export archive into an **empty** account (no TrainingSession, Climb,
+MaxWeightTest, or BodyWeightLog for that user; seeded plates don't count). Every
+row is inserted fresh under the current user — file-supplied ids and `user_id`
+are discarded — in one all-or-nothing transaction. There is no merge/append into
+a populated account; that's a deliberately deferred, separate feature (ADR-0008).
+_Avoid_: Import (as a synonym for merge), Sync (#20 offline sync is unrelated)
