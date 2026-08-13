@@ -8,3 +8,4 @@ venv/
 *.sqlite3
 .env
 .DS_Store
+*.code-workspace
