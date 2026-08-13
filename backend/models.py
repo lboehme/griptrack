@@ -9,6 +9,11 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+# Fixed vocabulary for User.unit_pref -- shared by backend.auth (registration
+# validation) and backend.import_restore (manifest validation, ADR-0008).
+VALID_UNITS = ("kg", "lbs")
+
+
 class User(SQLModel, table=True):
     __tablename__ = "users"
 

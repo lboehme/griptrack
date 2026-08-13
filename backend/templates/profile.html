@@ -58,6 +58,23 @@
 <a class="btn btn-secondary" href="/profile/export">Download data export (.zip) →</a>
 </div>
 
+<div class="card">
+<h3>Restore from export</h3>
+<p class="muted">Only works into an empty account (no sessions, climbs, max
+tests, or bodyweight logged yet) -- for seeding a fresh account from a
+previous export. This cannot be undone.</p>
+<form method="post" action="/profile/import" enctype="multipart/form-data">
+  <label>Export archive (.zip)
+    <input type="file" name="archive" accept=".zip" required>
+  </label>
+  <label>
+    <input type="checkbox" name="confirm" value="yes" required>
+    I understand this restores the archive into this account.
+  </label>
+  <button type="submit">Restore from export</button>
+</form>
+</div>
+
 {% if user.is_admin %}
 <div class="card">
 <h3>Invites <span class="muted" style="font-weight:500">(admin)</span></h3>

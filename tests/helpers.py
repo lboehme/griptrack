@@ -201,6 +201,27 @@ def get_session_page(client, path, params):
     return response
 
 
+def export_archive(client) -> bytes:
+    """Download the current user's export archive (bytes of the zip)."""
+    response = client.get("/profile/export")
+    assert response.status_code == 200
+    return response.content
+
+
+def import_archive(
+    client, archive_bytes: bytes, confirm: bool = True, filename: str = "griptrack-export.zip"
+):
+    """POST an export archive to the restore-into-empty-account endpoint
+    (issue #102). `confirm=False` exercises the missing-confirmation path."""
+    data = {"confirm": "yes"} if confirm else {}
+    return client.post(
+        "/profile/import",
+        data=data,
+        files={"archive": (filename, archive_bytes, "application/zip")},
+        follow_redirects=False,
+    )
+
+
 def current_maxes(client):
     """Parse the max-tests page into {(hand, grip, edge): weight}."""
     page = client.get("/max-tests").text

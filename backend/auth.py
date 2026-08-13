@@ -7,7 +7,7 @@ from fastapi import Depends, HTTPException, Request
 from sqlmodel import Session, func, select
 
 from backend.db import get_session
-from backend.models import Invite, User, utcnow
+from backend.models import VALID_UNITS, Invite, User, utcnow
 from backend.plates import seed_default_inventory
 
 # bcrypt ignores everything past 72 bytes (and bcrypt >= 5 refuses outright).
@@ -135,7 +135,7 @@ def register_user(
 ) -> User:
     email = email.strip().lower()
     validate_password(password)
-    if unit_pref not in ("kg", "lbs"):
+    if unit_pref not in VALID_UNITS:
         raise RegistrationError("Unit must be kg or lbs.")
 
     # The first account ever created bootstraps the Admin (see ADR-0004:

@@ -5,14 +5,14 @@ import zipfile
 from datetime import date as date_type
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlmodel import Session
 
-from backend import auth, training_log
+from backend import auth, import_restore, training_log
 from backend.db import get_session
 from backend.export_spec import ARCHIVE_MEMBERS, FORMAT_VERSION, MANIFEST_FILENAME, scoped_query
-from backend.limits import MAX_NAME_LENGTH, MAX_WEIGHT
+from backend.limits import MAX_IMPORT_UPLOAD_BYTES, MAX_NAME_LENGTH, MAX_WEIGHT
 from backend.models import BodyWeightLog, TrainingSession, User
 from backend.templating import templates
 
@@ -136,3 +136,31 @@ def export_data(
         media_type="application/zip",
         headers={"Content-Disposition": "attachment; filename=griptrack-export.zip"}
     )
+
+
+@router.post("/profile/import")
+async def import_data(
+    archive: UploadFile = File(...),
+    confirm: str | None = Form(default=None),
+    user: User = Depends(auth.current_user),
+    session: Session = Depends(get_session),
+):
+    """Restore an Export archive into the current user's **empty** account
+    (ADR-0008, #102). `backend.import_restore` owns validation, atomicity,
+    and the file-PK-discard/rewiring rules -- this route just adapts the
+    multipart upload into bytes and the outcome into a response."""
+    if confirm != "yes":
+        return HTMLResponse(
+            "Import requires explicit confirmation.", status_code=400
+        )
+
+    # Bounded read: never buffer more than the cap into memory, regardless
+    # of what the client claims to be sending.
+    upload_bytes = await archive.read(MAX_IMPORT_UPLOAD_BYTES + 1)
+
+    try:
+        import_restore.restore_archive(session, user, upload_bytes)
+    except import_restore.ImportRestoreError as error:
+        return HTMLResponse(str(error), status_code=400)
+
+    return RedirectResponse("/profile", status_code=303)
