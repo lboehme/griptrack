@@ -45,6 +45,15 @@ def create_app() -> FastAPI:
         raise RuntimeError(
             "GRIPTRACK_SESSION_SECRET must be set when GRIPTRACK_ENV=production"
         )
+    # The Android/Chaquopy WebView build (#93) embeds this same backend on
+    # 127.0.0.1 with no service worker: WebView SW support is unreliable and
+    # the offline caching is redundant when the server is already on-device.
+    # base.html reads this global to skip both the SW registration script
+    # and the (equally unnecessary) PWA manifest link. Unset/"0" behaves
+    # exactly like today's web/PWA build — nothing changes for it.
+    templates.env.globals["webview_build"] = (
+        os.environ.get("GRIPTRACK_WEBVIEW_BUILD", "0") == "1"
+    )
 
     app = FastAPI(title="GripTrack")
     app.state.login_limiter = LoginRateLimiter()
