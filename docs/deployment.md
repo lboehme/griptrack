@@ -152,7 +152,8 @@ export GRIPTRACK_DATABASE_URL=sqlite:////data/griptrack.db
 export GRIPTRACK_BOOTSTRAP_TOKEN=...          # for first registration
 alembic upgrade head
 uvicorn backend.main:app --host 0.0.0.0 --port 8000 \
-    --proxy-headers --forwarded-allow-ips "*"
+    --proxy-headers --forwarded-allow-ips "*" \
+    --loop asyncio --http h11
 ```
 
 Put it behind a TLS-terminating reverse proxy (Caddy/nginx/Cloudflare).
