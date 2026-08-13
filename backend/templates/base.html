@@ -18,6 +18,7 @@
   {% if not webview_build %}
   <script src="/static/register-sw.js" defer></script>
   {% endif %}
+  {% block extra_head %}{% endblock %}
 </head>
 <body>
   <header class="app-header">
