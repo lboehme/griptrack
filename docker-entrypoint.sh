@@ -104,11 +104,20 @@ fi
 # --proxy-headers + trusting the platform's forwarded IPs so request.url is
 # https (Secure cookies) and request.client.host is the real client (login
 # rate limiting), not the reverse proxy.
+#
+# --loop asyncio --http h11: uvicorn's own defaults ("auto") would already
+# fall back to these since requirements.txt no longer pins uvloop/httptools
+# (#94, ahead of the Android/Chaquopy build in #93, which wants the smallest
+# native-wheel surface). Pinning them explicitly makes that intentional
+# rather than incidental — the plain runner keeps serving correctly even if
+# a future transitive dependency happens to pull uvloop/httptools back in.
 SERVE="uvicorn backend.main:app \
     --host 0.0.0.0 \
     --port ${PORT:-8000} \
     --proxy-headers \
-    --forwarded-allow-ips *"
+    --forwarded-allow-ips * \
+    --loop asyncio \
+    --http h11"
 
 if [ -n "$replicate" ]; then
     # Litestream supervises the server: replication runs for exactly as long
