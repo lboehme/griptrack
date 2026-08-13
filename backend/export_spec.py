@@ -77,6 +77,46 @@ class ArchiveMember:
             return list(self.fields)
         return list(self.model.model_fields.keys())
 
+    def renames(self, unit: str) -> dict[str, str]:
+        """Weight column -> its `(kg)`/`(lbs)`-suffixed CSV header (ADR-0003).
+
+        The one place the header-suffix convention is spelled out; both the
+        exporter and the importer go through here (and `header`) so the two
+        directions of the round trip can't drift apart.
+        """
+        return {col: f"{col} ({unit})" for col in self.weight_cols}
+
+    def header(self, unit: str) -> list[str]:
+        """This member's CSV header row: `csv_fields` with weight columns
+        suffixed by `unit`."""
+        renames = self.renames(unit)
+        return [renames.get(f, f) for f in self.csv_fields]
+
+
+def neutralize(value: Any) -> Any:
+    """S6 CSV formula-neutralization: a text cell starting with `= + - @`
+    would execute as a formula when the archive is opened in a spreadsheet,
+    so prefix it with a single quote. `reverse_neutralize` is the exact
+    inverse -- the two are a pair; change one and you must change the other.
+    """
+    if isinstance(value, str) and value.startswith(("=", "+", "-", "@")):
+        return "'" + value
+    return value
+
+
+def reverse_neutralize(value: str) -> str:
+    """Inverse of `neutralize`: strip exactly one leading `'` guarding a
+    `= + - @` cell.
+
+    Known limitation: a genuine value that already reads `'=x` was exported
+    verbatim (it doesn't start with `= + - @`, so the exporter never quoted
+    it) but decodes back to `=x` here -- an inherent asymmetry of
+    single-quote neutralization, not round-trip-safe for that rare case.
+    """
+    if len(value) >= 2 and value[0] == "'" and value[1] in "=+-@":
+        return value[1:]
+    return value
+
 
 # Order here is the archive's canonical member order. TrainingSession is
 # listed before the members that key off it (PainReport, WarmupStepCheck,

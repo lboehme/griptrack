@@ -11,7 +11,13 @@ from sqlmodel import Session
 
 from backend import auth, import_restore, training_log
 from backend.db import get_session
-from backend.export_spec import ARCHIVE_MEMBERS, FORMAT_VERSION, MANIFEST_FILENAME, scoped_query
+from backend.export_spec import (
+    ARCHIVE_MEMBERS,
+    FORMAT_VERSION,
+    MANIFEST_FILENAME,
+    neutralize,
+    scoped_query,
+)
 from backend.limits import MAX_IMPORT_UPLOAD_BYTES, MAX_NAME_LENGTH, MAX_WEIGHT
 from backend.models import BodyWeightLog, TrainingSession, User
 from backend.templating import templates
@@ -85,14 +91,6 @@ def export_data(
     spec the future importer (#102) will read too -- this function only
     turns that spec into bytes."""
 
-    def neutralize(value):
-        # A text cell starting with = + - or @ would execute as a formula
-        # when the CSV is opened in a spreadsheet; prefix with a quote so
-        # a shared export can't carry a payload.
-        if isinstance(value, str) and value.startswith(("=", "+", "-", "@")):
-            return "'" + value
-        return value
-
     def add_csv(zf: zipfile.ZipFile, filename: str, rows, fieldnames: list[str]):
         csv_buffer = io.StringIO()
         writer = csv.DictWriter(csv_buffer, fieldnames=fieldnames)
@@ -123,8 +121,8 @@ def export_data(
             rows = session.exec(query).all()
             if member.model is TrainingSession:
                 training_session_ids = [r.id for r in rows]
-            renames = {col: f"{col} ({user.unit_pref})" for col in member.weight_cols}
-            out_fields = [renames.get(f, f) for f in member.csv_fields]
+            renames = member.renames(user.unit_pref)
+            out_fields = member.header(user.unit_pref)
             out_rows = [
                 {renames.get(f, f): d[f] for f in member.csv_fields}
                 for d in (r.model_dump() for r in rows)

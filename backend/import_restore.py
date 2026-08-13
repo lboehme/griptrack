@@ -30,6 +30,7 @@ from backend.export_spec import (
     MANIFEST_FILENAME,
     ArchiveMember,
     Scope,
+    reverse_neutralize,
 )
 from backend.limits import (
     MAX_IMPORT_MEMBER_BYTES,
@@ -200,15 +201,6 @@ def _safe_read_member(zf: zipfile.ZipFile, name: str) -> bytes:
     return data
 
 
-def _reverse_neutralize(value: str) -> str:
-    """Undo the exporter's S6 formula-neutralization: a cell starting with
-    `= + - @` is exported with a leading `'` so it can't execute as a
-    spreadsheet formula. Strip exactly one such leading quote back off."""
-    if len(value) >= 2 and value[0] == "'" and value[1] in "=+-@":
-        return value[1:]
-    return value
-
-
 def _field_type(model: type[SQLModel], field_name: str) -> tuple[type, bool]:
     """(base type, nullable) for `model`'s `field_name`, unwrapping `X |
     None` annotations."""
@@ -249,8 +241,8 @@ def _read_member_rows(
     except UnicodeDecodeError as exc:
         raise ImportRestoreError(f"{member.filename} is not valid UTF-8.") from exc
 
-    renames = {col: f"{col} ({unit})" for col in member.weight_cols}
-    expected_header = [renames.get(f, f) for f in member.csv_fields]
+    renames = member.renames(unit)
+    expected_header = member.header(unit)
     reader = csv.DictReader(io.StringIO(text))
     if reader.fieldnames != expected_header:
         raise ImportRestoreError(
@@ -266,7 +258,7 @@ def _read_member_rows(
         parsed: dict[str, object] = {}
         for header, raw_value in csv_row.items():
             field = inverse_renames.get(header, header)
-            value = _reverse_neutralize(raw_value) if raw_value is not None else ""
+            value = reverse_neutralize(raw_value) if raw_value is not None else ""
             parsed[field] = _convert_cell(member.model, field, value)
         rows.append((row_num, parsed))
     return rows
