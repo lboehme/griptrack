@@ -41,6 +41,33 @@ def test_base_template_registers_the_service_worker(client):
     assert "serviceWorker" in registration_script.text
 
 
+def test_webview_build_flag_skips_service_worker_registration_and_manifest(
+    monkeypatch, client_factory
+):
+    # GRIPTRACK_WEBVIEW_BUILD=1 is the Android/Chaquopy WebView build (#93,
+    # #95): WebView SW support is unreliable and redundant once the server
+    # is already on-device, so this mode must serve the app fully without
+    # registering the SW or relying on the PWA manifest.
+    monkeypatch.setenv("GRIPTRACK_WEBVIEW_BUILD", "1")
+    client = client_factory()
+
+    response = client.get("/health")
+
+    assert '<script src="/static/register-sw.js"' not in response.text
+    assert '<link rel="manifest"' not in response.text
+
+
+def test_default_build_still_registers_the_service_worker_and_manifest(client_factory):
+    # No GRIPTRACK_WEBVIEW_BUILD set — the existing web/PWA build's behavior
+    # must be unchanged by the new flag.
+    client = client_factory()
+
+    response = client.get("/health")
+
+    assert '<script src="/static/register-sw.js"' in response.text
+    assert '<link rel="manifest" href="/manifest.webmanifest">' in response.text
+
+
 def test_new_routes_carry_the_unchanged_csp(client):
     # No CSP change was needed for this slice: /sw.js and /offline are
     # same-origin, and self-registration needs no extra directive beyond
