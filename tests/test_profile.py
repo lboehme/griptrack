@@ -139,3 +139,24 @@ def test_csv_export_returns_user_scoped_data(client):
         
         # Verify units are in headers
         assert "weight (kg)" in bodyweights[0]
+
+
+def test_csv_export_neutralizes_spreadsheet_formula_cells(client):
+    """A text cell starting with = + - or @ executes as a formula when the
+    CSV is opened in Excel/LibreOffice. The export prefixes such cells with
+    a quote so a shared export can't carry a payload."""
+    import io
+    import zipfile
+
+    from tests.helpers import log_climb
+
+    register(client)
+    log_climb(client, "2026-07-04", "V3", notes='=HYPERLINK("http://evil")')
+
+    response = client.get("/profile/export")
+    assert response.status_code == 200
+
+    with zipfile.ZipFile(io.BytesIO(response.content)) as z:
+        climbs = z.read("Climb.csv").decode()
+        assert "'=HYPERLINK" in climbs
+        assert ",=HYPERLINK" not in climbs
