@@ -110,18 +110,19 @@ def export_data(
         }
         zf.writestr(MANIFEST_FILENAME, json.dumps(manifest, indent=2))
 
-        # TrainingSession ids gate the TRAINING_SESSION-scoped members
-        # below; computed once, up front, regardless of iteration order.
-        training_session_ids = [
-            ts.id
-            for ts in session.exec(
-                scoped_query(next(m for m in ARCHIVE_MEMBERS if m.model is TrainingSession), user)
-            ).all()
-        ]
-
+        # TRAINING_SESSION-scoped members (PainReport, WarmupStepCheck,
+        # SessionMaxEstimate, WorkSet) need the user's TrainingSession ids
+        # to scope their query. ARCHIVE_MEMBERS lists TrainingSession
+        # before all of them (see export_spec.py), so one forward pass
+        # both dumps every member and, in passing, captures those ids the
+        # moment the TrainingSession member itself is reached -- no
+        # separate lookup pass.
+        training_session_ids: list[int] = []
         for member in ARCHIVE_MEMBERS:
             query = scoped_query(member, user, training_session_ids)
             rows = session.exec(query).all()
+            if member.model is TrainingSession:
+                training_session_ids = [r.id for r in rows]
             renames = {col: f"{col} ({user.unit_pref})" for col in member.weight_cols}
             out_fields = [renames.get(f, f) for f in member.csv_fields]
             out_rows = [
