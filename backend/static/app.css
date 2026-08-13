@@ -960,8 +960,9 @@ li.climb .meta { color: var(--muted); font-size: .87rem; margin-top: .15rem; }
 .trend-chart {
   display: block;
   width: 100%;
-  height: auto;
+  min-height: 220px;
   border-radius: 10px;
+  overflow: hidden;
   margin: .3rem 0 .5rem;
 }
 

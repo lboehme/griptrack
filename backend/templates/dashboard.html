@@ -1,5 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Trends — GripTrack{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="/static/uplot.min.css">
+{% endblock %}
 {% block content %}
 <h2>Trends</h2>
 <p class="page-sub">TrainingVolume (weight × reps, summed per session) for every combination you train.</p>
@@ -37,11 +40,7 @@
     {% if combo.plateau %}<span class="pill plateau-flag" data-combo="{{ combo.hand }}|{{ combo.grip_name }}|{{ combo.edge_mm }}">plateau</span>{% endif %}
     {% if combo.overtraining %}<span class="pill overtraining-flag" data-combo="{{ combo.hand }}|{{ combo.grip_name }}|{{ combo.edge_mm }}">⚠ load spike, short rest</span>{% endif %}
   </h3>
-  {% set chart_qs = "hand=" ~ combo.hand ~ "&grip_type_id=" ~ combo.grip_type_id ~ "&edge_mm=" ~ combo.edge_mm %}
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="/dashboard/volume.svg?{{ chart_qs }}&theme=dark">
-    <img class="trend-chart" src="/dashboard/volume.svg?{{ chart_qs }}&theme=light" alt="TrainingVolume trend for {{ combo.hand }} {{ combo.grip_name }} @ {{ combo.edge_mm }} mm">
-  </picture>
+  <div class="trend-chart" data-chart-combo="{{ combo.hand }}|{{ combo.grip_name }}|{{ combo.edge_mm }}" role="img" aria-label="TrainingVolume trend for {{ combo.hand }} {{ combo.grip_name }} @ {{ combo.edge_mm }} mm"></div>
   <ul class="plain volume-list">
     {% for date, volume in combo.trend %}
     <li class="volume-point" data-combo="{{ combo.hand }}|{{ combo.grip_name }}|{{ combo.edge_mm }}" data-date="{{ date }}" data-volume="{{ volume }}">
@@ -52,6 +51,9 @@
   </ul>
 </div>
 {% endfor %}
+<script type="application/json" id="volume-trend-data">{{ chart_data|tojson }}</script>
+<script src="/static/uplot.iife.min.js" defer></script>
+<script src="/static/dashboard-chart.js" defer></script>
 {% else %}
 <div class="notice">
   Nothing to show yet — log a few <a href="/session/new">training sessions</a>

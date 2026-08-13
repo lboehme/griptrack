@@ -1,6 +1,19 @@
+import json
 import re
 
 from tests.helpers import log_max_test, register, save_work_set
+
+
+def chart_payload(client):
+    """Parse /dashboard's `#volume-trend-data` JSON-in-DOM payload."""
+    page = client.get("/dashboard").text
+    match = re.search(
+        r'<script type="application/json" id="volume-trend-data">(.*?)</script>',
+        page,
+        re.DOTALL,
+    )
+    assert match, "no volume-trend-data payload on the dashboard"
+    return json.loads(match.group(1))
 
 
 def volume_points(client):
@@ -101,20 +114,26 @@ def test_overtraining_needs_both_volume_spike_and_short_rest(client):
     assert overtraining_flags(client) == {"left|half crimp|20"}
 
 
-def test_dashboard_renders_a_server_side_chart_per_combo(client):
+def test_dashboard_ships_the_full_ordered_volume_series_per_combo(client):
     register(client)
     log_max_test(client, "left", "half crimp", 20, "2026-06-01", "40")
     save_work_set(client, "left", 1, "40", "5", date="2026-06-03")
     save_work_set(client, "left", 1, "42.5", "5", date="2026-06-10")
 
-    page = client.get("/dashboard").text
-    src = re.search(r'<img class="trend-chart"[^>]*src="([^"]+)"', page)
-    assert src, "no chart image on the dashboard"
+    payload = chart_payload(client)
+    assert payload == [
+        {
+            "combo": "left|half crimp|20",
+            "dates": ["2026-06-03", "2026-06-10"],
+            "volumes": [200.0, 212.5],
+        }
+    ]
 
-    svg = client.get(src.group(1).replace("&amp;", "&"))
-    assert svg.status_code == 200
-    assert svg.headers["content-type"].startswith("image/svg")
-    assert "<svg" in svg.text
+    # The old server-rendered SVG route is gone.
+    resp = client.get(
+        "/dashboard/volume.svg?hand=left&grip_type_id=1&edge_mm=20"
+    )
+    assert resp.status_code == 404
 
 
 def test_dashboard_shows_training_volume_per_session_per_combo(client):

@@ -1,36 +1,12 @@
-from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import Response
+from fastapi import APIRouter, Depends, Request
 from sqlmodel import Session
 
-from backend import analytics, auth, charts, training_log
+from backend import analytics, auth, training_log
 from backend.db import get_session
-from backend.limits import MAX_EDGE_MM
 from backend.models import User
 from backend.templating import templates
 
 router = APIRouter()
-
-
-@router.get("/dashboard/volume.svg")
-def volume_chart(
-    hand: str = Query(),
-    grip_type_id: int = Query(),
-    edge_mm: int = Query(gt=0, le=MAX_EDGE_MM),
-    theme: str = Query(default="light"),
-    user: User = Depends(auth.current_user),
-    session: Session = Depends(get_session),
-):
-    trend = analytics.training_volume_trend(session, user, hand, grip_type_id, edge_mm)
-    if not trend:
-        return Response(status_code=404)
-    svg = charts.render_volume_chart(
-        trend, theme if theme in charts.THEMES else "light"
-    )
-    return Response(
-        content=svg,
-        media_type="image/svg+xml",
-        headers={"Cache-Control": "no-store"},
-    )
 
 
 @router.get("/dashboard")
@@ -54,12 +30,25 @@ def dashboard_page(
                 "overtraining": analytics.overtraining_warning(trend),
             }
         )
+    # Fed to the client-side uPlot chart via the JSON-in-DOM idiom (see
+    # worksets.html's ladder-data/saved-sets-data precedent) -- one entry
+    # per trained combo, dates serialized to ISO strings since Jinja's
+    # tojson can't encode date objects directly.
+    chart_data = [
+        {
+            "combo": f"{combo['hand']}|{combo['grip_name']}|{combo['edge_mm']}",
+            "dates": [d.isoformat() for d, _ in combo["trend"]],
+            "volumes": [v for _, v in combo["trend"]],
+        }
+        for combo in combos
+    ]
     return templates.TemplateResponse(
         request,
         "dashboard.html",
         {
             "user": user,
             "combos": combos,
+            "chart_data": chart_data,
             "correlation": analytics.strength_grade_correlation(session, user),
         },
     )

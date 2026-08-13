@@ -171,8 +171,16 @@ unit-tested in isolation for now.
   and often briefly does, in a partially-filled state. Screens are
   progressively enhanced: the server renders real forms with number
   inputs, and JS upgrades them into steppers.
-- **Analytics charts:** server-rendered images (matplotlib/plotly → SVG/PNG,
-  embedded via `<img>`), not a client-side JS charting library.
+- **Analytics charts:** client-side, drawn with uPlot (MIT, vendored as a
+  plain static file — `backend/static/uplot.iife.min.js`/`uplot.min.css`, no
+  build step, no CDN) — reversed from the original server-rendered-SVG
+  decision as part of the runtime-slimming work (#87/#88); see
+  `backend/static/dashboard-chart.js`. The server ships the ordered
+  `(date, volume)` series per (hand, grip_type, edge_mm) combo into the
+  dashboard DOM via the JSON-in-DOM idiom (`<script
+  type="application/json">…|tojson…</script>`, the worksets-screen
+  precedent); the client draws one chart per combo into a container div,
+  picking its palette from `prefers-color-scheme`.
 - **Deployment:** local only for now
   (`conda run -n griptrack fastapi dev backend/main.py`, tested on a phone
   via the machine's LAN IP). Revisit hosting once the MVP is proven useful.
