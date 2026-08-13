@@ -25,6 +25,11 @@ def dashboard_page(
         combos.append(
             {
                 **combo,
+                # Built once here rather than re-joined per attribute in the
+                # template (plateau/overtraining pills, volume-list rows,
+                # the chart container, and the chart_data payload below all
+                # need the same "hand|grip_name|edge_mm" key).
+                "combo_key": f"{combo['hand']}|{combo['grip_name']}|{combo['edge_mm']}",
                 "trend": trend,
                 "plateau": analytics.plateau_flag(trend),
                 "overtraining": analytics.overtraining_warning(trend),
@@ -36,7 +41,7 @@ def dashboard_page(
     # tojson can't encode date objects directly.
     chart_data = [
         {
-            "combo": f"{combo['hand']}|{combo['grip_name']}|{combo['edge_mm']}",
+            "combo": combo["combo_key"],
             "dates": [d.isoformat() for d, _ in combo["trend"]],
             "volumes": [v for _, v in combo["trend"]],
         }

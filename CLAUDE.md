@@ -61,8 +61,9 @@ in lockstep with model changes.
 Local dev uses a conda env named `griptrack`
 (`/Users/lukas/opt/miniconda3/envs/griptrack`). Runtime deps are now pinned in
 `requirements.txt` (test extras in `requirements-dev.txt`) — keep those in
-lockstep with the conda env when adding a package. `matplotlib`/`pandas` power
-the analytics charts and are installed.
+lockstep with the conda env when adding a package. `matplotlib`/`pandas` are
+still installed but now unused — the volume chart moved client-side in #88;
+`#89` removes both packages.
 
 Run the API from the repository root (so `backend` resolves as a namespace
 package):

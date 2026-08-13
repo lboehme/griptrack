@@ -37,13 +37,13 @@
   <h3>
     <span class="hand-heading">{{ combo.hand[0]|upper }}</span>
     {{ combo.grip_name }} @ {{ combo.edge_mm }} mm {{ combo.dimension_name }}
-    {% if combo.plateau %}<span class="pill plateau-flag" data-combo="{{ combo.hand }}|{{ combo.grip_name }}|{{ combo.edge_mm }}">plateau</span>{% endif %}
-    {% if combo.overtraining %}<span class="pill overtraining-flag" data-combo="{{ combo.hand }}|{{ combo.grip_name }}|{{ combo.edge_mm }}">⚠ load spike, short rest</span>{% endif %}
+    {% if combo.plateau %}<span class="pill plateau-flag" data-combo="{{ combo.combo_key }}">plateau</span>{% endif %}
+    {% if combo.overtraining %}<span class="pill overtraining-flag" data-combo="{{ combo.combo_key }}">⚠ load spike, short rest</span>{% endif %}
   </h3>
-  <div class="trend-chart" data-chart-combo="{{ combo.hand }}|{{ combo.grip_name }}|{{ combo.edge_mm }}" role="img" aria-label="TrainingVolume trend for {{ combo.hand }} {{ combo.grip_name }} @ {{ combo.edge_mm }} mm"></div>
+  <div class="trend-chart" data-chart-combo="{{ combo.combo_key }}" role="img" aria-label="TrainingVolume trend for {{ combo.hand }} {{ combo.grip_name }} @ {{ combo.edge_mm }} mm"></div>
   <ul class="plain volume-list">
     {% for date, volume in combo.trend %}
-    <li class="volume-point" data-combo="{{ combo.hand }}|{{ combo.grip_name }}|{{ combo.edge_mm }}" data-date="{{ date }}" data-volume="{{ volume }}">
+    <li class="volume-point" data-combo="{{ combo.combo_key }}" data-date="{{ date }}" data-volume="{{ volume }}">
       <span class="muted">{{ date }}</span>
       <strong>{{ volume }}</strong> <span class="muted">{{ user.unit_pref }}·reps</span>
     </li>
