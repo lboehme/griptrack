@@ -38,6 +38,7 @@ from backend.limits import (
     MAX_IMPORT_UPLOAD_BYTES,
 )
 from backend.models import (
+    VALID_UNITS,
     BodyWeightLog,
     Climb,
     GripType,
@@ -46,8 +47,6 @@ from backend.models import (
     TrainingSession,
     User,
 )
-
-VALID_UNITS = ("kg", "lbs")
 
 # The models an empty account is defined against (ADR-0008): any row here
 # for the user means the account already "has data". Seeded default
@@ -73,9 +72,13 @@ def account_has_data(session: Session, user: User) -> bool:
 def restore_archive(session: Session, user: User, upload_bytes: bytes) -> None:
     """Validate and load `upload_bytes` (a ZIP, as produced by
     `GET /profile/export`) into `user`'s account. Raises
-    `ImportRestoreError` -- with nothing written -- on any problem: a
-    non-empty account, an unrecognized/incomplete archive, an unresolvable
-    grip/session reference, or a bound violation."""
+    `ImportRestoreError` -- with nothing written, since every write happens
+    inside the try/rollback below -- for every problem this module itself
+    detects: a non-empty account, an unrecognized/incomplete archive, an
+    unresolvable grip/session reference, or a bound violation. A DB-level
+    failure this module doesn't anticipate (e.g. an unexpected constraint
+    violation) still rolls back cleanly but propagates as-is, not as
+    `ImportRestoreError`."""
 
     if len(upload_bytes) > MAX_IMPORT_UPLOAD_BYTES:
         raise ImportRestoreError("Archive is too large.")
@@ -153,6 +156,12 @@ def restore_archive(session: Session, user: User, upload_bytes: bytes) -> None:
                 )
                 session.add(obj)
 
+        # ADR-0008 frames this as "adopt the manifest's unit, refusing only
+        # on a conflicting existing unit" -- but registration always gives
+        # a user *some* unit_pref, and the empty-account gate above already
+        # guarantees no weight-bearing row exists under it yet, so there's
+        # no data-level conflict left to refuse: the manifest's unit always
+        # wins for an account that passed that gate.
         user.unit_pref = unit
         session.add(user)
         session.commit()

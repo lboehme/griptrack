@@ -137,6 +137,35 @@ def test_import_adopts_unit_preference_from_the_manifest(client):
     assert '<span class="unit-pref">lbs</span>' in profile
 
 
+def test_import_reverses_the_export_side_formula_neutralization(client):
+    """The exporter (S6) prefixes a cell starting with = + - or @ with a
+    quote so it can't execute as a spreadsheet formula (see
+    test_csv_export_neutralizes_spreadsheet_formula_cells in
+    tests/test_profile.py). A round trip must strip that quote back off on
+    import rather than storing it verbatim (ADR-0008)."""
+    register(client, "founder@example.com", "test-pw-1234")
+    log_climb(client, "2026-07-04", "V3", notes='=HYPERLINK("http://evil")')
+    archive_bytes = export_archive(client)
+
+    with zipfile.ZipFile(io.BytesIO(archive_bytes)) as z:
+        climbs_csv = z.read("Climb.csv").decode()
+    assert "'=HYPERLINK" in climbs_csv  # exporter neutralized it (sanity check)
+
+    code = generate_invite(client)
+    register(client, "phone@example.com", "test-pw-5678", invite_code=code)
+
+    response = import_archive(client, archive_bytes)
+    assert response.status_code == 303
+
+    # Jinja2 autoescapes the stored note when the climb list renders it, so
+    # a still-present leading quote (unreversed neutralization) and a
+    # correctly-reversed one are distinguishable here: `'` escapes to
+    # `&#39;` only if it's really part of the stored value.
+    climbs_page = client.get("/climbs").text
+    assert "&#39;=HYPERLINK" not in climbs_page
+    assert "=HYPERLINK(&#34;http://evil&#34;)" in climbs_page
+
+
 def test_import_refuses_a_non_empty_account_and_writes_nothing(client):
     register(client, "founder@example.com", "test-pw-1234")
     log_bodyweight(client, "2026-07-01", "71.4")

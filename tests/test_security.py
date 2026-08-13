@@ -393,19 +393,25 @@ def test_import_member_count_is_bounded(client, monkeypatch):
 
 
 def test_import_row_count_per_member_is_bounded(client, monkeypatch):
+    """The row cap must trip on real user-supplied data (Climb.csv here),
+    not just on the archive's fixed-size members -- GripType.csv (5 starter
+    rows) and PlateInventoryItem.csv (6 seeded rows) are read before
+    Climb.csv in archive order, so the cap is set above both of those and
+    below the climb count to prove it's actually bounding the row the test
+    means to bound."""
     import backend.import_restore as import_restore
     from tests.helpers import export_archive, generate_invite, import_archive, log_climb
 
     register(client, "founder@example.com", "test-pw-1234")
-    log_climb(client, "2026-07-04", "V5")
-    log_climb(client, "2026-07-05", "V6")
-    log_climb(client, "2026-07-06", "V7")
+    for day in range(1, 11):
+        log_climb(client, f"2026-07-{day:02d}", "V5")
     archive_bytes = export_archive(client)
 
     code = generate_invite(client)
     register(client, "friend@example.com", "test-pw-5678", invite_code=code)
 
-    monkeypatch.setattr(import_restore, "MAX_IMPORT_ROWS_PER_MEMBER", 2)
+    monkeypatch.setattr(import_restore, "MAX_IMPORT_ROWS_PER_MEMBER", 8)
     response = import_archive(client, archive_bytes)
     assert response.status_code == 400
     assert "too many rows" in response.text.lower()
+    assert "Climb.csv" in response.text
