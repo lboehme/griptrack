@@ -22,9 +22,14 @@ import os
 import secrets
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from alembic import command
 from alembic.config import Config
+
+if TYPE_CHECKING:
+    from fastapi import FastAPI
+    from uvicorn import Config as UvicornConfig
 
 # The directory containing both the `backend` package and `migrations/`
 # (this file lives at <project_root>/backend/launcher.py). Overridable per
@@ -138,7 +143,7 @@ def bootstrap(app_dir: Path, *, project_root: Path = PROJECT_ROOT) -> str:
     return database_url
 
 
-def build_app(app_dir: Path, *, project_root: Path = PROJECT_ROOT):
+def build_app(app_dir: Path, *, project_root: Path = PROJECT_ROOT) -> FastAPI:
     """Bootstrap app_dir, then build and return the ready-to-serve FastAPI
     app. Split out from serve() so tests can drive it through TestClient
     (or a real socket) without this function itself binding one."""
@@ -152,7 +157,7 @@ def build_app(app_dir: Path, *, project_root: Path = PROJECT_ROOT):
     return create_app()
 
 
-def _uvicorn_config(app, host: str, port: int):
+def _uvicorn_config(app: FastAPI, host: str, port: int) -> UvicornConfig:
     import uvicorn
 
     # loop="asyncio", http="h11": the same plain-runner posture #94 pins
