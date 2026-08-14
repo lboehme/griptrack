@@ -16,6 +16,17 @@ Standard five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, 
 
 Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
+### Orchestrating a batch of issues
+
+When the owner says "orchestrate these issues" (or lists several issue numbers to
+build, or "continue" to resume), invoke the `/orchestrate` skill
+(`.claude/skills/orchestrate/SKILL.md`): map the dependency graph into
+parallel/blocked waves, dispatch each ticket to a Sonnet worktree agent running
+`/implement`, integrate green branches into local main (guarded by
+`scripts/pre-merge-check`), open one batch PR, run a dual review (GitHub Copilot +
+a deep Opus failure-hunting pass), fix the union of findings, and stop for the
+owner's merge/deploy go.
+
 ## Project context
 
 GripTrack is a mobile-first web app for logging block-pull / no-hang
