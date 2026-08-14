@@ -298,3 +298,28 @@ def test_import_failure_mid_load_rolls_the_whole_account_back_to_empty(client):
         assert len(z.read("TrainingSession.csv").decode().splitlines()) == 1
         assert len(z.read("MaxWeightTest.csv").decode().splitlines()) == 1
         assert len(z.read("PlateInventoryItem.csv").decode().splitlines()) == 1 + 6
+
+
+def test_import_rejects_a_non_numeric_cell_with_a_400_pointing_at_it(client):
+    # A malformed numeric cell (non-numeric text in an int/float column) must
+    # fail the import cleanly as a 400 naming the file/row/column -- never
+    # escape as an unhandled 500 (GitHub Copilot review, PR #106).
+    register(client, "founder@example.com", "test-pw-1234")
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "40")
+    archive_bytes = export_archive(client)
+
+    max_test_csv = _zip_members(archive_bytes)["MaxWeightTest.csv"].decode()
+    max_test_csv = _replace_column(max_test_csv, 0, "edge_mm", "twenty")
+    archive_bytes = _replace_member(archive_bytes, "MaxWeightTest.csv", max_test_csv)
+
+    code = generate_invite(client)
+    register(client, "phone@example.com", "test-pw-5678", invite_code=code)
+
+    response = import_archive(client, archive_bytes)
+    assert response.status_code == 400
+    assert "MaxWeightTest" in response.text
+    assert "edge_mm" in response.text
+
+    # Nothing landed: the fresh account is still empty.
+    with zipfile.ZipFile(io.BytesIO(export_archive(client))) as z:
+        assert len(z.read("MaxWeightTest.csv").decode().splitlines()) == 1

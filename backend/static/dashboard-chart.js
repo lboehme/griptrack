@@ -91,6 +91,7 @@ document.addEventListener("DOMContentLoaded", () => {
     targetsByCombo.set(el.dataset.chartCombo, el);
   });
 
+  const charts = [];
   combos.forEach((combo) => {
     const target = targetsByCombo.get(combo.combo);
     if (!target || !combo.dates.length) return;
@@ -140,11 +141,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const chart = new uPlot(opts, [xs, ys], target);
     chart.root.style.background = palette.surface;
     chart.root.style.borderRadius = "10px";
-    // uPlot sizes off the container's width at construction time; a
-    // resize (orientation change, layout shift) leaves it stale, so keep
-    // it in sync the same lightweight way the rest of the app avoids a
-    // ResizeObserver dependency.
-    window.addEventListener("resize", () => {
+    charts.push({ chart, target });
+  });
+
+  // uPlot sizes off the container's width at construction time; a resize
+  // (orientation change, layout shift) leaves it stale, so keep every chart
+  // in sync the same lightweight way the rest of the app avoids a
+  // ResizeObserver dependency. One shared listener iterates all charts
+  // rather than registering (and firing) a separate handler per combo.
+  window.addEventListener("resize", () => {
+    charts.forEach(({ chart, target }) => {
       chart.setSize({ width: target.clientWidth || 320, height: 220 });
     });
   });

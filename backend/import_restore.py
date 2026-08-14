@@ -259,7 +259,16 @@ def _read_member_rows(
         for header, raw_value in csv_row.items():
             field = inverse_renames.get(header, header)
             value = reverse_neutralize(raw_value) if raw_value is not None else ""
-            parsed[field] = _convert_cell(member.model, field, value)
+            try:
+                parsed[field] = _convert_cell(member.model, field, value)
+            except (ValueError, TypeError) as exc:
+                # A malformed cell (non-numeric text in an int/float column,
+                # an unparseable date) must fail the import cleanly with a
+                # 400 that points at the exact cell -- never escape as a 500.
+                raise ImportRestoreError(
+                    f"{member.filename} row {row_num}, column {header!r}: "
+                    f"invalid value {value!r}."
+                ) from exc
         rows.append((row_num, parsed))
     return rows
 
