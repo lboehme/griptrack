@@ -1,0 +1,70 @@
+#!/bin/sh
+# Warn when a ticket branch isn't based on the current tip of the target
+# branch (default: main), and preview any real merge conflicts.
+#
+# Why this exists: agent worktrees have branched off a *stale* main head. A
+# git merge is a 3-way merge against the common ancestor, so this does NOT
+# silently revert main's newer commits -- that part is safe. The real cost is
+# subtler: the agent built and tested against an outdated tree, so its "tests
+# green" is NOT evidence the *integrated* result is green (this is how a
+# stale #97 branch reported a different test count than main). A stale base
+# also invites avoidable merge conflicts and muddies history. So: rebase the
+# branch onto current main (or cherry-pick its unique commits) and re-run the
+# suite there before merging, so the green signal actually means something.
+#
+# Usage: scripts/pre-merge-check <branch> [base]
+#   exit 0 = based on current base, no conflicts
+#   exit 1 = stale base and/or merge conflicts (rebase before merging)
+#   exit 2 = usage / bad ref
+set -e
+cd "$(dirname "$0")/.."
+
+BRANCH="$1"
+BASE="${2:-main}"
+
+if [ -z "$BRANCH" ]; then
+    echo "usage: scripts/pre-merge-check <branch> [base]" >&2
+    exit 2
+fi
+if ! git rev-parse --verify --quiet "$BRANCH" >/dev/null; then
+    echo "pre-merge-check: no such branch/ref: $BRANCH" >&2
+    exit 2
+fi
+if ! git rev-parse --verify --quiet "$BASE" >/dev/null; then
+    echo "pre-merge-check: no such base branch/ref: $BASE" >&2
+    exit 2
+fi
+
+BASE_HEAD=$(git rev-parse "$BASE")
+MERGE_BASE=$(git merge-base "$BASE" "$BRANCH")
+STATUS=0
+
+if [ "$MERGE_BASE" = "$BASE_HEAD" ]; then
+    AHEAD=$(git rev-list --count "$BASE".."$BRANCH")
+    echo "base: OK -- '$BRANCH' is based on current $BASE ($BASE_HEAD), $AHEAD commit(s) ahead."
+else
+    STATUS=1
+    echo "base: STALE -- '$BRANCH' is not based on current $BASE." >&2
+    echo "  $BASE HEAD:     $BASE_HEAD" >&2
+    echo "  branch's base:  $MERGE_BASE" >&2
+    echo "  The branch's own test run reflects that stale tree, not the merged" >&2
+    echo "  result. Rebase onto $BASE (or cherry-pick its unique commits) and" >&2
+    echo "  re-run the suite there before merging:" >&2
+    echo "    git rebase $BASE $BRANCH" >&2
+    git log --oneline "$MERGE_BASE".."$BRANCH" | sed 's/^/    or: git cherry-pick /' >&2
+fi
+
+# Real integration risk (accurate, unlike a tip-to-tip diff): does a 3-way
+# merge actually conflict? `git merge-tree --write-tree` exits non-zero and
+# names the conflicted paths without touching the working tree.
+if git merge-tree --write-tree "$BASE" "$BRANCH" >/tmp/pmc_mergetree.$$ 2>/dev/null; then
+    echo "merge: OK -- no conflicts merging '$BRANCH' into $BASE."
+else
+    STATUS=1
+    echo "merge: CONFLICTS merging '$BRANCH' into $BASE:" >&2
+    sed '1d' /tmp/pmc_mergetree.$$ | sed 's/^/    /' >&2
+fi
+rm -f /tmp/pmc_mergetree.$$
+
+[ "$STATUS" -eq 0 ] && echo "pre-merge-check OK"
+exit "$STATUS"
