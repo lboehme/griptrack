@@ -17,7 +17,7 @@ def test_disclosure_opens_and_notes_autosave_without_a_reload(
     for hand in ("left", "right"):
         page.goto(f"{live_server}/max-tests")
         form = page.locator('form[action="/max-tests"]')
-        form.locator('select[name="hand"]').select_option(hand)
+        form.locator(f'input[name="hand"][value="{hand}"]').check()
         form.locator("select.grip-select").select_option(label="half crimp")
         form.locator('input[name="edge_mm"]').fill("20")
         form.locator('input[name="weight"]').fill("40")
@@ -50,7 +50,7 @@ def test_disclosure_opens_and_notes_autosave_without_a_reload(
     notes.blur()  # fires the change event the autosave listener waits for
 
     # Fill and autosave a pain report too, in the same disclosure.
-    page.locator('#pain-report-form select[name="hand"]').select_option("left")
+    page.locator('#pain-report-form input[name="hand"][value="left"]').check()
     severity = page.locator('#pain-report-form input[name="severity"]')
     severity.fill("1")
     severity.blur()
@@ -68,3 +68,36 @@ def test_disclosure_opens_and_notes_autosave_without_a_reload(
     expect(page.locator('#pain-reports-body tr[data-hand="left"]')).to_contain_text(
         "1"
     )
+
+
+def test_textarea_matches_dark_mode_background(live_server, authenticated_page):
+    page = authenticated_page
+    page.emulate_media(color_scheme="dark")
+
+    for hand in ("left", "right"):
+        page.goto(f"{live_server}/max-tests")
+        form = page.locator('form[action="/max-tests"]')
+        form.locator(f'input[name="hand"][value="{hand}"]').check()
+        form.locator("select.grip-select").select_option(label="half crimp")
+        form.locator('input[name="edge_mm"]').fill("20")
+        form.locator('input[name="weight"]').fill("40")
+        form.locator('button[type="submit"]').click()
+
+    page.goto(f"{live_server}/session/new")
+    page.locator(".grip-select").select_option(label="half crimp")
+    page.locator('input[name="edge_mm"]').fill("20")
+    page.get_by_role("button", name="Start warmup").click()
+    page.get_by_role("link", name="Continue to work sets").click()
+
+    page.locator("#how-it-felt summary").click()
+    notes = page.locator('textarea[name="notes"]')
+    severity = page.locator('#pain-report-form input[name="severity"]')
+
+    expect(notes).to_be_visible()
+    notes_bg = notes.evaluate("el => window.getComputedStyle(el).backgroundColor")
+    input_bg = severity.evaluate("el => window.getComputedStyle(el).backgroundColor")
+
+    # In dark mode, textarea must have dark background matching other inputs, not white
+    assert notes_bg == input_bg
+    assert notes_bg != "rgb(255, 255, 255)"
+

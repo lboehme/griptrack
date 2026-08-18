@@ -1,0 +1,15 @@
+{# Segmented hand picker (issue #117), shared by the max-test forms and the
+   pain-report form. Set `hand_options` before including (defaults to
+   left/right); the first option is checked. Posts name="hand" like the
+   native <select> it replaced -- works without JS, styled in app.css. #}
+<fieldset class="segmented-field">
+  <legend class="segmented-legend">Hand</legend>
+  <div class="segmented-group" role="radiogroup" aria-label="Hand">
+    {% for opt in hand_options | default(["left", "right"]) %}
+    <label class="segmented-option">
+      <input type="radio" name="hand" value="{{ opt }}"{% if loop.first %} checked{% endif %} class="segmented-radio">
+      <span class="segmented-label">{{ opt | capitalize }}</span>
+    </label>
+    {% endfor %}
+  </div>
+</fieldset>

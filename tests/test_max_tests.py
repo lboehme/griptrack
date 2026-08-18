@@ -114,3 +114,16 @@ def test_user_cannot_void_someone_elses_max_test(client):
     
     response = client.post(f"/max-tests/{test_id}/void", follow_redirects=False)
     assert response.status_code == 403
+
+
+def test_max_tests_page_uses_segmented_radio_group_for_hand(client):
+    register(client)
+    page = client.get("/max-tests").text
+
+    # No native hand dropdown
+    assert 'select name="hand"' not in page
+    # Segmented radio buttons present for both guided and direct max-test forms
+    assert page.count('class="segmented-group"') == 2
+    assert page.count('input type="radio" name="hand" value="left"') == 2
+    assert page.count('input type="radio" name="hand" value="right"') == 2
+

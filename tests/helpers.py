@@ -114,6 +114,44 @@ def save_focus_set(
     return client.post("/session/set", data=data, follow_redirects=True)
 
 
+def delete_focus_set(
+    client, set_number, date="2026-07-04", grip="half crimp", edge_mm=20,
+    session_number=None,
+):
+    data = {
+        "grip_type_id": grip_type_id(client, grip),
+        "edge_mm": edge_mm,
+        "date": date,
+        "set_number": set_number,
+    }
+    if session_number is not None:
+        data["session_number"] = session_number
+    return client.post("/session/set/delete", data=data, follow_redirects=True)
+
+
+def restore_focus_set(
+    client, set_number, date="2026-07-04", grip="half crimp", edge_mm=20,
+    session_number=None, left=None, right=None,
+):
+    data = {
+        "grip_type_id": grip_type_id(client, grip),
+        "edge_mm": edge_mm,
+        "date": date,
+        "set_number": set_number,
+    }
+    if session_number is not None:
+        data["session_number"] = session_number
+    for hand, values in (("left", left), ("right", right)):
+        if values is None:
+            continue
+        weight, reps, rpe = values
+        data[f"{hand}_weight"] = weight
+        data[f"{hand}_reps"] = reps
+        if rpe is not None:
+            data[f"{hand}_rpe"] = rpe
+    return client.post("/session/set/restore", data=data, follow_redirects=True)
+
+
 def pill_text(page_text):
     """The Focus screen's progress-pill text ("Set 1 of 3"), read off its
     data-pill-text attribute rather than the rendered HTML (which splits

@@ -168,36 +168,21 @@ def save_work_set(
     return combo_redirect("worksets", grip_type_id, edge_mm, date, hand, session_number)
 
 
-@router.post("/session/set")
-def save_focus_set(
-    request: Request,
-    grip_type_id: int = Form(),
-    edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
-    date: date_type = Form(),
-    set_number: int = Form(ge=1, le=MAX_SET_NUMBER),
-    session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
-    left_weight: float | None = Form(default=None),
-    left_reps: int | None = Form(default=None),
-    left_rpe: float | None = Form(default=None),
-    right_weight: float | None = Form(default=None),
-    right_reps: int | None = Form(default=None),
-    right_rpe: float | None = Form(default=None),
-    user: User = Depends(auth.current_user),
-    session: Session = Depends(get_session),
-):
-    """Set commit (docs/adr/0007-set-commit-over-per-cell-autosave.md):
-    writes both hands' WorkSets for one set_number in a single atomic
-    request instead of two calls to the per-hand /session/workset — a
-    half-failure on flaky gym wifi must never log one hand and not the
-    other.
-
-    Every present hand's payload is fully validated (same bounds and RPE
-    grid as /session/workset) *before* anything touches the session or the
-    database, so an invalid or partial payload writes nothing at all. Once
-    validation passes, both hands are staged with record_work_set(commit=
-    False) and committed together in one transaction. Re-posting the same
-    (session, hand, set_number) upserts in place (also the edit-mode path,
-    #80) rather than duplicating."""
+def parse_hands_payload(
+    left_weight: float | None,
+    left_reps: int | None,
+    left_rpe: float | None,
+    right_weight: float | None,
+    right_reps: int | None,
+    right_rpe: float | None,
+) -> dict[str, tuple[float, int, float | None]] | HTMLResponse:
+    """Validate the per-hand Set-commit payload shared by /session/set and
+    /session/set/restore: every present hand gets the same bounds and RPE
+    grid as /session/workset, *before* anything touches the DB, so an
+    invalid or partial payload writes nothing. A hand with all three fields
+    None wasn't submitted (sequential hand order) and is skipped. Returns
+    the validated `{hand: (weight, reps, rpe)}` dict, or an HTMLResponse the
+    caller should return as-is on the first validation failure."""
     raw = {
         "left": (left_weight, left_reps, left_rpe),
         "right": (right_weight, right_reps, right_rpe),
@@ -224,6 +209,42 @@ def save_focus_set(
         return HTMLResponse(
             "At least one hand's weight and reps are required.", status_code=400
         )
+    return hands_payload
+
+
+@router.post("/session/set")
+def save_focus_set(
+    request: Request,
+    grip_type_id: int = Form(),
+    edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
+    date: date_type = Form(),
+    set_number: int = Form(ge=1, le=MAX_SET_NUMBER),
+    session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
+    left_weight: float | None = Form(default=None),
+    left_reps: int | None = Form(default=None),
+    left_rpe: float | None = Form(default=None),
+    right_weight: float | None = Form(default=None),
+    right_reps: int | None = Form(default=None),
+    right_rpe: float | None = Form(default=None),
+    user: User = Depends(auth.current_user),
+    session: Session = Depends(get_session),
+):
+    """Set commit (docs/adr/0007-set-commit-over-per-cell-autosave.md):
+    writes both hands' WorkSets for one set_number in a single atomic
+    request instead of two calls to the per-hand /session/workset — a
+    half-failure on flaky gym wifi must never log one hand and not the
+    other.
+
+    The payload is fully validated by parse_hands_payload *before* anything
+    touches the session or the database. Once validation passes, both hands
+    are staged with record_work_set(commit=False) and committed together in
+    one transaction. Re-posting the same (session, hand, set_number) upserts
+    in place (also the edit-mode path, #80) rather than duplicating."""
+    hands_payload = parse_hands_payload(
+        left_weight, left_reps, left_rpe, right_weight, right_reps, right_rpe
+    )
+    if isinstance(hands_payload, HTMLResponse):
+        return hands_payload
 
     # Reject an unknown grip_type_id before any DB write, matching the GET
     # worksets page — otherwise an out-of-range id would 500 (or create an
@@ -239,6 +260,72 @@ def save_focus_set(
             weight, reps, rpe, commit=False,
         )
     session.commit()
+
+    if request.headers.get("HX-Request"):
+        return Response(status_code=204)
+    redirect_hand = next(iter(hands_payload)) if len(hands_payload) == 1 else ""
+    return combo_redirect(
+        "worksets", grip_type_id, edge_mm, date, redirect_hand, session_number
+    )
+
+
+@router.post("/session/set/delete")
+def delete_focus_set(
+    request: Request,
+    grip_type_id: int = Form(),
+    edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
+    date: date_type = Form(),
+    set_number: int = Form(ge=1, le=MAX_SET_NUMBER),
+    hand: str | None = Form(default=None),
+    session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
+    user: User = Depends(auth.current_user),
+    session: Session = Depends(get_session),
+):
+    require_grip_type(session, grip_type_id)
+    training_session = training_log.find_session(session, user, date, session_number)
+    if training_session is not None:
+        training_log.delete_set_and_renumber(
+            session, training_session, grip_type_id, edge_mm, set_number
+        )
+    if request.headers.get("HX-Request"):
+        return Response(status_code=204)
+    return combo_redirect("worksets", grip_type_id, edge_mm, date, hand or "", session_number)
+
+
+@router.post("/session/set/restore")
+def restore_focus_set(
+    request: Request,
+    grip_type_id: int = Form(),
+    edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
+    date: date_type = Form(),
+    set_number: int = Form(ge=1, le=MAX_SET_NUMBER),
+    session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
+    left_weight: float | None = Form(default=None),
+    left_reps: int | None = Form(default=None),
+    left_rpe: float | None = Form(default=None),
+    right_weight: float | None = Form(default=None),
+    right_reps: int | None = Form(default=None),
+    right_rpe: float | None = Form(default=None),
+    user: User = Depends(auth.current_user),
+    session: Session = Depends(get_session),
+):
+    """Undo counterpart to /session/set/delete: re-inserts a deleted set at
+    its original set_number (shifting higher sets back up) with the values
+    the client held during the undo window. Same payload validation as
+    /session/set."""
+    hands_payload = parse_hands_payload(
+        left_weight, left_reps, left_rpe, right_weight, right_reps, right_rpe
+    )
+    if isinstance(hands_payload, HTMLResponse):
+        return hands_payload
+
+    require_grip_type(session, grip_type_id)
+    training_session = training_log.start_or_get_session(
+        session, user, date, session_number
+    )
+    training_log.restore_set_at(
+        session, training_session, grip_type_id, edge_mm, set_number, hands_payload
+    )
 
     if request.headers.get("HX-Request"):
         return Response(status_code=204)

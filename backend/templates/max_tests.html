@@ -64,12 +64,7 @@
 <p class="page-sub">A guided warmup and effort-rated ladder that walks you to a real max.</p>
 <form method="get" action="/max-tests/guided">
   <div class="form-row">
-    <label>Hand
-      <select name="hand">
-        <option value="left">left</option>
-        <option value="right">right</option>
-      </select>
-    </label>
+    {% include "_hand_segmented.html" %}
     <label>Grip type
       <select name="grip_type_id" class="grip-select">
         {% for grip in grip_types %}
@@ -89,12 +84,7 @@
 <h3>Log a max test</h3>
 <form method="post" action="/max-tests">
   <div class="form-row">
-    <label>Hand
-      <select name="hand">
-        <option value="left">left</option>
-        <option value="right">right</option>
-      </select>
-    </label>
+    {% include "_hand_segmented.html" %}
     <label>Grip type
       <select name="grip_type_id" class="grip-select">
         {% for grip in grip_types %}

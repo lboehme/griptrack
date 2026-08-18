@@ -16,7 +16,7 @@ def test_tapping_a_completed_row_enters_edit_mode_with_the_right_values(
     for hand in ("left", "right"):
         page.goto(f"{live_server}/max-tests")
         form = page.locator('form[action="/max-tests"]')
-        form.locator('select[name="hand"]').select_option(hand)
+        form.locator(f'input[name="hand"][value="{hand}"]').check()
         form.locator("select.grip-select").select_option(label="half crimp")
         form.locator('input[name="edge_mm"]').fill("20")
         form.locator('input[name="weight"]').fill("40")
@@ -59,3 +59,69 @@ def test_tapping_a_completed_row_enters_edit_mode_with_the_right_values(
     expect(left_weight).to_have_text(set1_weight)
     expect(page.locator(".set-done-btn")).to_have_text("Save")
     expect(page.locator(".set-cancel-btn")).to_be_visible()
+    expect(page.locator(".set-delete-btn")).to_be_visible()
+
+
+def test_delete_set_and_undo_in_edit_mode(live_server, authenticated_page):
+    page = authenticated_page
+
+    for hand in ("left", "right"):
+        page.goto(f"{live_server}/max-tests")
+        form = page.locator('form[action="/max-tests"]')
+        form.locator(f'input[name="hand"][value="{hand}"]').check()
+        form.locator("select.grip-select").select_option(label="half crimp")
+        form.locator('input[name="edge_mm"]').fill("20")
+        form.locator('input[name="weight"]').fill("40")
+        form.locator('button[type="submit"]').click()
+
+    page.goto(f"{live_server}/session/new")
+    page.locator(".grip-select").select_option(label="half crimp")
+    page.locator('input[name="edge_mm"]').fill("20")
+    page.get_by_role("button", name="Start warmup").click()
+    page.get_by_role("link", name="Continue to work sets").click()
+
+    # Outside edit mode, delete button is hidden
+    expect(page.locator(".set-delete-btn")).to_be_hidden()
+
+    # Commit set 1
+    page.locator(".set-done-btn").click()
+    expect(page.locator('.completed-row[data-set="1"]')).to_be_visible()
+    page.locator("#rest-skip-btn").click()
+
+    # Commit set 2
+    page.locator('.stepper-plus[data-field="weight"][data-hand="left"]').click()
+    page.locator(".set-done-btn").click()
+    expect(page.locator('.completed-row[data-set="2"]')).to_be_visible()
+    page.locator("#rest-skip-btn").click()
+
+    pill = page.locator(".focus-pill")
+    expect(pill).to_contain_text("Set 3 of")
+
+    # Enter edit mode for set 1
+    page.locator('.completed-row[data-set="1"]').click()
+    expect(pill).to_have_text("Editing set 1")
+    delete_btn = page.locator(".set-delete-btn")
+    expect(delete_btn).to_be_visible()
+
+    # Click delete
+    delete_btn.click()
+
+    # Now old set 2 is renumbered to set 1, and set 2 row is gone
+    expect(page.locator('.completed-row[data-set="1"]')).to_be_visible()
+    expect(page.locator('.completed-row[data-set="2"]')).to_be_hidden()
+    expect(pill).to_contain_text("Set 2 of")
+
+    # Undo snackbar is visible
+    snackbar = page.locator("#undo-snackbar")
+    expect(snackbar).to_be_visible()
+    expect(snackbar).to_contain_text("Set 1 deleted")
+
+    # Click undo
+    page.locator("#undo-btn").click()
+
+    # Both set 1 and set 2 are back in completed list
+    expect(snackbar).to_be_hidden()
+    expect(page.locator('.completed-row[data-set="1"]')).to_be_visible()
+    expect(page.locator('.completed-row[data-set="2"]')).to_be_visible()
+    expect(pill).to_contain_text("Set 3 of")
+
