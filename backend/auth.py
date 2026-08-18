@@ -1,8 +1,10 @@
+import base64
+import hashlib
+import hmac
 import os
 import secrets
 import time
 
-import bcrypt
 from fastapi import Depends, HTTPException, Request
 from sqlmodel import Session, func, select
 
@@ -10,9 +12,23 @@ from backend.db import get_session
 from backend.models import VALID_UNITS, Invite, User, utcnow
 from backend.plates import seed_default_inventory
 
-# bcrypt ignores everything past 72 bytes (and bcrypt >= 5 refuses outright).
 PASSWORD_MIN_LENGTH = 8
-PASSWORD_MAX_BYTES = 72
+# PBKDF2 hashes the whole input (no bcrypt 72-byte truncation), so this is just
+# DoS hygiene / sanity, not a correctness limit — generous enough for any real
+# passphrase.
+PASSWORD_MAX_BYTES = 1024
+
+# Password hashing is stdlib PBKDF2-HMAC-SHA256 rather than bcrypt/argon2/scrypt:
+# those are native (Rust/C) wheels, and the on-device Android target (PRD #93)
+# wants to minimise the native-wheel surface — see docs/adr/0009 and #108.
+# PBKDF2 is a NIST-approved KDF; weaker per-iteration than bcrypt against GPU
+# attackers, but acceptable for a personal, invite-only, rate-limited instrument
+# (ADR-0006). The iteration count is stored in each hash, so it can be raised
+# later without invalidating existing hashes. 600k is OWASP's 2023 floor for
+# PBKDF2-HMAC-SHA256.
+_PBKDF2_ALGORITHM = "pbkdf2_sha256"
+_PBKDF2_ITERATIONS = 600_000
+_PBKDF2_SALT_BYTES = 16
 
 LOGIN_MAX_FAILURES = 10
 LOGIN_WINDOW_SECONDS = 60.0
@@ -23,17 +39,37 @@ class RegistrationError(Exception):
 
 
 def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    salt = secrets.token_bytes(_PBKDF2_SALT_BYTES)
+    derived = hashlib.pbkdf2_hmac(
+        "sha256", password.encode(), salt, _PBKDF2_ITERATIONS
+    )
+    salt_b64 = base64.b64encode(salt).decode()
+    hash_b64 = base64.b64encode(derived).decode()
+    return f"{_PBKDF2_ALGORITHM}${_PBKDF2_ITERATIONS}${salt_b64}${hash_b64}"
 
 
 def verify_password(password: str, hashed: str) -> bool:
+    """Constant-time check against a stored ``pbkdf2_sha256$…`` hash.
+
+    Fails closed (returns False, never raises) on any malformed or legacy
+    (e.g. bcrypt ``$2b$…``) hash — those accounts must be reset, see #108.
+    """
     try:
-        return bcrypt.checkpw(password.encode(), hashed.encode())
-    except ValueError:
+        algorithm, iterations_s, salt_b64, hash_b64 = hashed.split("$")
+        iterations = int(iterations_s)
+        salt = base64.b64decode(salt_b64, validate=True)
+        expected = base64.b64decode(hash_b64, validate=True)
+    except (ValueError, TypeError):
         return False
+    if algorithm != _PBKDF2_ALGORITHM or iterations < 1 or not expected:
+        return False
+    derived = hashlib.pbkdf2_hmac(
+        "sha256", password.encode(), salt, iterations, dklen=len(expected)
+    )
+    return hmac.compare_digest(derived, expected)
 
 
-# Precomputed so authenticate() can spend the same bcrypt time whether or not
+# Precomputed so authenticate() can spend the same hashing time whether or not
 # the email exists (no user-enumeration via response timing).
 _DUMMY_HASH = hash_password("dummy-password-for-timing")
 

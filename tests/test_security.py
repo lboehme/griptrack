@@ -36,15 +36,52 @@ def test_same_origin_posts_pass(client):
 
 
 def test_password_rules_are_enforced(client):
+    from backend.auth import PASSWORD_MAX_BYTES
+
+    # All failing attempts stay on the first-registration path (no invite
+    # needed and no account created), so the only rejection reason is the
+    # password rule under test.
     too_short = register(client, password="short")
     assert too_short.status_code == 400
 
-    too_long = register(client, password="x" * 73)
+    # There's still a sane upper bound (DoS hygiene), just no longer bcrypt's
+    # 72 bytes.
+    too_long = register(client, password="x" * (PASSWORD_MAX_BYTES + 1))
     assert too_long.status_code == 400
 
-    # And neither attempt created an account.
-    ok = register(client, password="long-enough-pw")
+    # PBKDF2 (unlike bcrypt) doesn't truncate at 72 bytes, so a passphrase
+    # longer than 72 chars that would once have been rejected now registers.
+    ok = register(client, password="x" * 73)
     assert ok.status_code == 303
+
+
+def test_password_hashing_uses_pbkdf2():
+    """#108: password hashing is stdlib PBKDF2 (no Rust bcrypt wheel), stored
+    in a self-describing format, and rejects malformed/legacy hashes without
+    crashing."""
+    from backend.auth import hash_password, verify_password
+
+    hashed = hash_password("correct horse battery staple")
+
+    # Self-describing: algorithm$iterations$salt$hash.
+    assert hashed.startswith("pbkdf2_sha256$")
+    algorithm, iterations, salt_b64, hash_b64 = hashed.split("$")
+    assert int(iterations) >= 600_000  # OWASP 2023 floor for PBKDF2-HMAC-SHA256
+    assert salt_b64 and hash_b64
+
+    # Round-trips, and only for the right password.
+    assert verify_password("correct horse battery staple", hashed) is True
+    assert verify_password("wrong password", hashed) is False
+
+    # Random per-hash salt: same password hashes to different strings.
+    assert hash_password("same") != hash_password("same")
+
+    # A legacy bcrypt hash can no longer be verified (reset-on-cutover), but
+    # must fail closed rather than raise.
+    assert verify_password("x", "$2b$12$" + "a" * 53) is False
+    # Arbitrary garbage also fails closed.
+    assert verify_password("x", "not-a-hash") is False
+    assert verify_password("x", "") is False
 
 
 def test_duplicate_email_is_rejected_cleanly(client):
