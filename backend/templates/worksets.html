@@ -332,27 +332,18 @@
     return next < 1 ? 1 : next;
   }
 
-  function formatRpe(value) {
-    if (value === null || value === "" || value === undefined) return "7";
-    var num = typeof value === "number" ? value : parseFloat(value);
-    if (isNaN(num)) return "7";
-    return Number.isInteger(num) ? String(num) : num.toFixed(1);
-  }
-
+  // Render an RPE value into a mini-value display: an unset/invalid value
+  // shows a greyed "7" hint (the wake-at-7 default, #114); a real value
+  // shows white, integers without a trailing ".0".
   function renderRpeDisplay(displayEl, value) {
     if (!displayEl) return;
-    if (value === null || value === "" || value === undefined) {
+    var num = typeof value === "number" ? value : parseFloat(value);
+    if (value === null || value === "" || value === undefined || isNaN(num)) {
       displayEl.textContent = "7";
       displayEl.classList.add("rpe-inactive");
     } else {
-      var num = typeof value === "number" ? value : parseFloat(value);
-      if (isNaN(num)) {
-        displayEl.textContent = "7";
-        displayEl.classList.add("rpe-inactive");
-      } else {
-        displayEl.textContent = Number.isInteger(num) ? String(num) : num.toFixed(1);
-        displayEl.classList.remove("rpe-inactive");
-      }
+      displayEl.textContent = Number.isInteger(num) ? String(num) : num.toFixed(1);
+      displayEl.classList.remove("rpe-inactive");
     }
   }
 
@@ -644,7 +635,7 @@
       if (list.querySelectorAll(".completed-row").length === 0) {
         var emptyP = document.createElement("p");
         emptyP.className = "muted completed-empty";
-        emptyP.textContent = "No completed sets yet for this combo.";
+        emptyP.textContent = "No sets logged yet.";
         list.appendChild(emptyP);
       }
     }
