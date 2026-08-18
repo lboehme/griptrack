@@ -12,6 +12,8 @@ captures/
 
 # Chaquopy's pip cache/build directory for resolved wheels.
 app/build/pip-cache/
+app/wheels/
+*.whl
 
 # OS cruft.
 .DS_Store

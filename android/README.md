@@ -1,72 +1,69 @@
-# GripTrack Android shell — Chaquopy feasibility skeleton (#97)
+# GripTrack Android shell — Embedded Backend + WebView (#98)
 
-This is a Chaquopy (embedded CPython) Android Studio / Gradle project. Its
-only job right now is to prove that `bcrypt` and `pydantic-core` — the two
-Rust-backed dependencies GripTrack's backend needs — install and run on an
-arm64 Android device under Python 3.12. It is **not** a throwaway spike:
-this project skeleton is meant to become the real app shell in #98 (embed
-the FastAPI backend + WebView).
+This is the Android shell for GripTrack, packaging the embedded FastAPI backend,
+SQLite database, Jinja templates, static assets, and Alembic migrations via
+**Chaquopy 17.0.0** (CPython 3.13) behind a native Android **WebView** (PRD #93).
 
-Full rationale, sourced version pins, the native-wheel risk writeup, and
-the go/no-go criteria live in
-**[`../docs/android-feasibility.md`](../docs/android-feasibility.md)** —
-read that before building. This file is just the quickstart.
+## Architecture
 
-## What's here
+1. **Embedded Python server (`ServerManager.kt` + `backend.launcher`)**:
+   - Spawns a daemon background thread at app cold-start running CPython 3.13.
+   - Runs `backend.launcher.serve(app_dir, host="127.0.0.1", port=8000)`:
+     - Sets the SQLite DB path to an app-private location (`filesDir/griptrack.db`).
+     - Executes Alembic migrations (`upgrade head`) to establish schema and seed data.
+     - Provisions a persistent session secret (`filesDir/session_secret`).
+     - Binds `uvicorn` on loopback `127.0.0.1:8000` with the plain ASGI runner (`asyncio`/`h11`).
+     - Sets `GRIPTRACK_WEBVIEW_BUILD=1` (skipping service worker and manifest).
+   - Polls `http://127.0.0.1:8000/health` until HTTP 200 is returned.
 
+2. **Native WebView & Splash UI (`MainActivity.kt` + `activity_main.xml`)**:
+   - Shows a branded splash screen (`#E8532C`) while the server boots and migrations run.
+   - Once `/health` returns 200, displays the WebView loaded at `http://127.0.0.1:8000/`.
+   - Cleartext loopback traffic is allowed via `android:usesCleartextTraffic="true"`.
+   - Javascript, DOM storage, and cookie persistence are enabled.
+   - Preserves WebView history on Android back button presses (`OnBackPressedCallback`).
+   - Server lifecycle survives Activity recreation and backgrounding.
+
+## Prerequisites
+
+- **JDK 17** (e.g. Temurin 17 at `/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home`)
+- **Android SDK** with Command-line Tools / Build-tools 35 (at `~/Library/Android/sdk`)
+- **Python 3.13** on host (`/opt/homebrew/bin/python3.13`)
+- `pydantic-core` arm64 cp313 wheel in `android/app/wheels/` (pre-bundled)
+
+## Building the APK
+
+From `android/` directory:
+
+```bash
+JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home \
+ANDROID_HOME=~/Library/Android/sdk \
+./gradlew assembleDebug --console=plain
 ```
-android/
-├── build.gradle.kts              # root: declares AGP 8.7.0 + Chaquopy 17.0.0
-├── settings.gradle.kts           # repositories, module list
-├── gradle.properties
-├── gradlew, gradlew.bat, gradle/wrapper/   # Gradle 8.9 wrapper
-└── app/
-    ├── build.gradle.kts          # namespace, arm64-v8a-only ABI filter,
-    │                              # chaquopy { defaultConfig { version = "3.12"; pip {...} } }
-    └── src/main/
-        ├── AndroidManifest.xml   # single activity, no permissions
-        ├── java/org/griptrack/app/MainActivity.kt
-        ├── python/feasibility_check.py   # the actual bcrypt/pydantic_core probe
-        └── res/…                 # one-screen layout + strings
+
+The APK will be output at:
+`android/app/build/outputs/apk/debug/app-debug.apk`
+
+## Sideload & Run on Device
+
+With an arm64-v8a Android device connected via USB with USB debugging enabled:
+
+```bash
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb shell am start -n org.griptrack.app/.MainActivity
 ```
 
-`app/build.gradle.kts` pins `pip { install("bcrypt==5.0.0");
-install("pydantic-core==2.46.4") }` — the exact versions
-`backend/requirements.txt` pins today (`pydantic-core` via the pinned
-`pydantic==2.13.4`), so this is a real test of the versions the app would
-actually ship.
+Monitor logs:
+```bash
+adb logcat -s GripTrackServer GripTrackActivity
+```
 
-## Build & run (owner-only — needs Android Studio + a device)
+## Manual On-Device Smoke Checklist (PRD #93)
 
-This project was scaffolded and researched on a machine with **no Android
-SDK, no Android Studio, and no arm64 device**, so nobody has run
-`./gradlew assembleDebug` against it yet, and the on-device check has not
-been performed by anyone. That verification is the remaining manual step.
-
-1. Open the `android/` folder (this folder, not the repo root) in Android
-   Studio. Let Gradle sync.
-   - **This sync is already a go/no-go signal.** `docs/android-feasibility.md`
-     found no confirmed Chaquopy prebuilt wheel for `bcrypt==5.0.0` (Rust,
-     post-4.0) or `pydantic-core` at all — so a pip-resolution failure
-     here is expected to be a live possibility, not a sign this project is
-     broken.
-2. If sync succeeds, run on a connected **arm64-v8a physical device**
-   (strongly preferred over an emulator for this check — see the doc for
-   why) via `Run ▸ Run 'app'`, or from a terminal:
-   ```
-   ./gradlew assembleDebug
-   adb install -r app/build/outputs/apk/debug/app-debug.apk
-   adb shell am start -n org.griptrack.app/.MainActivity
-   ```
-3. Read the result on screen (PASS/FAIL per check, GO/NO-GO overall) and
-   in Logcat: `adb logcat -s GripTrackFeasibility`.
-4. Record the outcome on issue #97, per the checklist at the end of
-   `docs/android-feasibility.md`.
-
-## Explicitly out of scope for this project (yet)
-
-- No WebView, no embedded FastAPI server, no backend import — that's #98.
-- No `x86_64` emulator ABI — arm64-v8a only, matching #97's acceptance
-  criteria and to avoid an emulator masking an arm64-specific problem.
-- No app icon assets, no theming beyond the AppCompat default — this is a
-  feasibility probe screen, not app UI.
+1. [ ] **Install APK**: Install `app-debug.apk` on a real arm64 device.
+2. [ ] **Cold Start**: Launch app; splash screen appears with progress bar; switches to login screen on `127.0.0.1:8000`.
+3. [ ] **First-run Registration**: Navigate to `/register`; enter email + password; submit. Account is created and becomes admin; session cookie is saved (no CSRF or cookie drop).
+4. [ ] **Focus Screen**: Log a work set via the Focus screen.
+5. [ ] **Dashboard Chart**: Open Dashboard; verify client-side uPlot TrainingVolume chart renders.
+6. [ ] **Data Persistence**: Force-kill the app (`adb shell am force-stop org.griptrack.app`) and reopen. Confirm user remains logged in and data persists from SQLite DB.
+7. [ ] **Airplane Mode**: Turn on airplane mode (no network connectivity); perform actions to confirm 100% offline, on-device operation.

@@ -9,6 +9,7 @@ the HTTP seam / over a real socket, on desktop — no Android seam involved.
 """
 
 import importlib
+import inspect
 import os
 import socket
 import sys
@@ -30,6 +31,7 @@ from backend.launcher import (
     database_url_for,
     ensure_session_secret,
     run_migrations,
+    serve,
 )
 from backend.models import STARTER_GRIP_TYPES, GripType, TrainingProtocol, User
 
@@ -38,6 +40,7 @@ ENV_KEYS = (
     "GRIPTRACK_SESSION_SECRET",
     "GRIPTRACK_ENV",
     "GRIPTRACK_BOOTSTRAP_TOKEN",
+    "GRIPTRACK_WEBVIEW_BUILD",
 )
 
 
@@ -79,6 +82,12 @@ def test_database_url_for_is_an_absolute_four_slash_sqlite_url(tmp_path):
     assert url.count("/", len("sqlite:")) >= 4
 
 
+def test_database_url_for_accepts_string_path(tmp_path):
+    url = database_url_for(str(tmp_path))
+
+    assert url == f"sqlite:///{(tmp_path / DB_FILENAME).resolve()}"
+
+
 # --- ensure_session_secret ----------------------------------------------
 
 
@@ -88,6 +97,11 @@ def test_ensure_session_secret_persists_and_reuses_across_calls(tmp_path):
 
     assert first == second
     assert len(first) > 20
+    assert (tmp_path / SESSION_SECRET_FILENAME).read_text().strip() == first
+
+
+def test_ensure_session_secret_accepts_string_path(tmp_path):
+    first = ensure_session_secret(str(tmp_path))
     assert (tmp_path / SESSION_SECRET_FILENAME).read_text().strip() == first
 
 
@@ -137,12 +151,14 @@ def test_bootstrap_forces_non_production_and_no_bootstrap_token(tmp_path, monkey
     # or force Secure cookies — bootstrap() must override both.
     monkeypatch.setenv("GRIPTRACK_ENV", "production")
     monkeypatch.setenv("GRIPTRACK_BOOTSTRAP_TOKEN", "some-invite-style-code")
+    monkeypatch.setenv("GRIPTRACK_WEBVIEW_BUILD", "0")
 
     database_url = bootstrap(tmp_path)
 
     assert database_url == database_url_for(tmp_path)
     assert "GRIPTRACK_ENV" not in os.environ
     assert "GRIPTRACK_BOOTSTRAP_TOKEN" not in os.environ
+    assert os.environ["GRIPTRACK_WEBVIEW_BUILD"] == "1"
     assert os.environ["GRIPTRACK_DATABASE_URL"] == database_url
     assert os.environ["GRIPTRACK_SESSION_SECRET"] == ensure_session_secret(tmp_path)
 
@@ -157,7 +173,32 @@ def test_bootstrap_reuses_the_persisted_secret_across_calls(tmp_path):
     assert first_secret == second_secret
 
 
+def test_bootstrap_accepts_string_path(tmp_path):
+    database_url = bootstrap(str(tmp_path))
+    assert database_url == database_url_for(tmp_path)
+
+
 # --- build_app (HTTP seam) -----------------------------------------------
+
+
+def test_build_app_serves_in_webview_mode_without_sw_or_manifest(tmp_path):
+    app = build_app(tmp_path)
+
+    with TestClient(app) as client:
+        response = client.get("/login")
+
+    assert response.status_code == 200
+    assert '<script src="/static/register-sw.js"' not in response.text
+    assert '<link rel="manifest"' not in response.text
+
+
+def test_build_app_accepts_string_path(tmp_path):
+    app = build_app(str(tmp_path))
+
+    with TestClient(app) as client:
+        response = client.get("/login")
+
+    assert response.status_code == 200
 
 
 def test_build_app_registers_the_first_user_with_no_bootstrap_token(tmp_path):
@@ -237,3 +278,15 @@ def test_serve_wiring_boots_a_reachable_loopback_server(tmp_path):
     finally:
         server.should_exit = True
         thread.join(timeout=5)
+
+
+def test_serve_signature_accepts_positional_host_and_port():
+    params = list(inspect.signature(serve).parameters.values())
+    assert len(params) >= 3
+    assert params[0].name == "app_dir"
+    assert params[1].name == "host"
+    assert params[2].name == "port"
+    # host and port must be POSITIONAL_OR_KEYWORD so Java/Kotlin bridges (like Chaquopy)
+    # can call serve(app_dir, host, port) positionally.
+    assert params[1].kind == inspect.Parameter.POSITIONAL_OR_KEYWORD
+    assert params[2].kind == inspect.Parameter.POSITIONAL_OR_KEYWORD
