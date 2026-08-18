@@ -218,7 +218,7 @@ label {
   color: var(--muted);
 }
 
-input, select {
+input, select, textarea {
   display: block;
   width: 100%;
   margin-top: .32rem;
@@ -234,7 +234,7 @@ input, select {
   transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
 }
 
-input:focus, select:focus {
+input:focus, select:focus, textarea:focus {
   border-color: var(--accent);
   background: var(--surface);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 16%, transparent);
