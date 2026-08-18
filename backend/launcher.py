@@ -43,25 +43,26 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8000
 
 
-def database_url_for(app_dir: Path) -> str:
+def database_url_for(app_dir: Path | str) -> str:
     """Absolute, four-slash `sqlite:////...` URL for the DB file in app_dir.
 
     The engine (backend.db) auto-creates the parent directory and applies
     WAL + busy_timeout per connection, so nothing else is needed here.
     """
-    db_path = (app_dir / DB_FILENAME).resolve()
+    db_path = (Path(app_dir) / DB_FILENAME).resolve()
     return f"sqlite:///{db_path}"
 
 
-def ensure_session_secret(app_dir: Path) -> str:
+def ensure_session_secret(app_dir: Path | str) -> str:
     """Return the device session secret, generating and persisting it once.
 
     Subsequent calls (i.e. subsequent app launches) reuse the same value
     read back from app_dir, so cookies signed on a prior run keep
     validating — never the dev fallback, never a fresh secret per launch.
     """
-    app_dir.mkdir(parents=True, exist_ok=True)
-    secret_path = app_dir / SESSION_SECRET_FILENAME
+    app_path = Path(app_dir)
+    app_path.mkdir(parents=True, exist_ok=True)
+    secret_path = app_path / SESSION_SECRET_FILENAME
     if secret_path.exists():
         existing = secret_path.read_text().strip()
         if existing:
@@ -117,7 +118,7 @@ def run_migrations(database_url: str, *, project_root: Path = PROJECT_ROOT) -> N
     command.upgrade(alembic_cfg, "head")
 
 
-def bootstrap(app_dir: Path, *, project_root: Path = PROJECT_ROOT) -> str:
+def bootstrap(app_dir: Path | str, *, project_root: Path = PROJECT_ROOT) -> str:
     """Run the full on-device bootstrap sequence against app_dir.
 
     Mirrors docker-entrypoint.sh: resolve + set the DB path, migrate to
@@ -129,21 +130,23 @@ def bootstrap(app_dir: Path, *, project_root: Path = PROJECT_ROOT) -> str:
 
     Returns the database_url that was set, mostly for logging/tests.
     """
-    app_dir.mkdir(parents=True, exist_ok=True)
+    app_path = Path(app_dir)
+    app_path.mkdir(parents=True, exist_ok=True)
 
-    database_url = database_url_for(app_dir)
+    database_url = database_url_for(app_path)
     run_migrations(database_url, project_root=project_root)
 
-    secret = ensure_session_secret(app_dir)
+    secret = ensure_session_secret(app_path)
     os.environ["GRIPTRACK_SESSION_SECRET"] = secret
 
     os.environ.pop("GRIPTRACK_ENV", None)
     os.environ.pop("GRIPTRACK_BOOTSTRAP_TOKEN", None)
+    os.environ["GRIPTRACK_WEBVIEW_BUILD"] = "1"
 
     return database_url
 
 
-def build_app(app_dir: Path, *, project_root: Path = PROJECT_ROOT) -> FastAPI:
+def build_app(app_dir: Path | str, *, project_root: Path = PROJECT_ROOT) -> FastAPI:
     """Bootstrap app_dir, then build and return the ready-to-serve FastAPI
     app. Split out from serve() so tests can drive it through TestClient
     (or a real socket) without this function itself binding one."""
@@ -168,7 +171,7 @@ def _uvicorn_config(app: FastAPI, host: str, port: int) -> UvicornConfig:
 
 
 def serve(
-    app_dir: Path,
+    app_dir: Path | str,
     *,
     host: str = DEFAULT_HOST,
     port: int = DEFAULT_PORT,

@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">GripTrack Feasibility</string>
-    <string name="checking_placeholder">Running bcrypt / pydantic_core checks…</string>
+    <string name="app_name">GripTrack</string>
+    <string name="starting_server">Starting GripTrack…</string>
+    <string name="server_error_title">Failed to start embedded server</string>
+    <string name="retry_button">Retry</string>
 </resources>

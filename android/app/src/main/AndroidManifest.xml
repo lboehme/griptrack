@@ -1,19 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-    #97 scope: no network, no storage, no permissions needed — this build
-    only runs the on-device bcrypt/pydantic_core probe (feasibility_check.py)
-    and shows the result. Loopback server + WebView + INTERNET-adjacent
-    config land in #98.
--->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:allowBackup="false"
         android:label="@string/app_name"
-        android:theme="@style/Theme.AppCompat.DayNight">
+        android:theme="@style/Theme.GripTrack"
+        android:usesCleartextTraffic="true">
 
         <activity
             android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
