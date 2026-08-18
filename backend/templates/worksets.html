@@ -64,7 +64,7 @@
         <span class="field-label">RPE</span>
         <div class="mini-stepper">
           <button type="button" class="stepper-btn-sm stepper-minus" data-field="rpe" data-hand="{{ hand }}" aria-label="Decrease {{ hand }} RPE">−</button>
-          <span class="mini-value" data-role="rpe-display" data-hand="{{ hand }}">{{ seed[hand].rpe if seed[hand].rpe is not none else "–" }}</span>
+          <span class="mini-value{% if seed[hand].rpe is none %} rpe-inactive{% endif %}" data-role="rpe-display" data-hand="{{ hand }}">{{ seed[hand].rpe if seed[hand].rpe is not none else "7" }}</span>
           <button type="button" class="stepper-btn-sm stepper-plus" data-field="rpe" data-hand="{{ hand }}" aria-label="Increase {{ hand }} RPE">＋</button>
         </div>
         <label class="raw-input-label">RPE
@@ -311,19 +311,35 @@
   }
 
   function formatRpe(value) {
-    if (value === null || value === "" || value === undefined) return "–";
+    if (value === null || value === "" || value === undefined) return "7";
     var num = typeof value === "number" ? value : parseFloat(value);
-    if (isNaN(num)) return "–";
+    if (isNaN(num)) return "7";
     return Number.isInteger(num) ? String(num) : num.toFixed(1);
   }
 
+  function renderRpeDisplay(displayEl, value) {
+    if (!displayEl) return;
+    if (value === null || value === "" || value === undefined) {
+      displayEl.textContent = "7";
+      displayEl.classList.add("rpe-inactive");
+    } else {
+      var num = typeof value === "number" ? value : parseFloat(value);
+      if (isNaN(num)) {
+        displayEl.textContent = "7";
+        displayEl.classList.add("rpe-inactive");
+      } else {
+        displayEl.textContent = Number.isInteger(num) ? String(num) : num.toFixed(1);
+        displayEl.classList.remove("rpe-inactive");
+      }
+    }
+  }
+
   function stepRpe(value, dir) {
+    if (value === null) return 7.0;
     if (dir > 0) {
-      if (value === null) return 1.0;
       var up = Math.round((value + 0.5) * 10) / 10;
       return up > 10 ? 10 : up;
     }
-    if (value === null) return null;
     if (value <= 1) return null;
     var down = Math.round((value - 0.5) * 10) / 10;
     return down < 1 ? 1 : down;
@@ -355,7 +371,7 @@
           var currentRpe = input.value === "" ? null : parseFloat(input.value);
           var nextRpe = stepRpe(currentRpe, dir);
           input.value = nextRpe === null ? "" : nextRpe;
-          display.textContent = formatRpe(nextRpe);
+          renderRpeDisplay(display, nextRpe);
         }
       });
     });
@@ -464,7 +480,7 @@
     var rpeDisplay = card.querySelector('[data-role="rpe-display"]');
     var rpe = vals.rpe === undefined ? null : vals.rpe;
     if (rpeInput) rpeInput.value = rpe === null ? "" : rpe;
-    if (rpeDisplay) rpeDisplay.textContent = formatRpe(rpe);
+    if (rpeDisplay) renderRpeDisplay(rpeDisplay, rpe);
   }
 
   function buildDetailText(handsData) {
@@ -606,14 +622,7 @@
     if (!form) return;
     form.dataset.currentSet = nextSet;
     document.getElementById("set-number-field").value = nextSet;
-    // Carry the just-committed weight/reps down to the new current set;
-    // RPE always starts blank again (see CONTEXT.md: Loadable ladder).
-    form.querySelectorAll('[data-role="rpe-input"]').forEach(function (input) {
-      input.value = "";
-    });
-    form.querySelectorAll('[data-role="rpe-display"]').forEach(function (el) {
-      el.textContent = "–";
-    });
+    // The just-committed weight, reps, and RPE carry down to the new current set.
   }
 })();
 

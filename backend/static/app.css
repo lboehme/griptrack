@@ -697,6 +697,10 @@ input[type="number"]::-webkit-outer-spin-button {
   font-variant-numeric: tabular-nums;
 }
 
+.rpe-inactive {
+  color: var(--muted);
+}
+
 .raw-input-label { margin: .5rem 0 0; font-size: .75rem; }
 
 /* Progressive enhancement: the tap steppers replace the plain number

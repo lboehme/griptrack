@@ -132,16 +132,16 @@ def _seed_for_hand(
     the set isn't "complete" yet and current_set_number hasn't advanced),
     that row's own values win, RPE included — reloading the page must not
     forget what was just saved. Otherwise this is a genuinely new set:
-    weight/reps carry down from the most recently committed set for this
-    hand, else the usual CurrentMax/default-reps prefill, and RPE starts
-    blank (nullable) regardless, see CONTEXT.md: Loadable ladder."""
+    weight/reps and RPE carry down from the most recently committed set for
+    this hand, else the usual CurrentMax/default-reps prefill and RPE starts
+    blank (nullable) if there is no prior set or the prior set had no RPE."""
     existing = saved.get((hand, current_set_number))
     if existing is not None:
         return {"weight": existing.weight, "reps": existing.reps, "rpe": existing.rpe}
     for n in range(current_set_number - 1, 0, -1):
         prior = saved.get((hand, n))
         if prior is not None:
-            return {"weight": prior.weight, "reps": prior.reps, "rpe": None}
+            return {"weight": prior.weight, "reps": prior.reps, "rpe": prior.rpe}
     return {"weight": current_max.get(hand), "reps": default_reps, "rpe": None}
 
 

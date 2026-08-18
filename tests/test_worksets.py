@@ -783,3 +783,45 @@ def test_edit_mode_still_works_once_every_default_set_is_logged(client):
     assert response.status_code == 200
     detail = completed_detail(worksets_page(client).text, 2)
     assert "L 46.0 × 4 @ 9" in detail
+
+
+# ---------- RPE stepper defaults and carry-down (issue #114) ----------
+
+
+def test_rpe_stepper_defaults_to_greyed_7_and_blank_raw_input(client):
+    setup_tested_user(client)
+    page = worksets_page(client).text
+    assert current_set_field(page, "left", "rpe") == ""
+    assert current_set_field(page, "right", "rpe") == ""
+    assert re.search(
+        r'<span class="mini-value rpe-inactive" data-role="rpe-display" data-hand="left">\s*7\s*</span>',
+        page,
+    )
+
+
+def test_rpe_carries_down_from_prior_committed_set(client):
+    setup_tested_user(client)
+    save_focus_set(client, 1, left=("42.5", "5", "8"), right=("40.0", "5", "7.5"))
+
+    page = worksets_page(client).text
+    assert pill_text(page) == "Set 2 of 3"
+    assert current_set_field(page, "left", "rpe") == "8.0"
+    assert current_set_field(page, "right", "rpe") == "7.5"
+    assert re.search(
+        r'<span class="mini-value" data-role="rpe-display" data-hand="left">\s*8\.0\s*</span>',
+        page,
+    )
+
+
+def test_rpe_stays_unset_when_prior_set_had_no_rpe(client):
+    setup_tested_user(client)
+    save_focus_set(client, 1, left=("42.5", "5", None), right=("40.0", "5", None))
+
+    page = worksets_page(client).text
+    assert pill_text(page) == "Set 2 of 3"
+    assert current_set_field(page, "left", "rpe") == ""
+    assert re.search(
+        r'<span class="mini-value rpe-inactive" data-role="rpe-display" data-hand="left">\s*7\s*</span>',
+        page,
+    )
+
