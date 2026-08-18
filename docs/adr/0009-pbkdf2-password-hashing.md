@@ -50,7 +50,7 @@ round-trips.
 ## Consequences / trade-offs
 
 - **Weaker per-iteration than bcrypt/argon2 against GPU attackers.** PBKDF2 is a
-  NIST-approved KDF and, at 600k iterations with a per-user salt behind login
+  NIST-approved KDF and, at 300k iterations with a per-user salt behind login
   rate limiting, is a reasonable choice for a **personal, invite-only
   instrument** (ADR-0006). Flag this if the threat model ever changes (public
   signup, an audience) — that would be the trigger to reconsider argon2, and to

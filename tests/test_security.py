@@ -89,6 +89,9 @@ def test_password_hashing_uses_pbkdf2():
     # Arbitrary garbage also fails closed.
     assert verify_password("x", "not-a-hash") is False
     assert verify_password("x", "") is False
+    # A well-shaped header but invalid base64 in the salt/hash fields must also
+    # fail closed (b64decode raises binascii.Error, a ValueError subclass).
+    assert verify_password("x", "pbkdf2_sha256$300000$not!base64$also!bad") is False
 
 
 def test_duplicate_email_is_rejected_cleanly(client):

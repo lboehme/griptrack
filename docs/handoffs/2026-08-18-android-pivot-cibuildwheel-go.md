@@ -47,7 +47,7 @@ Key findings (full write-up in `docs/android-feasibility.md`, verdict on #97):
 Because every self-built wheel is per-release cross-compile maintenance,
 dropping bcrypt halves that surface. `backend.auth` now hashes with stdlib
 `hashlib.pbkdf2_hmac` (PBKDF2-HMAC-SHA256), self-describing
-`pbkdf2_sha256$iterations$salt$hash`, 600k iterations (OWASP 2023), 16-byte
+`pbkdf2_sha256$iterations$salt$hash`, 300k iterations, 16-byte
 salt, `hmac.compare_digest`, fails closed on legacy/garbage hashes. Password cap
 raised off bcrypt's 72 bytes → 1024. `bcrypt` removed from `requirements.txt`
 **and uninstalled from the conda env**; `import backend.main` verified without
