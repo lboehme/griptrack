@@ -74,16 +74,13 @@ class MainActivity : AppCompatActivity() {
             loadsImagesAutomatically = true
         }
 
-        CookieManager.getInstance().apply {
-            setAcceptCookie(true)
-            setAcceptThirdPartyCookies(webView, true)
-        }
+        CookieManager.getInstance().setAcceptCookie(true)
 
         webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val url = request?.url?.toString() ?: return false
                 // Keep loopback navigations within the WebView
-                return if (url.startsWith(ServerManager.serverUrl) || url.startsWith("http://127.0.0.1")) {
+                return if (url.startsWith(ServerManager.serverUrl)) {
                     false
                 } else {
                     // Let external links open in standard browser if needed
@@ -111,12 +108,8 @@ class MainActivity : AppCompatActivity() {
 
         ServerManager.start(
             context = this,
-            onReady = { url ->
-                onServerReady(url)
-            },
-            onError = { error ->
-                onServerError(error)
-            }
+            onReady = ::onServerReady,
+            onError = ::onServerError
         )
     }
 
@@ -131,7 +124,8 @@ class MainActivity : AppCompatActivity() {
     private fun onServerReady(url: String) {
         Log.i(TAG, "Server ready, loading WebView at: $url")
         if (!hasLoadedInitialUrl) {
-            webView.loadUrl(url)
+            val loginUrl = "$url/login"
+            webView.loadUrl(loginUrl)
             hasLoadedInitialUrl = true
         }
         splashContainer.visibility = View.GONE

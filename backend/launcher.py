@@ -172,9 +172,9 @@ def _uvicorn_config(app: FastAPI, host: str, port: int) -> UvicornConfig:
 
 def serve(
     app_dir: Path | str,
-    *,
     host: str = DEFAULT_HOST,
     port: int = DEFAULT_PORT,
+    *,
     project_root: Path = PROJECT_ROOT,
 ) -> None:
     """Bootstrap app_dir and serve it on host:port. Blocks until shut down.

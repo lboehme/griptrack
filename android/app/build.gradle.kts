@@ -88,15 +88,9 @@ chaquopy {
                 options("--find-links", userWheelhouseDir.absolutePath)
             }
 
-            // Runtime dependencies matching requirements.txt
-            install("fastapi==0.139.0")
-            install("uvicorn==0.49.0")
-            install("pydantic==2.13.4")
-            install("sqlmodel==0.0.39")
-            install("alembic==1.18.5")
-            install("python-multipart==0.0.32")
-            install("jinja2==3.1.6")
-            install("itsdangerous==2.2.0")
+            // Single source of truth for runtime dependencies: requirements.txt
+            val requirementsFile = rootDir.resolve("../requirements.txt")
+            install("-r", requirementsFile.absolutePath)
         }
 
         // Package extraction for runtime disk reads: Jinja templates,

@@ -9,6 +9,7 @@ the HTTP seam / over a real socket, on desktop — no Android seam involved.
 """
 
 import importlib
+import inspect
 import os
 import socket
 import sys
@@ -30,6 +31,7 @@ from backend.launcher import (
     database_url_for,
     ensure_session_secret,
     run_migrations,
+    serve,
 )
 from backend.models import STARTER_GRIP_TYPES, GripType, TrainingProtocol, User
 
@@ -276,3 +278,15 @@ def test_serve_wiring_boots_a_reachable_loopback_server(tmp_path):
     finally:
         server.should_exit = True
         thread.join(timeout=5)
+
+
+def test_serve_signature_accepts_positional_host_and_port():
+    params = list(inspect.signature(serve).parameters.values())
+    assert len(params) >= 3
+    assert params[0].name == "app_dir"
+    assert params[1].name == "host"
+    assert params[2].name == "port"
+    # host and port must be POSITIONAL_OR_KEYWORD so Java/Kotlin bridges (like Chaquopy)
+    # can call serve(app_dir, host, port) positionally.
+    assert params[1].kind == inspect.Parameter.POSITIONAL_OR_KEYWORD
+    assert params[2].kind == inspect.Parameter.POSITIONAL_OR_KEYWORD
