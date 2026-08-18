@@ -747,8 +747,51 @@ input[type="number"]::-webkit-outer-spin-button {
   border-radius: 16px;
 }
 
+.set-actions .set-delete-btn {
+  flex-basis: 100%;
+  width: 100%;
+  min-height: 3rem;
+  border-radius: 16px;
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+}
+
 .set-actions .set-cancel-btn[hidden] { display: none; }
 .set-actions .set-done-btn[hidden] { display: none; }
+.set-actions .set-delete-btn[hidden] { display: none; }
+
+.undo-snackbar {
+  position: fixed;
+  bottom: calc(var(--tabbar-h) + 1rem);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: calc(100% - 2rem);
+  max-width: 480px;
+  padding: .75rem 1.1rem;
+  background: var(--surface);
+  color: var(--text);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  z-index: 90;
+}
+
+.undo-snackbar[hidden] { display: none; }
+
+.undo-btn {
+  min-height: 2.2rem;
+  padding: 0 .9rem;
+  font-size: .85rem;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
 
 /* ---- rest countdown (issue #82, throwaway pre-Wave-4) ---- */
 

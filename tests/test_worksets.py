@@ -4,6 +4,7 @@ from tests.helpers import (
     completed_detail,
     current_maxes,
     current_set_field,
+    delete_focus_set,
     get_session_page,
     grip_type_id,
     log_max_test,
@@ -11,6 +12,7 @@ from tests.helpers import (
     pill_text,
     register,
     register_second_user,
+    restore_focus_set,
     save_focus_set,
     save_work_set,
 )
@@ -641,6 +643,8 @@ def test_no_new_write_route_is_added_for_the_disclosure(client):
         "/session/workset",
         "/session/workset/delete",
         "/session/set",
+        "/session/set/delete",
+        "/session/set/restore",
         "/session/estimate",
         "/session/check",
         "/session/update",
@@ -824,4 +828,86 @@ def test_rpe_stays_unset_when_prior_set_had_no_rpe(client):
         r'<span class="mini-value rpe-inactive" data-role="rpe-display" data-hand="left">\s*7\s*</span>',
         page,
     )
+
+
+# ---------- Delete set with renumber and undo (issue #115) ----------
+
+
+def test_delete_set_renumbers_remaining_sets_without_gaps(client):
+    setup_tested_user(client)
+    save_focus_set(client, 1, left=("40.0", "5", "7"), right=("38.0", "5", "7"))
+    save_focus_set(client, 2, left=("42.5", "5", "8"), right=("40.0", "5", "8"))
+    save_focus_set(client, 3, left=("45.0", "5", "9"), right=("42.0", "5", "9"))
+
+    # Delete set 2
+    response = delete_focus_set(client, 2)
+    assert response.status_code == 200
+
+    page = worksets_page(client).text
+    # Old set 1 and old set 3 (now set 2) remain
+    assert completed_detail(page, 1) == "L 40.0 × 5 @ 7.0 · R 38.0 × 5 @ 7.0 kg"
+    assert completed_detail(page, 2) == "L 45.0 × 5 @ 9.0 · R 42.0 × 5 @ 9.0 kg"
+    assert completed_detail(page, 3) is None
+
+    # History confirms exactly 2 sets remain, indexed 1 and 2
+    history = client.get("/history").text
+    assert history.count('data-hand="left" data-set="1"') == 1
+    assert history.count('data-hand="left" data-set="2"') == 1
+    assert history.count('data-hand="left" data-set="3"') == 0
+
+
+def test_restore_set_inserts_and_shifts_higher_sets_back_up(client):
+    setup_tested_user(client)
+    save_focus_set(client, 1, left=("40.0", "5", "7"), right=("38.0", "5", "7"))
+    save_focus_set(client, 2, left=("42.5", "5", "8"), right=("40.0", "5", "8"))
+    save_focus_set(client, 3, left=("45.0", "5", "9"), right=("42.0", "5", "9"))
+
+    delete_focus_set(client, 2)
+
+    # Restore old set 2 at set_number 2
+    response = restore_focus_set(
+        client, 2, left=("42.5", "5", "8"), right=("40.0", "5", "8")
+    )
+    assert response.status_code == 200
+
+    page = worksets_page(client).text
+    assert completed_detail(page, 1) == "L 40.0 × 5 @ 7.0 · R 38.0 × 5 @ 7.0 kg"
+    assert completed_detail(page, 2) == "L 42.5 × 5 @ 8.0 · R 40.0 × 5 @ 8.0 kg"
+    assert completed_detail(page, 3) == "L 45.0 × 5 @ 9.0 · R 42.0 × 5 @ 9.0 kg"
+
+
+def test_delete_only_remaining_set_leaves_combo_empty_cleanly(client):
+    setup_tested_user(client)
+    save_focus_set(client, 1, left=("40.0", "5", "7"), right=("38.0", "5", "7"))
+
+    response = delete_focus_set(client, 1)
+    assert response.status_code == 200
+
+    page = worksets_page(client).text
+    assert completed_detail(page, 1) is None
+    assert pill_text(page) == "Set 1 of 3"
+    assert current_set_field(page, "left", "weight") == "42.5"
+
+
+def test_sequential_hand_delete_and_restore(client):
+    setup_tested_user(client)
+    client.post("/profile", data={"hand_order_pref": "sequential"})
+
+    save_focus_set(client, 1, left=("40.0", "5", "7"))
+    save_focus_set(client, 2, left=("42.5", "5", "8"))
+    save_focus_set(client, 3, left=("45.0", "5", "9"))
+
+    delete_focus_set(client, 2)
+
+    page = worksets_page(client).text
+    assert completed_detail(page, 1) == "40.0 kg × 5 @ 7.0"
+    assert completed_detail(page, 2) == "45.0 kg × 5 @ 9.0"
+    assert completed_detail(page, 3) is None
+
+    restore_focus_set(client, 2, left=("42.5", "5", "8"))
+    restored_page = worksets_page(client).text
+    assert completed_detail(restored_page, 1) == "40.0 kg × 5 @ 7.0"
+    assert completed_detail(restored_page, 2) == "42.5 kg × 5 @ 8.0"
+    assert completed_detail(restored_page, 3) == "45.0 kg × 5 @ 9.0"
+
 

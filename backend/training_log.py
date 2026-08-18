@@ -280,6 +280,97 @@ def delete_work_set(
     return True
 
 
+def delete_set_and_renumber(
+    session: Session,
+    training_session: TrainingSession,
+    grip_type_id: int,
+    edge_mm: int,
+    set_number: int,
+    commit: bool = True,
+) -> dict[str, dict]:
+    """Delete all in-play hands' WorkSets for the given set_number and
+    renumber any higher sets down by 1 in a single transaction, keeping the
+    1..N sequence contiguous with no gaps. Returns the deleted hands' data."""
+    deleted_rows = session.exec(
+        select(WorkSet)
+        .where(WorkSet.training_session_id == training_session.id)
+        .where(WorkSet.grip_type_id == grip_type_id)
+        .where(WorkSet.edge_mm == edge_mm)
+        .where(WorkSet.set_number == set_number)
+    ).all()
+
+    if not deleted_rows:
+        return {}
+
+    deleted_data = {
+        ws.hand: {"weight": ws.weight, "reps": ws.reps, "rpe": ws.rpe}
+        for ws in deleted_rows
+    }
+
+    for ws in deleted_rows:
+        session.delete(ws)
+
+    # Shift higher sets down by 1
+    higher_rows = session.exec(
+        select(WorkSet)
+        .where(WorkSet.training_session_id == training_session.id)
+        .where(WorkSet.grip_type_id == grip_type_id)
+        .where(WorkSet.edge_mm == edge_mm)
+        .where(WorkSet.set_number > set_number)
+        .order_by(WorkSet.set_number.asc())
+    ).all()
+
+    for ws in higher_rows:
+        ws.set_number -= 1
+        session.add(ws)
+
+    if commit:
+        session.commit()
+
+    return deleted_data
+
+
+def restore_set_at(
+    session: Session,
+    training_session: TrainingSession,
+    grip_type_id: int,
+    edge_mm: int,
+    set_number: int,
+    hands_payload: dict[str, tuple[float, int, float | None]],
+    commit: bool = True,
+) -> None:
+    """Insert a set at set_number, shifting any existing sets at or above
+    set_number up by 1, and write the restored hands' data."""
+    higher_rows = session.exec(
+        select(WorkSet)
+        .where(WorkSet.training_session_id == training_session.id)
+        .where(WorkSet.grip_type_id == grip_type_id)
+        .where(WorkSet.edge_mm == edge_mm)
+        .where(WorkSet.set_number >= set_number)
+        .order_by(WorkSet.set_number.desc())
+    ).all()
+
+    for ws in higher_rows:
+        ws.set_number += 1
+        session.add(ws)
+
+    for hand, (weight, reps, rpe) in hands_payload.items():
+        ws = WorkSet(
+            training_session_id=training_session.id,
+            hand=hand,
+            grip_type_id=grip_type_id,
+            edge_mm=edge_mm,
+            set_number=set_number,
+            weight=weight,
+            reps=reps,
+            rpe=rpe,
+        )
+        session.add(ws)
+
+    if commit:
+        session.commit()
+
+
 def worksets_for_combo(
     session: Session,
     user: User,

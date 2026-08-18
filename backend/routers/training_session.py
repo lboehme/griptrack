@@ -248,6 +248,90 @@ def save_focus_set(
     )
 
 
+@router.post("/session/set/delete")
+def delete_focus_set(
+    request: Request,
+    grip_type_id: int = Form(),
+    edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
+    date: date_type = Form(),
+    set_number: int = Form(ge=1, le=MAX_SET_NUMBER),
+    hand: str | None = Form(default=None),
+    session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
+    user: User = Depends(auth.current_user),
+    session: Session = Depends(get_session),
+):
+    require_grip_type(session, grip_type_id)
+    training_session = training_log.find_session(session, user, date, session_number)
+    if training_session is not None:
+        training_log.delete_set_and_renumber(
+            session, training_session, grip_type_id, edge_mm, set_number
+        )
+    if request.headers.get("HX-Request"):
+        return Response(status_code=204)
+    return combo_redirect("worksets", grip_type_id, edge_mm, date, hand or "", session_number)
+
+
+@router.post("/session/set/restore")
+def restore_focus_set(
+    request: Request,
+    grip_type_id: int = Form(),
+    edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
+    date: date_type = Form(),
+    set_number: int = Form(ge=1, le=MAX_SET_NUMBER),
+    session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
+    left_weight: float | None = Form(default=None),
+    left_reps: int | None = Form(default=None),
+    left_rpe: float | None = Form(default=None),
+    right_weight: float | None = Form(default=None),
+    right_reps: int | None = Form(default=None),
+    right_rpe: float | None = Form(default=None),
+    user: User = Depends(auth.current_user),
+    session: Session = Depends(get_session),
+):
+    raw = {
+        "left": (left_weight, left_reps, left_rpe),
+        "right": (right_weight, right_reps, right_rpe),
+    }
+    hands_payload: dict[str, tuple[float, int, float | None]] = {}
+    for hand, (weight, reps, rpe) in raw.items():
+        if weight is None and reps is None and rpe is None:
+            continue
+        if weight is None or reps is None:
+            return HTMLResponse(
+                f"{hand} hand needs both weight and reps.", status_code=400
+            )
+        if not (0 < weight <= MAX_WEIGHT):
+            return HTMLResponse("Weight out of range.", status_code=400)
+        if not (1 <= reps <= MAX_REPS):
+            return HTMLResponse("Reps out of range.", status_code=400)
+        if rpe is not None and not (1.0 <= rpe <= 10.0 and (rpe * 2) == int(rpe * 2)):
+            return HTMLResponse(
+                "RPE must be between 1 and 10 in 0.5 steps.", status_code=400
+            )
+        hands_payload[hand] = (weight, reps, rpe)
+
+    if not hands_payload:
+        return HTMLResponse(
+            "At least one hand's weight and reps are required.", status_code=400
+        )
+
+    require_grip_type(session, grip_type_id)
+    training_session = training_log.start_or_get_session(
+        session, user, date, session_number
+    )
+    training_log.restore_set_at(
+        session, training_session, grip_type_id, edge_mm, set_number, hands_payload
+    )
+
+    if request.headers.get("HX-Request"):
+        return Response(status_code=204)
+    redirect_hand = next(iter(hands_payload)) if len(hands_payload) == 1 else ""
+    return combo_redirect(
+        "worksets", grip_type_id, edge_mm, date, redirect_hand, session_number
+    )
+
+
+
 @router.post("/session/workset/delete")
 def delete_work_set(
     request: Request,

@@ -78,6 +78,7 @@
   <div class="set-actions">
     <button type="submit" class="set-done-btn">{{ "Save" if editing else "Set done" }}</button>
     <a class="btn btn-secondary set-cancel-btn" href="{{ cancel_url }}"{% if not editing %} hidden{% endif %}>Cancel</a>
+    <button type="submit" formaction="/session/set/delete" class="btn btn-secondary set-delete-btn" id="set-delete-btn"{% if not editing %} hidden{% endif %}>− Delete this set</button>
     <p class="set-error" id="set-error" role="alert" hidden></p>
   </div>
 </form>
@@ -193,6 +194,12 @@
   {% endif %}
   <a class="btn" href="/">Done — back home</a>
 </div>
+
+<div class="undo-snackbar" id="undo-snackbar" role="status" aria-live="polite" hidden>
+  <span class="undo-message" id="undo-message">Set deleted</span>
+  <button type="button" class="btn undo-btn" id="undo-btn">Undo</button>
+</div>
+
 <script>
 (function () {
   var screen = document.getElementById("focus-screen");
@@ -210,6 +217,11 @@
   var totalSets = form ? parseInt(form.dataset.totalSets, 10) : 0;
   var setDoneBtn = form ? form.querySelector(".set-done-btn") : null;
   var cancelBtn = form ? form.querySelector(".set-cancel-btn") : null;
+  var setDeleteBtn = form ? form.querySelector(".set-delete-btn") : null;
+  var undoSnackbar = document.getElementById("undo-snackbar");
+  var undoBtn = document.getElementById("undo-btn");
+  var undoTimer = null;
+  var lastDeleted = null;
 
   // Rest countdown (issue #82): deliberately throwaway and client-only --
   // a hardcoded 3:00, no persistence, dies on reload. Lives outside the
@@ -420,6 +432,37 @@
         exitEditMode(false);
       });
     }
+
+    if (setDeleteBtn) {
+      setDeleteBtn.addEventListener("click", function (event) {
+        event.preventDefault();
+        var setNumber = parseInt(form.dataset.currentSet, 10);
+        var deletedHands = savedSets[setNumber] || captureFormValues();
+
+        var deleteData = new FormData();
+        deleteData.append("grip_type_id", form.querySelector('input[name="grip_type_id"]').value);
+        deleteData.append("edge_mm", form.querySelector('input[name="edge_mm"]').value);
+        deleteData.append("date", form.querySelector('input[name="date"]').value);
+        var sessionNumInput = form.querySelector('input[name="session_number"]');
+        if (sessionNumInput) deleteData.append("session_number", sessionNumInput.value);
+        deleteData.append("set_number", setNumber);
+
+        fetch("/session/set/delete", {
+          method: "POST",
+          body: deleteData,
+          headers: { "HX-Request": "true" },
+        }).then(function (response) {
+          if (!response.ok) {
+            showSetError("Could not delete the set. Please try again.");
+            return;
+          }
+          clearSetError();
+          handleSetDeleted(setNumber, deletedHands);
+        }).catch(function () {
+          showSetError("Could not delete the set — check your connection and try again.");
+        });
+      });
+    }
   }
 
   // Tapping a COMPLETED row is the correction path (issue #80): with JS,
@@ -537,6 +580,7 @@
     renderPillEditing(setNumber);
     if (setDoneBtn) setDoneBtn.textContent = "Save";
     if (cancelBtn) cancelBtn.hidden = false;
+    if (setDeleteBtn) setDeleteBtn.hidden = false;
   }
 
   function exitEditMode(justSaved, editedSetNumber, savedHandsData) {
@@ -563,6 +607,200 @@
     renderPillNormal(resumeSet);
     if (setDoneBtn) setDoneBtn.textContent = "Set done";
     if (cancelBtn) cancelBtn.hidden = true;
+    if (setDeleteBtn) setDeleteBtn.hidden = true;
+  }
+
+  function handleSetDeleted(deletedSetNumber, deletedHands) {
+    lastDeleted = {
+      setNumber: deletedSetNumber,
+      handsData: deletedHands,
+    };
+
+    var list = document.querySelector(".completed-list");
+    var editTemplate = list ? list.dataset.editUrlTemplate : "";
+    if (list) {
+      var row = list.querySelector('.completed-row[data-set="' + deletedSetNumber + '"]');
+      if (row) row.remove();
+      list.querySelectorAll(".completed-row").forEach(function (r) {
+        var num = parseInt(r.dataset.set, 10);
+        if (num > deletedSetNumber) {
+          var newNum = num - 1;
+          r.dataset.set = newNum;
+          r.href = editTemplate ? editTemplate.replace("__SET__", newNum) : "#";
+          var labelEl = r.querySelector(".completed-set-label");
+          if (labelEl) labelEl.textContent = "Set " + newNum;
+        }
+      });
+      if (list.querySelectorAll(".completed-row").length === 0) {
+        var emptyP = document.createElement("p");
+        emptyP.className = "muted completed-empty";
+        emptyP.textContent = "No completed sets yet for this combo.";
+        list.appendChild(emptyP);
+      }
+    }
+
+    delete savedSets[deletedSetNumber];
+    var newSavedSets = {};
+    Object.keys(savedSets).forEach(function (key) {
+      var k = parseInt(key, 10);
+      if (k > deletedSetNumber) {
+        newSavedSets[k - 1] = savedSets[k];
+      } else {
+        newSavedSets[k] = savedSets[k];
+      }
+    });
+    savedSets = newSavedSets;
+
+    var completedCount = Object.keys(savedSets).length;
+    var nextSet = completedCount + 1;
+
+    editing = false;
+    form.dataset.editing = "false";
+    beforeEdit = null;
+
+    if (savedSets[completedCount]) {
+      form.querySelectorAll(".hand-card").forEach(function (card) {
+        var hand = card.dataset.hand;
+        var lastVals = savedSets[completedCount][hand];
+        if (lastVals) setFormValues(card, hand, lastVals);
+      });
+    } else {
+      var resumeSeedEl = document.getElementById("resume-seed-data");
+      if (resumeSeedEl) {
+        var resumeSeed = JSON.parse(resumeSeedEl.textContent);
+        form.querySelectorAll(".hand-card").forEach(function (card) {
+          var hand = card.dataset.hand;
+          var vals = resumeSeed[hand];
+          if (vals) setFormValues(card, hand, vals);
+        });
+      }
+    }
+
+    form.dataset.currentSet = nextSet;
+    document.getElementById("set-number-field").value = nextSet;
+    renderPillNormal(nextSet);
+    renderProgressSegments(nextSet);
+    if (setDoneBtn) setDoneBtn.textContent = "Set done";
+    if (cancelBtn) cancelBtn.hidden = true;
+    if (setDeleteBtn) setDeleteBtn.hidden = true;
+
+    showUndoSnackbar(deletedSetNumber);
+  }
+
+  function showUndoSnackbar(setNumber) {
+    if (!undoSnackbar) return;
+    if (undoTimer) clearTimeout(undoTimer);
+    var msg = document.getElementById("undo-message");
+    if (msg) msg.textContent = "Set " + setNumber + " deleted";
+    undoSnackbar.hidden = false;
+    undoTimer = setTimeout(function () {
+      undoSnackbar.hidden = true;
+      lastDeleted = null;
+    }, 5000);
+  }
+
+  if (undoBtn) {
+    undoBtn.addEventListener("click", function () {
+      if (!lastDeleted) return;
+      if (undoTimer) clearTimeout(undoTimer);
+      undoSnackbar.hidden = true;
+
+      var toRestore = lastDeleted;
+      lastDeleted = null;
+
+      var restoreData = new FormData();
+      restoreData.append("grip_type_id", form.querySelector('input[name="grip_type_id"]').value);
+      restoreData.append("edge_mm", form.querySelector('input[name="edge_mm"]').value);
+      restoreData.append("date", form.querySelector('input[name="date"]').value);
+      var sessionNumInput = form.querySelector('input[name="session_number"]');
+      if (sessionNumInput) restoreData.append("session_number", sessionNumInput.value);
+      restoreData.append("set_number", toRestore.setNumber);
+
+      Object.keys(toRestore.handsData).forEach(function (hand) {
+        var h = toRestore.handsData[hand];
+        restoreData.append(hand + "_weight", h.weight);
+        restoreData.append(hand + "_reps", h.reps);
+        if (h.rpe !== null && h.rpe !== undefined && h.rpe !== "") {
+          restoreData.append(hand + "_rpe", h.rpe);
+        }
+      });
+
+      fetch("/session/set/restore", {
+        method: "POST",
+        body: restoreData,
+        headers: { "HX-Request": "true" },
+      }).then(function (response) {
+        if (!response.ok) {
+          showSetError("Could not undo delete. Please try again.");
+          return;
+        }
+        clearSetError();
+        handleSetRestored(toRestore.setNumber, toRestore.handsData);
+      }).catch(function () {
+        showSetError("Could not undo delete — check your connection and try again.");
+      });
+    });
+  }
+
+  function handleSetRestored(restoredSetNumber, restoredHandsData) {
+    var list = document.querySelector(".completed-list");
+    var editTemplate = list ? list.dataset.editUrlTemplate : "";
+    if (list) {
+      var empty = list.querySelector(".completed-empty");
+      if (empty) empty.remove();
+
+      var rows = Array.from(list.querySelectorAll(".completed-row"));
+      rows.forEach(function (r) {
+        var num = parseInt(r.dataset.set, 10);
+        if (num >= restoredSetNumber) {
+          var newNum = num + 1;
+          r.dataset.set = newNum;
+          r.href = editTemplate ? editTemplate.replace("__SET__", newNum) : "#";
+          var labelEl = r.querySelector(".completed-set-label");
+          if (labelEl) labelEl.textContent = "Set " + newNum;
+        }
+      });
+
+      var detail = buildDetailText(restoredHandsData);
+      var newRow = document.createElement("a");
+      newRow.className = "completed-row";
+      newRow.href = editTemplate ? editTemplate.replace("__SET__", restoredSetNumber) : "#";
+      newRow.dataset.set = restoredSetNumber;
+      newRow.innerHTML =
+        '<span class="completed-check" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9.5 18 20 6.5"/></svg></span>' +
+        '<span class="completed-set-label">Set ' + restoredSetNumber + '</span>' +
+        '<span class="completed-detail">' + detail + '</span>';
+
+      var inserted = false;
+      var currentRows = list.querySelectorAll(".completed-row");
+      for (var i = 0; i < currentRows.length; i++) {
+        var n = parseInt(currentRows[i].dataset.set, 10);
+        if (n > restoredSetNumber) {
+          list.insertBefore(newRow, currentRows[i]);
+          inserted = true;
+          break;
+        }
+      }
+      if (!inserted) {
+        list.appendChild(newRow);
+      }
+    }
+
+    var newSavedSets = {};
+    Object.keys(savedSets).forEach(function (key) {
+      var k = parseInt(key, 10);
+      if (k >= restoredSetNumber) {
+        newSavedSets[k + 1] = savedSets[k];
+      } else {
+        newSavedSets[k] = savedSets[k];
+      }
+    });
+    newSavedSets[restoredSetNumber] = restoredHandsData;
+    savedSets = newSavedSets;
+
+    var completedCount = Object.keys(savedSets).length;
+    var nextSet = completedCount + 1;
+    advanceTo(nextSet, totalSets);
   }
 
   function updateCompletedRow(setNumber, handsData) {
@@ -595,8 +833,7 @@
     savedSets[setNumber] = handsData;
   }
 
-  function advanceTo(nextSet, totalSets) {
-    renderPillNormal(nextSet);
+  function renderProgressSegments(nextSet) {
     document.querySelectorAll(".progress-segment").forEach(function (seg, index) {
       var n = index + 1;
       seg.classList.remove("segment-filled", "segment-current", "segment-remaining");
@@ -604,6 +841,11 @@
       else if (n === nextSet) seg.classList.add("segment-current");
       else seg.classList.add("segment-remaining");
     });
+  }
+
+  function advanceTo(nextSet, totalSets) {
+    renderPillNormal(nextSet);
+    renderProgressSegments(nextSet);
 
     var upNext = document.querySelector(".up-next-row");
     if (nextSet >= totalSets) {
