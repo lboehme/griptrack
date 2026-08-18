@@ -1,10 +1,14 @@
 package org.griptrack.app
 
 import android.annotation.SuppressLint
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.webkit.CookieManager
+import android.webkit.ValueCallback
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -13,14 +17,16 @@ import android.widget.Button
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 
 /**
- * Main Activity embedding the GripTrack WebView shell (#98, PRD #93).
+ * Main Activity embedding the GripTrack WebView shell (#98, #99, PRD #93).
  *
  * Bootstraps the embedded Python FastAPI backend on a background thread,
  * polls /health behind a splash screen, and loads the WebView at the exact
- * 127.0.0.1:<port> bound by the server once healthy.
+ * 127.0.0.1:<port> bound by the server once healthy. Supports file downloads
+ * (export archives) and file uploads (restore archive).
  */
 class MainActivity : AppCompatActivity() {
 
@@ -37,6 +43,15 @@ class MainActivity : AppCompatActivity() {
     private lateinit var retryButton: Button
 
     private var hasLoadedInitialUrl = false
+    private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
+
+    private val fileChooserLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val uri = if (result.resultCode == RESULT_OK) result.data?.data else null
+        fileChooserCallback?.onReceiveValue(if (uri != null) arrayOf(uri) else null)
+        fileChooserCallback = null
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -92,6 +107,35 @@ class MainActivity : AppCompatActivity() {
                 super.onPageFinished(view, url)
                 CookieManager.getInstance().flush()
             }
+        }
+
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onShowFileChooser(
+                webView: WebView?,
+                filePathCallback: ValueCallback<Array<Uri>>?,
+                fileChooserParams: FileChooserParams?
+            ): Boolean {
+                fileChooserCallback?.onReceiveValue(null)
+                fileChooserCallback = filePathCallback
+
+                val intent = fileChooserParams?.createIntent() ?: Intent(Intent.ACTION_GET_CONTENT).apply {
+                    type = "*/*"
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                }
+                return try {
+                    fileChooserLauncher.launch(intent)
+                    true
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to launch file chooser", e)
+                    fileChooserCallback?.onReceiveValue(null)
+                    fileChooserCallback = null
+                    false
+                }
+            }
+        }
+
+        webView.setDownloadListener { url, _, contentDisposition, mimetype, _ ->
+            DownloadHelper.download(this, url, contentDisposition, mimetype)
         }
     }
 
