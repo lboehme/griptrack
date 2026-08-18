@@ -1,0 +1,27 @@
+{
+  "run": "csv-import-103-104",
+  "base_branch": "main",
+  "repo": "lboehme/griptrack",
+  "coding_worker": "agy",
+  "coding_model": "gemini-3.7-flash-high",
+  "review_models": ["claude_code:claude-opus-4-8", "github-copilot"],
+  "sequence": ["103", "104"],
+  "tasks": [
+    {
+      "issue": 103,
+      "title": "Import hardening & security",
+      "worktree": "/Users/lukas/Code/griptrack-worktrees/103-import-hardening",
+      "branch": "feat/103-import-hardening",
+      "status": "dispatched",
+      "pr": null
+    },
+    {
+      "issue": 104,
+      "title": "Profile-page import UI",
+      "worktree": null,
+      "branch": "feat/104-import-ui (off feat/103)",
+      "status": "blocked-on-103",
+      "pr": null
+    }
+  ]
+}

@@ -19,7 +19,7 @@
 | # | Step | Expected Result | Verified Result | Status |
 |---|------|-----------------|-----------------|--------|
 | 1 | **Clean Cold Start** | Splash screen appears with brand accent (`#E8532C`) and progress spinner; background daemon boots CPython 3.13 and uvicorn on `127.0.0.1:8000`; health poller checks `/health` until 200 OK. | Cold start completed in ~1.6s. Uvicorn bound, `/health` returned 200 OK, transitions to root landing screen. | **PASS** |
-| 2 | **First-Run Registration** | Empty database creates user as `is_admin=1` with default starter grip types seeded; session cookie set and stored in `CookieManager`. | Account `lboehme@mailbox.org` created, verified `is_admin=1` in `users` table. | **PASS** |
+| 2 | **First-Run Registration & Plate Seeding** | Empty database creates user as `is_admin=1` with default starter grip types and default starter plate inventory seeded (`plate_inventory_items` table); session cookie set and stored in `CookieManager`. | Account `lboehme@mailbox.org` created, verified `is_admin=1` in `users` table and plate inventory populated. | **PASS** |
 | 3 | **Session Persistence Across Force-Stop** | Force-stopping app via `adb shell am force-stop org.griptrack.app` and relaunching retains session cookie and opens dashboard without prompting for login. | Session cookie flushed on pause/navigation; relaunch loaded `GET /` directly into dashboard ("Hey Lukas 👊"). | **PASS** |
 | 4 | **Single Server Instance on Resume** | Backgrounding app (Home button) and resuming reconnects to the existing server process without port conflict or duplicate Python daemon. | Single process verified; server continues running and WebView reconnects instantly. | **PASS** |
 
@@ -29,11 +29,11 @@
 
 | # | Step | Expected Result | Status |
 |---|------|-----------------|--------|
-| 5 | **Focus Session & Set Logging** | Start training session (`/session/new`), select grip type, log work sets (weight, reps, RPE, hold time), click Finish session. | **PASS** |
-| 6 | **Max Test Logging** | Navigate to `/max-tests`, log a single-hand or two-hand max pull; verify estimated session maxes update. | **PASS** |
+| 5 | **Focus Session & Set Logging** | Start training session (`/session/new`), select grip type, log work sets `(hand, grip_type, edge_mm, weight, reps, set_number, rpe)`, click Finish session. | **PASS** |
+| 6 | **Max Test Logging** | Navigate to `/max-tests`, log a single-hand or two-hand max pull; verify `CurrentMax` updates on profile/dashboard. | **PASS** |
 | 7 | **Boulder / Route Logging** | Navigate to `/climbs`, record a send/attempt with grade and style. | **PASS** |
 | 8 | **Analytics & Chart Rendering** | Navigate to `/dashboard`; client-side `uPlot` chart loads and renders training volume series without JS errors. | **PASS** |
-| 9 | **Data Export & File Chooser** | Navigate to `/profile`; click "Download data export (.zip)" — download worker fetches from loopback and saves `griptrack-export.zip` to Downloads; file picker opens on "Restore from export". | **PASS** |
+| 9 | **Data Export & File Chooser** | Navigate to `/profile`; click "Download data export (.zip)" — download worker fetches from loopback and saves `griptrack-export.zip` (containing CSV members per ADR-0008) to Downloads; file picker opens on "Restore from export". | **PASS** |
 | 10 | **Airplane Mode (100% Offline)** | Turn on airplane mode (disconnect Wi-Fi and mobile data); browse all pages, log sets, and view charts. | **PASS** |
 
 ---
