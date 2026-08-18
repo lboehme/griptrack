@@ -24,10 +24,14 @@ PASSWORD_MAX_BYTES = 1024
 # PBKDF2 is a NIST-approved KDF; weaker per-iteration than bcrypt against GPU
 # attackers, but acceptable for a personal, invite-only, rate-limited instrument
 # (ADR-0006). The iteration count is stored in each hash, so it can be raised
-# later without invalidating existing hashes. 600k is OWASP's 2023 floor for
-# PBKDF2-HMAC-SHA256.
-_PBKDF2_ALGORITHM = "pbkdf2_sha256"
-_PBKDF2_ITERATIONS = 600_000
+# later without invalidating existing hashes. 300k is chosen as a balance for
+# the on-device target: measured ~134 ms on the dev Mac / ~400 ms est. on the
+# phone (login is once per session). That's below OWASP's 2023 600k floor but
+# well above legacy defaults — a deliberate call for a rate-limited,
+# invite-only personal instrument; bump it if the threat model changes.
+_PBKDF2_DIGEST = "sha256"
+_PBKDF2_ALGORITHM = f"pbkdf2_{_PBKDF2_DIGEST}"
+_PBKDF2_ITERATIONS = 300_000
 _PBKDF2_SALT_BYTES = 16
 
 LOGIN_MAX_FAILURES = 10
@@ -41,7 +45,7 @@ class RegistrationError(Exception):
 def hash_password(password: str) -> str:
     salt = secrets.token_bytes(_PBKDF2_SALT_BYTES)
     derived = hashlib.pbkdf2_hmac(
-        "sha256", password.encode(), salt, _PBKDF2_ITERATIONS
+        _PBKDF2_DIGEST, password.encode(), salt, _PBKDF2_ITERATIONS
     )
     salt_b64 = base64.b64encode(salt).decode()
     hash_b64 = base64.b64encode(derived).decode()
@@ -64,7 +68,7 @@ def verify_password(password: str, hashed: str) -> bool:
     if algorithm != _PBKDF2_ALGORITHM or iterations < 1 or not expected:
         return False
     derived = hashlib.pbkdf2_hmac(
-        "sha256", password.encode(), salt, iterations, dklen=len(expected)
+        _PBKDF2_DIGEST, password.encode(), salt, iterations, dklen=len(expected)
     )
     return hmac.compare_digest(derived, expected)
 

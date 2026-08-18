@@ -19,8 +19,14 @@ behind `hash_password` / `verify_password`, so no caller changed.
 - **Self-describing stored format:** `pbkdf2_sha256$<iterations>$<b64salt>$<b64hash>`.
   The iteration count lives in each hash, so it can be raised later without
   invalidating existing hashes — `verify_password` reads the stored iterations.
-- **Iterations: 600,000** (OWASP's 2023 floor for PBKDF2-HMAC-SHA256), 16-byte
-  random salt per hash, verification via `hmac.compare_digest` (constant-time).
+- **Iterations: 300,000**, 16-byte random salt per hash, verification via
+  `hmac.compare_digest` (constant-time). The count is tuned for the on-device
+  target: measured ~134 ms on the dev Mac and ~400 ms estimated on the phone
+  (login is once per session, so this latency is paid rarely). That is below
+  OWASP's 2023 600k floor but far above legacy defaults — a deliberate
+  security/latency balance for a rate-limited, invite-only personal instrument
+  (ADR-0006). Because the count lives in each stored hash, it can be raised
+  later without invalidating existing hashes if the threat model changes.
 - **Fails closed:** any malformed or legacy (`$2b$…` bcrypt) stored hash makes
   `verify_password` return `False` rather than raise. The timing-equalized
   dummy-verify for unknown emails and the per-IP login rate limiter are
