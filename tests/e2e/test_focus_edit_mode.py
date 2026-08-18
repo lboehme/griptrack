@@ -16,7 +16,7 @@ def test_tapping_a_completed_row_enters_edit_mode_with_the_right_values(
     for hand in ("left", "right"):
         page.goto(f"{live_server}/max-tests")
         form = page.locator('form[action="/max-tests"]')
-        form.locator('select[name="hand"]').select_option(hand)
+        form.locator(f'input[name="hand"][value="{hand}"]').check()
         form.locator("select.grip-select").select_option(label="half crimp")
         form.locator('input[name="edge_mm"]').fill("20")
         form.locator('input[name="weight"]').fill("40")
@@ -68,7 +68,7 @@ def test_delete_set_and_undo_in_edit_mode(live_server, authenticated_page):
     for hand in ("left", "right"):
         page.goto(f"{live_server}/max-tests")
         form = page.locator('form[action="/max-tests"]')
-        form.locator('select[name="hand"]').select_option(hand)
+        form.locator(f'input[name="hand"][value="{hand}"]').check()
         form.locator("select.grip-select").select_option(label="half crimp")
         form.locator('input[name="edge_mm"]').fill("20")
         form.locator('input[name="weight"]').fill("40")

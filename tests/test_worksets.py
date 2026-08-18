@@ -587,6 +587,18 @@ def test_how_it_felt_disclosure_sits_below_completed_and_holds_notes_deload_pain
     assert disclosure_html.count("<summary") == 1
 
 
+def test_pain_report_hand_uses_segmented_group(client):
+    setup_tested_user(client)
+    save_work_set(client, "left", 1, "40", "5", date="2026-07-04")
+
+    page = worksets_page(client, date="2026-07-04").text
+    assert 'select name="hand"' not in page
+    assert 'input type="radio" name="hand" value="left"' in page
+    assert 'input type="radio" name="hand" value="right"' in page
+    assert 'input type="radio" name="hand" value="both"' in page
+
+
+
 def test_flow_links_sit_beneath_the_disclosure(client):
     setup_tested_user(client)
     save_work_set(client, "left", 1, "40", "5", date="2026-07-04")

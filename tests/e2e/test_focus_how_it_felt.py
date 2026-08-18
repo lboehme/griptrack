@@ -17,7 +17,7 @@ def test_disclosure_opens_and_notes_autosave_without_a_reload(
     for hand in ("left", "right"):
         page.goto(f"{live_server}/max-tests")
         form = page.locator('form[action="/max-tests"]')
-        form.locator('select[name="hand"]').select_option(hand)
+        form.locator(f'input[name="hand"][value="{hand}"]').check()
         form.locator("select.grip-select").select_option(label="half crimp")
         form.locator('input[name="edge_mm"]').fill("20")
         form.locator('input[name="weight"]').fill("40")
@@ -50,7 +50,7 @@ def test_disclosure_opens_and_notes_autosave_without_a_reload(
     notes.blur()  # fires the change event the autosave listener waits for
 
     # Fill and autosave a pain report too, in the same disclosure.
-    page.locator('#pain-report-form select[name="hand"]').select_option("left")
+    page.locator('#pain-report-form input[name="hand"][value="left"]').check()
     severity = page.locator('#pain-report-form input[name="severity"]')
     severity.fill("1")
     severity.blur()
@@ -77,7 +77,7 @@ def test_textarea_matches_dark_mode_background(live_server, authenticated_page):
     for hand in ("left", "right"):
         page.goto(f"{live_server}/max-tests")
         form = page.locator('form[action="/max-tests"]')
-        form.locator('select[name="hand"]').select_option(hand)
+        form.locator(f'input[name="hand"][value="{hand}"]').check()
         form.locator("select.grip-select").select_option(label="half crimp")
         form.locator('input[name="edge_mm"]').fill("20")
         form.locator('input[name="weight"]').fill("40")

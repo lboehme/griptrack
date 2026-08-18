@@ -16,7 +16,7 @@ def test_committing_a_set_starts_the_rest_countdown_and_skip_ends_it(
     for hand in ("left", "right"):
         page.goto(f"{live_server}/max-tests")
         form = page.locator('form[action="/max-tests"]')
-        form.locator('select[name="hand"]').select_option(hand)
+        form.locator(f'input[name="hand"][value="{hand}"]').check()
         form.locator("select.grip-select").select_option(label="half crimp")
         form.locator('input[name="edge_mm"]').fill("20")
         form.locator('input[name="weight"]').fill("40")

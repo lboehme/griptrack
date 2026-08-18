@@ -274,6 +274,84 @@ input[type="checkbox"]:checked {
   box-shadow: var(--accent-glow);
 }
 
+/* ---------- segmented button group (issue #117) ---------- */
+
+.segmented-field {
+  border: 0;
+  padding: 0;
+  margin: 0 0 .95rem;
+  min-width: 0;
+}
+
+.segmented-legend {
+  display: block;
+  font-size: .82rem;
+  font-weight: 650;
+  color: var(--muted);
+  margin-bottom: .32rem;
+  padding: 0;
+}
+
+.segmented-group {
+  display: flex;
+  align-items: stretch;
+  background: var(--surface-2);
+  border: 1.5px solid transparent;
+  border-radius: 12px;
+  padding: 3px;
+  min-height: var(--touch);
+  gap: 3px;
+  box-sizing: border-box;
+}
+
+.segmented-option {
+  flex: 1 1 0;
+  margin: 0;
+  cursor: pointer;
+  display: flex;
+  position: relative;
+}
+
+.segmented-radio {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.segmented-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: calc(var(--touch) - 8px);
+  padding: .35rem .4rem;
+  font-size: .95rem;
+  font-weight: 650;
+  color: var(--muted);
+  border-radius: 9px;
+  transition: background .15s ease, color .15s ease, box-shadow .15s ease;
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: none;
+}
+
+.segmented-radio:checked + .segmented-label {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .08);
+}
+
+.segmented-radio:focus-visible + .segmented-label {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+
 input[type="checkbox"]:checked::before { transform: scale(1); }
 
 input[type="checkbox"]:active { transform: scale(.9); }
