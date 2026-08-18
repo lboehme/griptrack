@@ -328,7 +328,7 @@ input[type="checkbox"]:checked {
   align-items: center;
   justify-content: center;
   width: 100%;
-  min-height: calc(var(--touch) - 8px);
+  min-height: calc(var(--touch) - 4px); /* >=44px touch target (CLAUDE.md) */
   padding: .35rem .4rem;
   font-size: .95rem;
   font-weight: 650;
@@ -860,7 +860,7 @@ input[type="number"]::-webkit-outer-spin-button {
 .undo-snackbar[hidden] { display: none; }
 
 .undo-btn {
-  min-height: 2.2rem;
+  min-height: 2.75rem; /* 44px touch target (CLAUDE.md) */
   padding: 0 .9rem;
   font-size: .85rem;
   font-weight: 700;

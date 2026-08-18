@@ -169,23 +169,7 @@
           {% include "_combo_fields.html" %}
           <input type="hidden" name="session_number" value="{{ session_number if session_number else '' }}">
           <div class="form-row">
-            <fieldset class="segmented-field">
-              <legend class="segmented-legend">Hand</legend>
-              <div class="segmented-group" role="radiogroup" aria-label="Hand">
-                <label class="segmented-option">
-                  <input type="radio" name="hand" value="left" checked class="segmented-radio">
-                  <span class="segmented-label">Left</span>
-                </label>
-                <label class="segmented-option">
-                  <input type="radio" name="hand" value="right" class="segmented-radio">
-                  <span class="segmented-label">Right</span>
-                </label>
-                <label class="segmented-option">
-                  <input type="radio" name="hand" value="both" class="segmented-radio">
-                  <span class="segmented-label">Both</span>
-                </label>
-              </div>
-            </fieldset>
+            {% with hand_options = ["left", "right", "both"] %}{% include "_hand_segmented.html" %}{% endwith %}
             <label>Severity (1-3)
               <input type="number" name="severity" min="1" max="3" required placeholder="e.g. 1">
             </label>
@@ -611,6 +595,19 @@
     if (setDeleteBtn) setDeleteBtn.hidden = true;
   }
 
+  // Re-key savedSets after a set is removed/inserted: every key past the
+  // threshold shifts by delta, the rest stay put. `inclusive` selects >=
+  // (restore, shifting sets up) vs > (delete, shifting sets down).
+  function rekeySavedSets(threshold, inclusive, delta) {
+    var out = {};
+    Object.keys(savedSets).forEach(function (key) {
+      var k = parseInt(key, 10);
+      var shift = inclusive ? k >= threshold : k > threshold;
+      out[shift ? k + delta : k] = savedSets[k];
+    });
+    savedSets = out;
+  }
+
   function handleSetDeleted(deletedSetNumber, deletedHands) {
     lastDeleted = {
       setNumber: deletedSetNumber,
@@ -641,16 +638,7 @@
     }
 
     delete savedSets[deletedSetNumber];
-    var newSavedSets = {};
-    Object.keys(savedSets).forEach(function (key) {
-      var k = parseInt(key, 10);
-      if (k > deletedSetNumber) {
-        newSavedSets[k - 1] = savedSets[k];
-      } else {
-        newSavedSets[k] = savedSets[k];
-      }
-    });
-    savedSets = newSavedSets;
+    rekeySavedSets(deletedSetNumber, false, -1);
 
     var completedCount = Object.keys(savedSets).length;
     var nextSet = completedCount + 1;
@@ -787,17 +775,8 @@
       }
     }
 
-    var newSavedSets = {};
-    Object.keys(savedSets).forEach(function (key) {
-      var k = parseInt(key, 10);
-      if (k >= restoredSetNumber) {
-        newSavedSets[k + 1] = savedSets[k];
-      } else {
-        newSavedSets[k] = savedSets[k];
-      }
-    });
-    newSavedSets[restoredSetNumber] = restoredHandsData;
-    savedSets = newSavedSets;
+    rekeySavedSets(restoredSetNumber, true, 1);
+    savedSets[restoredSetNumber] = restoredHandsData;
 
     var completedCount = Object.keys(savedSets).length;
     var nextSet = completedCount + 1;

@@ -64,19 +64,7 @@
 <p class="page-sub">A guided warmup and effort-rated ladder that walks you to a real max.</p>
 <form method="get" action="/max-tests/guided">
   <div class="form-row">
-    <fieldset class="segmented-field">
-      <legend class="segmented-legend">Hand</legend>
-      <div class="segmented-group" role="radiogroup" aria-label="Hand">
-        <label class="segmented-option">
-          <input type="radio" name="hand" value="left" checked class="segmented-radio">
-          <span class="segmented-label">Left</span>
-        </label>
-        <label class="segmented-option">
-          <input type="radio" name="hand" value="right" class="segmented-radio">
-          <span class="segmented-label">Right</span>
-        </label>
-      </div>
-    </fieldset>
+    {% include "_hand_segmented.html" %}
     <label>Grip type
       <select name="grip_type_id" class="grip-select">
         {% for grip in grip_types %}
@@ -96,19 +84,7 @@
 <h3>Log a max test</h3>
 <form method="post" action="/max-tests">
   <div class="form-row">
-    <fieldset class="segmented-field">
-      <legend class="segmented-legend">Hand</legend>
-      <div class="segmented-group" role="radiogroup" aria-label="Hand">
-        <label class="segmented-option">
-          <input type="radio" name="hand" value="left" checked class="segmented-radio">
-          <span class="segmented-label">Left</span>
-        </label>
-        <label class="segmented-option">
-          <input type="radio" name="hand" value="right" class="segmented-radio">
-          <span class="segmented-label">Right</span>
-        </label>
-      </div>
-    </fieldset>
+    {% include "_hand_segmented.html" %}
     <label>Grip type
       <select name="grip_type_id" class="grip-select">
         {% for grip in grip_types %}
