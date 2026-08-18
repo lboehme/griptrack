@@ -102,8 +102,10 @@ fail-fast on a missing secret), `GRIPTRACK_SESSION_SECRET` (required in prod),
 `GRIPTRACK_DATABASE_URL` (point at a persistent volume), and
 `GRIPTRACK_BOOTSTRAP_TOKEN` (gates the first-admin registration).
 
-Security is enforced in code and covered by `tests/test_security.py`: bcrypt
-hashing with 8–72-char passwords, per-IP login rate limiting with
+Security is enforced in code and covered by `tests/test_security.py`: stdlib
+PBKDF2-HMAC-SHA256 password hashing (8-char floor, generous upper bound; see
+ADR-0009 and #108 — chosen over bcrypt/argon2 to keep the on-device native-wheel
+surface to just `pydantic-core`), per-IP login rate limiting with
 timing-equalized auth, `SameSite=Lax` + Origin-check CSRF defense, a security-
 header middleware (CSP/XFO/nosniff/Referrer-Policy), and upper bounds on every
 numeric input (the plate subset-sum is the DoS-sensitive path). Numeric input
@@ -152,9 +154,12 @@ unit-tested in isolation for now.
   produce non-round, unloadable numbers for lb-plate users.
 - **Auth:** Invite-only registration, no open self-signup and no email
   infrastructure (no verification emails, no email-based password reset) —
-  see `docs/adr/0004-invite-only-registration.md`. Password hashing via the
-  `bcrypt` package directly (not passlib — passlib is unmaintained and
-  incompatible with bcrypt ≥ 4.1); server-side signed session cookie
+  see `docs/adr/0004-invite-only-registration.md`. Password hashing via
+  stdlib `hashlib.pbkdf2_hmac` (PBKDF2-HMAC-SHA256), in a self-describing
+  `pbkdf2_sha256$iterations$salt$hash` format — chosen over the native
+  `bcrypt`/`argon2`/`scrypt` wheels so the on-device Android target (#93) only
+  has to ship `pydantic-core`; see `docs/adr/0009-pbkdf2-password-hashing.md`
+  and #108. Server-side signed session cookie
   (Starlette `SessionMiddleware`); a `current_user` dependency gates
   per-user data. A simple `is_admin` flag (first registered user, by
   default) grants two capabilities only: generating invites, and manually

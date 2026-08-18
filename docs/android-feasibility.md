@@ -226,3 +226,190 @@ In rough order of effort:
 - For Python 3.13+, Chaquopy's own maintainers now point package authors
   at `cibuildwheel` rather than Chaquopy's legacy `build-wheel` tool for
   producing new native wheels; the legacy tool only runs on Linux x86-64.
+
+## On-device build outcome (2026-08-14): NO-GO on the shipped pins
+
+The skeleton was built for the first time on the owner's Apple-silicon Mac
+(`./gradlew assembleDebug`, Temurin JDK 17 — **not** the AS-bundled JBR 25,
+which Gradle 8.9 rejects — plus host `python3.12` from Homebrew as Chaquopy's
+`buildPython`). The whole toolchain layer passed; the build reached Chaquopy's
+real `installDebugPythonRequirements` (pip) step and failed there exactly as
+this doc predicted:
+
+- **`bcrypt==5.0.0`** → `Could not find a version that satisfies the
+  requirement bcrypt==5.0.0 (from versions: 3.2.2)`. Only the pre-Rust **C**
+  build (3.2.2) is in Chaquopy's repo.
+- **`pydantic-core==2.46.4`** → `No matching distribution` (only a `0.0.1`
+  stub). Surfaced via an isolation probe: temporarily pinning `bcrypt==3.2.2`
+  downloaded cleanly (`bcrypt-3.2.2-0-cp312-cp312-android_21_arm64_v8a.whl`),
+  proving the Gradle/Chaquopy/pip plumbing is sound; the build then failed on
+  `pydantic-core`.
+
+Decided at build time on the host — no device needed. Both Rust deps
+unavailable. `build.gradle.kts` was reverted to the production pins.
+
+## Fallback (1) feasibility research — the cibuildwheel path (2026-08-14)
+
+Researched whether we can *build* our own Chaquopy-consumable Android arm64
+wheels for `bcrypt==5.0.0` and `pydantic-core==2.46.4`. Verdict: **plausible,
+not proven — one make-or-break unknown remains.** Not yet attempted.
+
+**Building the wheels is feasible:**
+- `cibuildwheel --platform android` runs **on macOS** (not Linux-only) with
+  the Android SDK, invoked like a desktop build.
+  ([cibuildwheel options](https://cibuildwheel.pypa.io/en/stable/options/),
+  [Chaquopy server/pypi README](https://github.com/chaquo/chaquopy/tree/master/server/pypi))
+- Both packages are **PyO3/maturin** Rust extensions, and maturin
+  cross-compiles to `aarch64-linux-android`. `pydantic-core` has already been
+  cross-compiled for Android arm64 across Python 3.9–3.13 by
+  [Eutalix/android-pydantic-core](https://github.com/Eutalix/android-pydantic-core)
+  — evidence the old PyO3-datetime blocker (issue #1607) is resolved in current
+  versions. Note that project targets **Termux** (hardcoded
+  `/data/data/com.termux/...` paths, `linux_{arch}` retagging) so its wheels
+  are **not** Chaquopy-ABI-drop-in — but it proves the compile itself works.
+
+**Consuming them under Chaquopy is the risk:**
+- **Requires bumping the app's Chaquopy Python 3.12 → 3.13.** cibuildwheel's
+  Android support is PEP 738, which is **3.13+ only**; 3.12 has only Chaquopy's
+  legacy Linux-x86-64 `build-wheel` tool. Chaquopy 17 supports 3.13.9 and its
+  docs recommend 3.13+ for best device compatibility (16 KB pages), so this is
+  sanctioned.
+- Chaquopy pip **can** consume local wheels:
+  `pip { options("--find-links", "<dir>"); install(...) }` (wheels flat in the
+  dir; Chaquopy uses `--only-binary`).
+- Chaquopy 17.0.0 explicitly "improved compatibility with various ways of
+  tagging a wheel as Android-specific" (#1374), and per PEP 738 discussion the
+  Android wheel tag format **originated from Chaquopy** — both suggest it will
+  accept standard cibuildwheel wheels.
+  ([Chaquopy changelog](https://chaquo.com/chaquopy/doc/current/changelog.html),
+  [PEP 738](https://peps.python.org/pep-0738/))
+- **Unverified crux:** cibuildwheel builds against *official* CPython-Android;
+  Chaquopy ships its *own* CPython build. Same 3.13 version does **not**
+  guarantee a C-ABI match, and these wheels use version-specific ABI (`cp313`),
+  not stable `abi3`. If Chaquopy's 3.13 ABI diverges, the wheel loads by tag but
+  crashes at `import`. No primary source confirms or denies this — only an
+  empirical build + install + on-device import settles it.
+
+**If attempted, the cheap-first plan:** (1) NDK + Rust `aarch64-linux-android`
+target + `cibuildwheel` on the Mac; (2) build **bcrypt 5.0.0 only**, wire via
+`--find-links` with app Python bumped to 3.13, install on the S22, confirm the
+bcrypt import PASSes — this one result answers the ABI question before any time
+goes into (3) the harder `pydantic-core`.
+
+**Status: not attempted** — owner chose to record the research and decide the
+build later. Neither `bcrypt` nor `pydantic-core` publishes Android wheels on
+PyPI today (checked 2026-08-14), so there is no build-free shortcut.
+
+## Fallback (1) ON-DEVICE outcome (2026-08-18): bcrypt ABI probe → PASS
+
+The cibuildwheel path was attempted, cheap-first (bcrypt only), and the
+make-or-break ABI question is now answered empirically: **a cibuildwheel wheel
+built against official CPython-Android imports and runs correctly under
+Chaquopy's own CPython.** The `cp313` version-specific ABI matches.
+
+What was done:
+
+1. **Toolchain (macOS arm64 host):** rustup + `aarch64-linux-android` target;
+   Android command-line tools installed into `~/Library/Android/sdk`
+   (`ANDROID_HOME`); `cibuildwheel` ≥3.1 in a venv; Homebrew `python@3.13`
+   (Chaquopy 3.13 `buildPython`). cibuildwheel auto-installed **NDK
+   27.3.13750724** via `sdkmanager` and — crucially — wired the Rust
+   cross-linker itself
+   (`CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER` → NDK
+   `aarch64-linux-android24-clang`). That was the main worry going in; it is
+   handled automatically.
+2. **Built the wheel:**
+   `cibuildwheel --only cp313-android_arm64_v8a <bcrypt-5.0.0-sdist>` →
+   `bcrypt-5.0.0-cp313-cp313-android_24_arm64_v8a.whl`
+   (sha256 `7ce4eb8b…a98ad7`), built against official CPython-Android
+   **3.13.14**. auditwheel confirms it is **not abi3** — a genuine
+   version-specific `cp313` ABI, so this is a real test of the ABI-match
+   question, not softened by the stable ABI. (~2 min build.)
+3. **Consumed it under Chaquopy:** in `android/app/build.gradle.kts`, bumped
+   Chaquopy `version` 3.12 → **3.13**, set `buildPython` to Homebrew 3.13, and
+   fed the wheel via `pip { options("--find-links", file("wheels").absolutePath); install("bcrypt==5.0.0") }`.
+   `pydantic-core` was deliberately left out (cheap-first). `MainActivity`
+   ran the bcrypt check only.
+4. **Build:** `./gradlew assembleDebug` (Temurin JDK 17). Chaquopy's
+   `installDebugPythonRequirements` resolved the local wheel cleanly
+   (`Successfully installed bcrypt-5.0.0`) — the exact step that hard-failed
+   on 2026-08-14 with the stock pins. `BUILD SUCCESSFUL`, `app-debug.apk`
+   (~22.6 MB).
+5. **On-device:** installed and launched on the owner's **Galaxy S22 Ultra
+   (SM-S908B, Android 16, arm64-v8a)**. Logcat (`-s GripTrackFeasibility`):
+
+   ```
+   PASS  bcrypt: bcrypt 5.0.0: hashpw/checkpw round-trip OK
+   GO (bcrypt ABI) — cibuildwheel cp313 wheel imports under Chaquopy.
+   ```
+
+   The Rust `_bcrypt` extension didn't just load by tag — it performed a real
+   `hashpw`/`checkpw` round-trip. Chaquopy runtime CPython (3.13.9) accepted a
+   wheel compiled against official CPython 3.13.14; the patch-level difference
+   is immaterial to the 3.13 ABI.
+
+**bcrypt verdict: the ABI-divergence crux is resolved.** The cheap Rust canary
+proves Chaquopy will run our own cross-compiled Rust wheels.
+
+## Fallback (1) — pydantic-core ALSO builds + runs (2026-08-18): overall GO
+
+The load-bearing dependency was then built and probed the same way, and the
+last remaining unknown — whether `pydantic-core==2.46.4` itself *builds* under
+cibuildwheel (`jiter` sub-dep + historical PyO3-datetime issues) — is answered:
+**it builds on the first attempt and runs on-device.**
+
+- `cibuildwheel --only cp313-android_arm64_v8a <pydantic_core-2.46.4-sdist>` →
+  `pydantic_core-2.46.4-cp313-cp313-android_24_arm64_v8a.whl`
+  (sha256 `633a0932…6fe351`, 1.9 MB, ~2 min). Backend is **maturin**; the
+  sdist pins **no** rust-toolchain (stable Rust suffices, no nightly);
+  `jiter 0.14.0` compiled cleanly from crates.io. The historical
+  PyO3-datetime blocker (chaquopy#1326, pydantic-core#1607) does **not**
+  reproduce with current versions built against official CPython-Android.
+- Wired alongside bcrypt via `--find-links`; Chaquopy resolved
+  `Successfully installed bcrypt-5.0.0 pydantic-core-2.46.4 typing-extensions-4.16.0`,
+  `BUILD SUCCESSFUL`, and on the S22 Ultra:
+
+  ```
+  PASS  bcrypt: bcrypt 5.0.0: hashpw/checkpw round-trip OK
+  PASS  pydantic_core: pydantic_core 2.46.4: SchemaValidator round-trip OK
+  GO (cibuildwheel ABI) — both Rust wheels import + run under Chaquopy.
+  ```
+
+**Overall verdict: GO. The #97 NO-GO is overturned.** Both Rust deps that lack
+Chaquopy prebuilt wheels can be self-supplied via `cibuildwheel --platform
+android` and run correctly under Chaquopy on real arm64 hardware. PRD #93's
+embedded-backend approach is unblocked, contingent on the app moving to
+Chaquopy **Python 3.13** and carrying (or building) these two arm64 wheels.
+
+### What this costs the real app (#98 onward)
+
+- App Chaquopy Python must be **3.13** (was 3.12). Chaquopy 17 supports 3.13.9.
+- Two arm64 cp313 wheels must be available to the build via `--find-links`
+  (or a small pre-build step invoking cibuildwheel). They are **not** on PyPI
+  or in Chaquopy's repo, so this repo/build owns producing them. #108
+  (bcrypt → stdlib PBKDF2) would drop the bcrypt wheel entirely, leaving only
+  `pydantic-core` to self-build — worth doing to halve this surface.
+- The rest of the runtime is pure-Python (post #87/#89 slimming), so
+  `pydantic-core` is the *only* hard native wheel that remains after #108.
+
+### Reproducing the wheels
+
+Toolchain installed on the owner's Mac this session: rustup +
+`aarch64-linux-android` target; Android cmdline-tools under
+`~/Library/Android/sdk`; `cibuildwheel` in `~/griptrack-android-wheels/.venv`;
+Homebrew `python@3.13`. cibuildwheel auto-installs the NDK and wires the Rust
+cross-linker; no manual NDK/linker setup is needed. Build a wheel with:
+
+```
+export ANDROID_HOME=~/Library/Android/sdk
+export JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home
+export PATH="$HOME/.cargo/bin:$PATH"
+~/griptrack-android-wheels/.venv/bin/cibuildwheel \
+  --only cp313-android_arm64_v8a --output-dir wheelhouse <package-sdist-dir>
+```
+
+The built wheels are kept in `~/griptrack-android-wheels/wheelhouse/` (outside
+the repo). The `android/` probe scaffolding (Python-3.13 bump, `--find-links`,
+both-wheel `pip{}`, dual-check `MainActivity`) was **reverted to the committed
+feasibility-skeleton pins** after this GO — the durable result is this document
+plus the on-device verdict on #97, not a modified skeleton.
