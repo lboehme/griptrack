@@ -155,6 +155,7 @@ def save_work_set(
         return HTMLResponse(
             "RPE must be between 1 and 10 in 0.5 steps.", status_code=400
         )
+    require_grip_type(session, grip_type_id)
     training_session = training_log.start_or_get_session(
         session, user, date, session_number
     )
