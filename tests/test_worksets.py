@@ -197,6 +197,29 @@ def test_per_hand_workset_endpoint_still_upserts_in_place(client):
     assert current_set_field(page, "left", "weight") == "40.0"
 
 
+def test_unknown_grip_type_is_rejected_and_writes_nothing_on_workset(client):
+    setup_tested_user(client)
+
+    # An otherwise-valid per-hand payload with an unknown grip_type_id must be
+    # rejected before any DB write (matching POST /session/set and GET worksets),
+    # returning 404 directly rather than creating an orphan WorkSet row or 303 redirecting.
+    response = client.post(
+        "/session/workset",
+        data={
+            "grip_type_id": 999999,
+            "edge_mm": 20,
+            "date": "2026-07-04",
+            "hand": "left",
+            "set_number": 1,
+            "weight": "42.5",
+            "reps": 5,
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 404
+    assert completed_detail(worksets_page(client).text, 1) is None
+
+
 def test_an_accidentally_added_set_can_be_deleted(client):
     setup_tested_user(client)
     save_work_set(client, "left", 3, "42.5", "5")
