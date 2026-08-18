@@ -75,31 +75,35 @@ object ServerManager {
             }
         }
 
-        val appContext = context.applicationContext
+        val currentThread = serverThread
+        if (currentThread == null || !currentThread.isAlive) {
+            val appContext = context.applicationContext
+            serverThread = Thread({
+                try {
+                    if (!Python.isStarted()) {
+                        Python.start(AndroidPlatform(appContext))
+                    }
+                    val py = Python.getInstance()
+                    val launcher = py.getModule("backend.launcher")
 
-        serverThread = Thread({
-            try {
-                if (!Python.isStarted()) {
-                    Python.start(AndroidPlatform(appContext))
+                    val appDir = appContext.filesDir.absolutePath
+                    Log.i(TAG, "Starting embedded server with app_dir=$appDir on $LOOPBACK_HOST:$DEFAULT_PORT")
+
+                    launcher.callAttr("serve", appDir, LOOPBACK_HOST, DEFAULT_PORT)
+                    Log.i(TAG, "Server run() exited normally")
+                } catch (e: PyException) {
+                    Log.e(TAG, "Python exception in embedded server: ${e.message}", e)
+                    notifyError(e)
+                } catch (t: Throwable) {
+                    Log.e(TAG, "Unexpected error in server thread: ${t.message}", t)
+                    notifyError(t)
                 }
-                val py = Python.getInstance()
-                val launcher = py.getModule("backend.launcher")
-
-                val appDir = appContext.filesDir.absolutePath
-                Log.i(TAG, "Starting embedded server with app_dir=$appDir on $LOOPBACK_HOST:$DEFAULT_PORT")
-
-                launcher.callAttr("serve", appDir, LOOPBACK_HOST, DEFAULT_PORT)
-                Log.i(TAG, "Server run() exited normally")
-            } catch (e: PyException) {
-                Log.e(TAG, "Python exception in embedded server: ${e.message}", e)
-                notifyError(e)
-            } catch (t: Throwable) {
-                Log.e(TAG, "Unexpected error in server thread: ${t.message}", t)
-                notifyError(t)
+            }, "GripTrack-EmbeddedServer").apply {
+                isDaemon = true
+                start()
             }
-        }, "GripTrack-EmbeddedServer").apply {
-            isDaemon = true
-            start()
+        } else {
+            Log.i(TAG, "Existing server thread is still alive; resuming health polling")
         }
 
         startHealthPolling()
