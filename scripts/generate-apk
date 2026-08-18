@@ -1,0 +1,135 @@
+#!/bin/sh
+# Build the GripTrack Android APK (Chaquopy embedded backend + WebView).
+# Usage:
+#   scripts/generate-apk [--install|-i] [--clean] [--release]
+#
+# Flags:
+#   --install, -i   Install the APK via adb and launch the app if a device is connected.
+#   --clean         Run a clean build (./gradlew clean).
+#   --release       Assemble release APK instead of debug.
+#   --help, -h      Show help message.
+
+set -e
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ANDROID_DIR="$REPO_ROOT/android"
+
+# Detect JAVA_HOME
+if [ -z "$JAVA_HOME" ]; then
+    if [ -x "/usr/libexec/java_home" ]; then
+        JAVA_HOME="$(/usr/libexec/java_home -v 17 2>/dev/null || /usr/libexec/java_home 2>/dev/null || true)"
+    fi
+    if [ -z "$JAVA_HOME" ] && [ -d "/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home" ]; then
+        JAVA_HOME="/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home"
+    fi
+fi
+
+# Detect ANDROID_HOME / ANDROID_SDK_ROOT
+if [ -z "$ANDROID_HOME" ]; then
+    if [ -n "$ANDROID_SDK_ROOT" ] && [ -d "$ANDROID_SDK_ROOT" ]; then
+        ANDROID_HOME="$ANDROID_SDK_ROOT"
+    elif [ -d "$HOME/Library/Android/sdk" ]; then
+        ANDROID_HOME="$HOME/Library/Android/sdk"
+    fi
+fi
+
+export JAVA_HOME
+export ANDROID_HOME
+
+INSTALL=false
+CLEAN=false
+BUILD_TYPE="Debug"
+
+for arg in "$@"; do
+    case "$arg" in
+        --install|-i)
+            INSTALL=true
+            ;;
+        --clean)
+            CLEAN=true
+            ;;
+        --release)
+            BUILD_TYPE="Release"
+            ;;
+        --help|-h)
+            echo "Usage: scripts/generate-apk [--install|-i] [--clean] [--release]"
+            echo ""
+            echo "Options:"
+            echo "  -i, --install  Install on connected device via adb and launch"
+            echo "  --clean        Run gradlew clean before assembling"
+            echo "  --release      Build release APK instead of debug"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $arg"
+            echo "Run scripts/generate-apk --help for usage."
+            exit 1
+            ;;
+    esac
+done
+
+if [ -z "$JAVA_HOME" ] || [ ! -d "$JAVA_HOME" ]; then
+    echo "Error: JAVA_HOME is not set and could not be detected automatically." >&2
+    echo "Please set JAVA_HOME to JDK 17 (e.g. export JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home)" >&2
+    exit 1
+fi
+
+if [ -z "$ANDROID_HOME" ] || [ ! -d "$ANDROID_HOME" ]; then
+    echo "Error: ANDROID_HOME is not set and could not be found at ~/Library/Android/sdk." >&2
+    echo "Please set ANDROID_HOME (e.g. export ANDROID_HOME=~/Library/Android/sdk)" >&2
+    exit 1
+fi
+
+echo "==> Environment:"
+echo "    JAVA_HOME:    $JAVA_HOME"
+echo "    ANDROID_HOME: $ANDROID_HOME"
+echo "    Build type:   $BUILD_TYPE"
+
+cd "$ANDROID_DIR"
+
+if [ "$CLEAN" = "true" ]; then
+    echo "==> Cleaning build..."
+    ./gradlew clean --console=plain
+fi
+
+echo "==> Assembling ${BUILD_TYPE} APK..."
+./gradlew "assemble${BUILD_TYPE}" --console=plain
+
+BUILD_TYPE_LOWER="$(echo "$BUILD_TYPE" | tr '[:upper:]' '[:lower:]')"
+APK_PATH="$ANDROID_DIR/app/build/outputs/apk/$BUILD_TYPE_LOWER/app-$BUILD_TYPE_LOWER.apk"
+
+if [ ! -f "$APK_PATH" ]; then
+    echo "Error: APK not found at $APK_PATH" >&2
+    exit 1
+fi
+
+APK_SIZE="$(ls -lh "$APK_PATH" | awk '{print $5}')"
+echo "==> Build successful!"
+echo "    APK:  $APK_PATH ($APK_SIZE)"
+
+if [ "$INSTALL" = "true" ]; then
+    if ! command -v adb >/dev/null 2>&1; then
+        if [ -x "$ANDROID_HOME/platform-tools/adb" ]; then
+            ADB="$ANDROID_HOME/platform-tools/adb"
+        else
+            echo "Error: adb command not found. Cannot install." >&2
+            exit 1
+        fi
+    else
+        ADB="adb"
+    fi
+
+    echo "==> Checking connected devices..."
+    DEVICE_COUNT="$("$ADB" devices | grep -v "List of devices" | grep -c "device$" || true)"
+    if [ "$DEVICE_COUNT" -eq 0 ]; then
+        echo "Error: No Android device connected with USB debugging enabled." >&2
+        "$ADB" devices
+        exit 1
+    fi
+
+    echo "==> Installing APK to connected device..."
+    "$ADB" install -r "$APK_PATH"
+
+    echo "==> Launching GripTrack app..."
+    "$ADB" shell am start -n org.griptrack.app/.MainActivity
+    echo "==> App launched successfully."
+fi
