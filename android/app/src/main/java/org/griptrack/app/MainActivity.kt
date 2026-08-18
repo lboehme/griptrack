@@ -87,6 +87,11 @@ class MainActivity : AppCompatActivity() {
                     super.shouldOverrideUrlLoading(view, request)
                 }
             }
+
+            override fun onPageFinished(view: WebView?, url: String?) {
+                super.onPageFinished(view, url)
+                CookieManager.getInstance().flush()
+            }
         }
     }
 
@@ -124,8 +129,7 @@ class MainActivity : AppCompatActivity() {
     private fun onServerReady(url: String) {
         Log.i(TAG, "Server ready, loading WebView at: $url")
         if (!hasLoadedInitialUrl) {
-            val loginUrl = "$url/login"
-            webView.loadUrl(loginUrl)
+            webView.loadUrl(url)
             hasLoadedInitialUrl = true
         }
         splashContainer.visibility = View.GONE
@@ -138,6 +142,11 @@ class MainActivity : AppCompatActivity() {
         statusText.visibility = View.GONE
         errorContainer.visibility = View.VISIBLE
         errorDetailText.text = error.stackTraceToString()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        CookieManager.getInstance().flush()
     }
 
     override fun onDestroy() {

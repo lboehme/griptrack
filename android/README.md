@@ -18,7 +18,7 @@ SQLite database, Jinja templates, static assets, and Alembic migrations via
 
 2. **Native WebView & Splash UI (`MainActivity.kt` + `activity_main.xml`)**:
    - Shows a branded splash screen (`#E8532C`) while the server boots and migrations run.
-   - Once `/health` returns 200, displays the WebView loaded at `http://127.0.0.1:8000/login`.
+   - Once `/health` returns 200, displays the WebView loaded at `http://127.0.0.1:8000/`.
    - Cleartext loopback traffic is allowed via `android:usesCleartextTraffic="true"`.
    - Javascript, DOM storage, and cookie persistence are enabled.
    - Preserves WebView history on Android back button presses (`OnBackPressedCallback`).
