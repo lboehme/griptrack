@@ -21,7 +21,7 @@ def correlation_points(client):
     }
 
 
-def seed_progression(client):
+def seed_progression(client, count=8):
     """Strength and boulder grade rising together; one unparseable-grade
     climb as noise (issue #55 — excluded from the correlation, not silently
     but with loud feedback at logging time and a history badge)."""
@@ -40,11 +40,12 @@ def seed_progression(client):
         ("2026-07-02", "48", "2026-07-03", "V6"),
         ("2026-07-10", "50", "2026-07-12", "V7"),
     ]
-    for strength_date, weight, climb_date, grade in points:
+    for strength_date, weight, climb_date, grade in points[:count]:
         log_max_test(client, "left", "half crimp", 20, strength_date, weight)
         log_climb(client, climb_date, grade)
 
-    log_climb(client, "2026-06-15", "hard")  # unparseable grade, excluded
+    if count >= 8:
+        log_climb(client, "2026-06-15", "hard")  # unparseable grade, excluded
 
 
 def test_rising_strength_and_grades_correlate_positively(client):
@@ -79,20 +80,6 @@ def test_too_few_boulder_climbs_shows_no_correlation(client):
 
 def test_correlation_floor_boundary_at_seven_points_shows_no_correlation(client):
     """The n >= 8 floor: exactly 7 points must still yield no correlation."""
-    register(client)
-    log_bodyweight(client, "2026-06-01", "70")
-
-    points = [
-        ("2026-06-01", "35", "2026-06-02", "V1"),
-        ("2026-06-10", "38", "2026-06-12", "V2"),
-        ("2026-06-15", "42", "2026-06-16", "V3"),
-        ("2026-06-20", "44", "2026-06-21", "V4"),
-        ("2026-06-25", "46", "2026-06-26", "V5"),
-        ("2026-06-28", "48", "2026-06-29", "V6"),
-        ("2026-07-02", "50", "2026-07-03", "V7"),
-    ]
-    for strength_date, weight, climb_date, grade in points:
-        log_max_test(client, "left", "half crimp", 20, strength_date, weight)
-        log_climb(client, climb_date, grade)
+    seed_progression(client, count=7)
 
     assert correlation_stat(client) is None

@@ -167,7 +167,7 @@ def test_adding_a_grip_type_with_an_empty_name_is_ignored(client):
     assert client.get("/max-tests").text == before
 
 
-def _void_actions(html: str) -> list[int]:
+def _extract_voidable_test_ids(html: str) -> list[int]:
     import re
 
     return [int(m) for m in re.findall(r'action="/max-tests/(\d+)/void"', html)]
@@ -195,7 +195,7 @@ def test_voiding_the_newest_test_resurfaces_an_older_one_and_reinstates_supersed
     # Void the day 3 retest: CurrentMax falls back to 85 kg because
     # the 80 kg day 1 test resurfaces and the 85 kg day 2 work set logged after
     # its date supersedes it.
-    newest_id = max(_void_actions(client.get("/max-tests").text))
+    newest_id = max(_extract_voidable_test_ids(client.get("/max-tests").text))
     client.post(f"/max-tests/{newest_id}/void", follow_redirects=True)
     assert current_maxes(client)[("left", "half crimp", 20)] == 85.0
 
@@ -208,7 +208,7 @@ def test_voided_test_drops_out_of_the_strength_grade_correlation(client):
     seed_progression(client)
     assert correlation_stat(client) is not None
 
-    for test_id in _void_actions(client.get("/max-tests").text):
+    for test_id in _extract_voidable_test_ids(client.get("/max-tests").text):
         client.post(f"/max-tests/{test_id}/void", follow_redirects=True)
 
     assert correlation_stat(client) is None
@@ -226,7 +226,7 @@ def test_voided_test_no_longer_counts_as_the_last_used_combination(client):
     page = client.get("/session/new").text
     assert f'value="{grip_type_id(client, "open hand")}" selected' in page
 
-    newest_id = max(_void_actions(client.get("/max-tests").text))
+    newest_id = max(_extract_voidable_test_ids(client.get("/max-tests").text))
     client.post(f"/max-tests/{newest_id}/void", follow_redirects=True)
 
     page = client.get("/session/new").text
@@ -237,11 +237,11 @@ def test_voided_test_row_is_struck_through_and_not_voidable_again(client):
     register(client)
     log_max_test(client, "left", "half crimp", 20, "2026-07-01", "40")
 
-    test_id = _void_actions(client.get("/max-tests").text)[0]
+    test_id = _extract_voidable_test_ids(client.get("/max-tests").text)[0]
     client.post(f"/max-tests/{test_id}/void", follow_redirects=True)
 
     page = client.get("/max-tests").text
     assert "line-through" in page
     assert ">Voided<" in page
-    assert _void_actions(page) == []  # no second Void button
+    assert _extract_voidable_test_ids(page) == []  # no second Void button
 
