@@ -1,5 +1,11 @@
 import re
+from datetime import date as date_type
 
+from sqlmodel import select
+
+from backend import training_log
+from backend.db import get_session
+from backend.models import GripType, User
 from tests.helpers import (
     current_maxes,
     grip_type_id,
@@ -243,4 +249,68 @@ def test_voided_test_row_is_struck_through_and_not_voidable_again(client):
     assert "line-through" in page
     assert ">Voided<" in page
     assert _extract_voidable_test_ids(page) == []  # no second Void button
+
+
+def test_max_test_history_and_void_domain_functions(client):
+    register(client)
+    session = next(client.app.dependency_overrides[get_session]())
+    user = session.exec(select(User).where(User.email == "lifter@example.com")).one()
+
+    crimp = session.exec(select(GripType).where(GripType.name == "half crimp")).one()
+    open_hand = session.exec(select(GripType).where(GripType.name == "open hand")).one()
+
+    # Log two tests on different dates
+    t1 = training_log.record_max_weight_test(
+        session, user, "left", crimp.id, 20, date_type(2026, 7, 1), 40.0
+    )
+    t2 = training_log.record_max_weight_test(
+        session, user, "right", open_hand.id, 15, date_type(2026, 7, 2), 45.0
+    )
+    # Log a third test on the same date as t2 to test secondary sort by id desc
+    t3 = training_log.record_max_weight_test(
+        session, user, "left", crimp.id, 20, date_type(2026, 7, 2), 50.0
+    )
+
+    history = training_log.max_test_history(session, user)
+    assert len(history) == 3
+    # Ordered by date desc, id desc: t3 (2026-07-02, higher id), t2 (2026-07-02, lower id), t1 (2026-07-01)
+    assert history[0][0].id == t3.id
+    assert history[0][1].id == crimp.id
+    assert history[1][0].id == t2.id
+    assert history[1][1].id == open_hand.id
+    assert history[2][0].id == t1.id
+    assert history[2][1].id == crimp.id
+
+    # Voiding a non-existent test returns None
+    assert training_log.void_max_weight_test(session, user, 99999) is None
+
+    # Voiding t3 succeeds and sets voided_at
+    voided = training_log.void_max_weight_test(session, user, t3.id)
+    assert voided is not None
+    assert voided.id == t3.id
+    assert voided.voided_at is not None
+    orig_voided_at = voided.voided_at
+
+    # Calling void again on an already voided test returns the test and keeps original voided_at
+    voided_again = training_log.void_max_weight_test(session, user, t3.id)
+    assert voided_again is not None
+    assert voided_again.voided_at == orig_voided_at
+
+    # max_test_history still includes the voided test
+    history_after = training_log.max_test_history(session, user)
+    assert len(history_after) == 3
+    assert history_after[0][0].id == t3.id
+    assert history_after[0][0].voided_at == orig_voided_at
+
+    # Another user cannot see or void these tests
+    register_second_user(client)
+    other_user = session.exec(select(User).where(User.email == "friend@example.com")).one()
+    assert training_log.max_test_history(session, other_user) == []
+    assert training_log.void_max_weight_test(session, other_user, t2.id) is None
+
+    # Ensure t2 was NOT voided by other_user
+    session.refresh(t2)
+    assert t2.voided_at is None
+
+    session.close()
 
