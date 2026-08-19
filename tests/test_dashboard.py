@@ -151,6 +151,15 @@ def overtraining_flags(client):
     )
 
 
+def asymmetry_warning_flags(client):
+    page = client.get("/dashboard").text
+    return set(
+        re.findall(
+            r'class="pill asymmetry-warning-flag" data-combo="([^"]+)"', page
+        )
+    )
+
+
 def test_overtraining_needs_both_volume_spike_and_short_rest(client):
     register(client)
     for grip, edge in (("half crimp", 20), ("half crimp", 10),
@@ -734,3 +743,172 @@ def test_load_gap_per_user_data_isolation_at_http_seam(client):
             "load_gaps": [20.0],
         }
     ]
+
+
+def test_asymmetry_warning_silent_below_data_minimum():
+    # Fewer than 6 sessions (ASYM_RECENT_SESSIONS + ASYM_MIN_BASELINE_SESSIONS = 3 + 3)
+    # Even if recent gap is high (e.g. 20%), thin data gates BOTH arms.
+    trend = [
+        (date_type(2026, 6, 1), 2.0),
+        (date_type(2026, 6, 2), 2.0),
+        (date_type(2026, 6, 3), 20.0),
+        (date_type(2026, 6, 4), 20.0),
+        (date_type(2026, 6, 5), 20.0),
+    ]
+    assert len(trend) == 5
+    assert analytics.asymmetry_warning(trend) is False
+
+    # Empty trend
+    assert analytics.asymmetry_warning([]) is False
+
+
+def test_asymmetry_warning_fires_on_drift_gte_5_pp():
+    # 6 points: baseline [2.0, 2.0, 2.0] (avg 2.0), recent [7.0, 7.0, 7.0] (avg 7.0)
+    # 7.0 - 2.0 = 5.0 pp drift (>= 5.0) -> fires
+    trend = [
+        (date_type(2026, 6, 1), 2.0),
+        (date_type(2026, 6, 2), 2.0),
+        (date_type(2026, 6, 3), 2.0),
+        (date_type(2026, 6, 4), 7.0),
+        (date_type(2026, 6, 5), 7.0),
+        (date_type(2026, 6, 6), 7.0),
+    ]
+    assert analytics.asymmetry_warning(trend) is True
+
+    # Signed drift in negative direction (Right hand higher load)
+    # baseline [-2.0, -2.0, -2.0] -> abs [2.0, 2.0, 2.0]
+    # recent [-8.0, -8.0, -8.0] -> abs [8.0, 8.0, 8.0]
+    # 8.0 - 2.0 = 6.0 >= 5.0 -> fires
+    trend_signed = [
+        (date_type(2026, 6, 1), -2.0),
+        (date_type(2026, 6, 2), -2.0),
+        (date_type(2026, 6, 3), -2.0),
+        (date_type(2026, 6, 4), -8.0),
+        (date_type(2026, 6, 5), -8.0),
+        (date_type(2026, 6, 6), -8.0),
+    ]
+    assert analytics.asymmetry_warning(trend_signed) is True
+
+    # 9 points with full 6-session baseline window
+    # baseline [1.0, 1.0, 2.0, 2.0, 1.0, 2.0] (avg 1.5)
+    # recent [7.0, 7.0, 7.0] (avg 7.0)
+    # 7.0 - 1.5 = 5.5 >= 5.0 -> fires
+    trend_9 = [
+        (date_type(2026, 6, 1), 1.0),
+        (date_type(2026, 6, 2), 1.0),
+        (date_type(2026, 6, 3), 2.0),
+        (date_type(2026, 6, 4), 2.0),
+        (date_type(2026, 6, 5), 1.0),
+        (date_type(2026, 6, 6), 2.0),
+        (date_type(2026, 6, 7), 7.0),
+        (date_type(2026, 6, 8), 7.0),
+        (date_type(2026, 6, 9), 7.0),
+    ]
+    assert analytics.asymmetry_warning(trend_9) is True
+
+
+def test_asymmetry_warning_silent_on_stable_gap():
+    # Stable 8% gap: drift = 0 < 5.0, recent = 8.0 < 15.0 -> silent
+    trend_8 = [(date_type(2026, 6, i), 8.0) for i in range(1, 8)]
+    assert analytics.asymmetry_warning(trend_8) is False
+
+    # Stable 10% gap (natural dominance): drift = 0 < 5.0, recent = 10.0 < 15.0 -> silent
+    trend_10 = [(date_type(2026, 6, i), 10.0) for i in range(1, 8)]
+    assert analytics.asymmetry_warning(trend_10) is False
+
+    # Small drift under 5 pp threshold: baseline 3.0, recent 6.5 -> drift 3.5 < 5.0 -> silent
+    trend_small_drift = [
+        (date_type(2026, 6, 1), 3.0),
+        (date_type(2026, 6, 2), 3.0),
+        (date_type(2026, 6, 3), 3.0),
+        (date_type(2026, 6, 4), 6.5),
+        (date_type(2026, 6, 5), 6.5),
+        (date_type(2026, 6, 6), 6.5),
+    ]
+    assert analytics.asymmetry_warning(trend_small_drift) is False
+
+
+def test_asymmetry_warning_fires_on_sustained_gte_15_pct_backstop():
+    # Stable 15.0% gap: drift = 0.0, but recent = 15.0 >= 15.0 -> backstop arm fires
+    trend_15 = [(date_type(2026, 6, i), 15.0) for i in range(1, 7)]
+    assert analytics.asymmetry_warning(trend_15) is True
+
+    # Stable 18.0% gap: recent = 18.0 >= 15.0 -> backstop arm fires
+    trend_18 = [(date_type(2026, 6, i), 18.0) for i in range(1, 8)]
+    assert analytics.asymmetry_warning(trend_18) is True
+
+
+def test_asymmetry_warning_silent_on_narrowing_gap():
+    # Narrowing gap (e.g. baseline 12.0%, recent 4.0%):
+    # recent - baseline = -8.0 < 5.0, recent = 4.0 < 15.0 -> never warns
+    trend_narrowing = [
+        (date_type(2026, 6, 1), 12.0),
+        (date_type(2026, 6, 2), 12.0),
+        (date_type(2026, 6, 3), 12.0),
+        (date_type(2026, 6, 4), 4.0),
+        (date_type(2026, 6, 5), 4.0),
+        (date_type(2026, 6, 6), 4.0),
+    ]
+    assert analytics.asymmetry_warning(trend_narrowing) is False
+
+
+def test_dashboard_asymmetry_warning_renders_when_warning_fires_and_absent_when_false(client):
+    register(client)
+    # Combo 1: Half crimp 20mm has 6 bilateral sessions with widening gap >= 5 pp (drifting from 0% to 20%)
+    # Sessions 1-3: Left 50kg x 5 = 250, Right 50kg x 5 = 250 -> 0.0% gap
+    for day in range(1, 4):
+        save_work_set(client, "left", 1, "50", "5", date=f"2026-06-0{day}")
+        save_work_set(client, "right", 1, "50", "5", date=f"2026-06-0{day}")
+
+    # Sessions 4-6: Left 50kg x 5 = 250, Right 40kg x 5 = 200 -> +20.0% gap
+    for day in range(4, 7):
+        save_work_set(client, "left", 1, "50", "5", date=f"2026-06-0{day}")
+        save_work_set(client, "right", 1, "40", "5", date=f"2026-06-0{day}")
+
+    # Combo 2: Open hand 10mm has 6 bilateral sessions with stable ~5% gap (Left 40, Right 38 -> gap ~5%)
+    for day in range(1, 7):
+        save_work_set(client, "left", 1, "40", "5", date=f"2026-06-0{day}", grip="open hand", edge_mm=10)
+        save_work_set(client, "right", 1, "38", "5", date=f"2026-06-0{day}", grip="open hand", edge_mm=10)
+
+    session, user = db_session_and_user(client)
+    view = analytics.dashboard_view(session, user)
+
+    pairs_by_key = {p["combo_key"]: p for p in view["asymmetry_pairs"]}
+    assert "asymmetry|half crimp|20" in pairs_by_key
+    assert "asymmetry|open hand|10" in pairs_by_key
+    assert pairs_by_key["asymmetry|half crimp|20"]["asymmetry_warning"] is True
+    assert pairs_by_key["asymmetry|open hand|10"]["asymmetry_warning"] is False
+
+    # HTTP seam
+    page = client.get("/dashboard").text
+    assert "⚠ asymmetry drift" in page
+
+    flags = asymmetry_warning_flags(client)
+    assert flags == {"asymmetry|half crimp|20"}
+
+
+def test_asymmetry_warning_per_user_data_isolation_at_http_seam(client):
+    register(client, email="userA@example.com")
+    # User A: 6 sessions on half crimp 20mm with widening gap
+    for day in range(1, 4):
+        save_work_set(client, "left", 1, "50", "5", date=f"2026-06-0{day}")
+        save_work_set(client, "right", 1, "50", "5", date=f"2026-06-0{day}")
+    for day in range(4, 7):
+        save_work_set(client, "left", 1, "50", "5", date=f"2026-06-0{day}")
+        save_work_set(client, "right", 1, "40", "5", date=f"2026-06-0{day}")
+
+    # User A has warning flag
+    assert asymmetry_warning_flags(client) == {"asymmetry|half crimp|20"}
+
+    # User B registers: 6 sessions on half crimp 20mm with balanced loads (0% gap)
+    register_second_user(client, email="userB@example.com")
+    for day in range(1, 7):
+        save_work_set(client, "left", 1, "40", "5", date=f"2026-06-0{day}")
+        save_work_set(client, "right", 1, "40", "5", date=f"2026-06-0{day}")
+
+    # User B has no warning flag
+    assert asymmetry_warning_flags(client) == set()
+
+    # User A logs in again: still has warning flag
+    login(client, "userA@example.com", "test-pw-1234")
+    assert asymmetry_warning_flags(client) == {"asymmetry|half crimp|20"}

@@ -1156,7 +1156,9 @@ li.climb .meta { color: var(--muted); font-size: .87rem; margin-top: .15rem; }
   margin-left: .4rem;
 }
 
-.pill.overtraining-flag {
+.pill.overtraining-flag,
+.pill.asymmetry-warning-flag,
+.pill.asymmetry-flag {
   color: #a05a00;
   background: color-mix(in srgb, #e8a13c 18%, transparent);
   border-color: transparent;
@@ -1181,7 +1183,9 @@ li.climb .meta { color: var(--muted); font-size: .87rem; margin-top: .15rem; }
 }
 
 @media (prefers-color-scheme: dark) {
-  .pill.overtraining-flag { color: #f3b95f; }
+  .pill.overtraining-flag,
+  .pill.asymmetry-warning-flag,
+  .pill.asymmetry-flag { color: #f3b95f; }
   .pill.grade-unparsed { color: #f3b95f; }
   .grade-warning { color: #f3b95f; }
 }
