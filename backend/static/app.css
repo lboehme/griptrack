@@ -1081,8 +1081,7 @@ li.climb .meta { color: var(--muted); font-size: .87rem; margin-top: .15rem; }
 
 /* ---------- dashboard ---------- */
 
-.trend-chart,
-.asymmetry-chart {
+.trend-chart {
   display: block;
   width: 100%;
   min-height: 220px;
@@ -1091,18 +1090,11 @@ li.climb .meta { color: var(--muted); font-size: .87rem; margin-top: .15rem; }
   margin: .3rem 0 .5rem;
 }
 
-.volume-list li,
-.asymmetry-list li {
+.volume-list li {
   display: flex;
   justify-content: space-between;
   padding: .3rem 0;
   font-size: .92rem;
-}
-
-.asymmetry-pair:not(:last-child) {
-  margin-bottom: 1.5rem;
-  padding-bottom: 1.2rem;
-  border-bottom: 1px solid var(--border);
 }
 
 .pill.plateau-flag {
