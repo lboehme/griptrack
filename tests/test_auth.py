@@ -239,3 +239,20 @@ def test_register_page_renders(client):
     assert 'name="email"' in response.text
     assert 'name="password"' in response.text
     assert 'name="unit_pref"' in response.text
+
+
+def test_admin_reset_for_unknown_email_returns_404(client):
+    register(client)  # founder = admin
+    response = client.post(
+        "/admin/reset-password",
+        data={"email": "nobody@example.com", "new_password": "fresh-password"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 404
+
+
+def test_register_with_invalid_unit_pref_is_rejected(client):
+    response = register(
+        client, "founder@example.com", "s3cret-pw", unit_pref="stones"
+    )
+    assert response.status_code == 400
