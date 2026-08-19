@@ -31,6 +31,30 @@
   {% endif %}
 </div>
 {% endif %}
+{% if asymmetry_pairs %}
+<div class="card asymmetry-card">
+  <h3>L/R Strength Asymmetry</h3>
+  <p class="page-sub" style="margin-bottom: .8rem;">Signed gap ((L − R) / max(L, R)) over time. Shaded bands show ±10–15% reference zone.</p>
+  {% for pair in asymmetry_pairs %}
+  <div class="asymmetry-pair">
+    <h4 style="margin: .6rem 0 .3rem; font-size: 1.05rem;">
+      {{ pair.grip_name }} @ {{ pair.edge_mm }} mm {{ pair.dimension_name }}
+    </h4>
+    <div class="asymmetry-chart" data-chart-asymmetry="{{ pair.combo_key }}" role="img" aria-label="Strength asymmetry trend for {{ pair.grip_name }} @ {{ pair.edge_mm }} mm"></div>
+    <ul class="plain asymmetry-list">
+      {% for date, gap in pair.trend %}
+      <li class="asymmetry-point" data-combo="{{ pair.combo_key }}" data-date="{{ date }}" data-gap="{{ "%.1f"|format(gap) }}">
+        <span class="muted">{{ date }}</span>
+        <strong>{% if gap > 0 %}+{% endif %}{{ "%.1f"|format(gap) }}%</strong>
+        <span class="muted">{% if gap > 0 %}L stronger{% elif gap < 0 %}R stronger{% else %}Equal{% endif %}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endfor %}
+</div>
+<script type="application/json" id="asymmetry-chart-data">{{ asymmetry_chart_data|tojson }}</script>
+{% endif %}
 {% if combos %}
 {% for combo in combos %}
 <div class="card">
@@ -52,12 +76,15 @@
 </div>
 {% endfor %}
 <script type="application/json" id="volume-trend-data">{{ chart_data|tojson }}</script>
-<script src="/static/uplot.iife.min.js" defer></script>
-<script src="/static/dashboard-chart.js" defer></script>
-{% else %}
+{% endif %}
+{% if not combos and not asymmetry_pairs %}
 <div class="notice">
   Nothing to show yet — log a few <a href="/session/new">training sessions</a>
   and your volume trend will appear here.
 </div>
+{% endif %}
+{% if combos or asymmetry_pairs %}
+<script src="/static/uplot.iife.min.js" defer></script>
+<script src="/static/dashboard-chart.js" defer></script>
 {% endif %}
 {% endblock %}
