@@ -2,38 +2,20 @@ from datetime import date as date_type
 
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlmodel import Session, select
+from sqlmodel import Session
 
-from backend import auth
-from backend.analytics import parse_boulder_grade
+from backend import auth, climbing
 from backend.db import get_session
 from backend.limits import MAX_GRADE_LENGTH, MAX_NOTES_LENGTH
-from backend.models import CLIMB_STYLES, Climb, User
+from backend.models import CLIMB_STYLES, User
 from backend.templating import templates
 
 router = APIRouter()
-
-# New climbs are always logged as boulder (sport-climb logging was dropped —
-# see issue #55; the discipline column and existing sport rows are untouched
-# so history keeps rendering them).
-NEW_CLIMB_DISCIPLINE = "boulder"
 
 GRADE_NOT_RECOGNIZED_MESSAGE = (
     "Climb logged, but the grade wasn't recognized — this climb won't "
     "appear in the strength/grade correlation."
 )
-
-
-def climbs_newest_first(session: Session, user: User) -> list[Climb]:
-    """A user's climbs, newest first — the one query both the climbs page
-    and the history page render from, so their ordering can't drift."""
-    return list(
-        session.exec(
-            select(Climb)
-            .where(Climb.user_id == user.id)
-            .order_by(Climb.date.desc(), Climb.id.desc())
-        ).all()
-    )
 
 
 @router.get("/climbs")
@@ -48,7 +30,7 @@ def climbs_page(
         "climbs.html",
         {
             "user": user,
-            "climbs": climbs_newest_first(session, user),
+            "climbs": climbing.climbs_newest_first(session, user),
             "styles": CLIMB_STYLES,
             "today": date_type.today().isoformat(),
             # The flag rides across the POST-redirect-GET; the message text
@@ -67,25 +49,22 @@ def log_climb(
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
-    if style not in CLIMB_STYLES:
-        return HTMLResponse(
-            "Style must be one of: " + ", ".join(CLIMB_STYLES), status_code=400
-        )
-    session.add(
-        Climb(
-            user_id=user.id,
+    try:
+        _climb, recognized_grade = climbing.log_climb(
+            session=session,
+            user=user,
             date=date,
-            discipline=NEW_CLIMB_DISCIPLINE,
             grade=grade,
             style=style,
             notes=notes,
         )
-    )
-    session.commit()
+    except ValueError as exc:
+        return HTMLResponse(str(exc), status_code=400)
 
-    if parse_boulder_grade(grade) is None:
+    if not recognized_grade:
         # Loud feedback per issue #55, without breaking POST-redirect-GET
         # (a refresh must not re-POST a duplicate climb): redirect with a
         # flag that the GET handler turns into the banner.
         return RedirectResponse("/climbs?grade_warning=1", status_code=303)
     return RedirectResponse("/climbs", status_code=303)
+

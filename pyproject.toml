@@ -41,6 +41,7 @@ exclude = ["migrations/versions/", "^build/"]
 module = [
     "backend.analytics",
     "backend.archive",
+    "backend.climbing",
     "backend.export_spec",
     "backend.import_restore",
     "backend.main",
