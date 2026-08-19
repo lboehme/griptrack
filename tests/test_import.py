@@ -493,3 +493,36 @@ def test_archive_module_round_trip_at_module_seam():
     session.refresh(user_b)
     assert user_b.unit_pref == "kg"
 
+
+def test_import_rejects_manifest_that_is_a_json_array(client):
+    register(client, "author@example.com", "test-pw-1234")
+    log_bodyweight(client, "2026-07-01", "70.0")
+    archive_bytes = export_archive(client)
+
+    code = generate_invite(client)
+    register(client, "newuser@example.com", "test-pw-5678", invite_code=code)
+
+    bad_archive = _replace_member(archive_bytes, "manifest.json", "[]")
+    response = import_archive(client, bad_archive)
+    assert response.status_code == 400
+    assert "manifest.json must be a JSON object" in response.text
+
+
+def test_import_rejects_csv_row_with_extra_columns(client):
+    register(client, "author2@example.com", "test-pw-1234")
+    log_bodyweight(client, "2026-07-01", "70.0")
+    archive_bytes = export_archive(client)
+
+    code = generate_invite(client)
+    register(client, "newuser2@example.com", "test-pw-5678", invite_code=code)
+
+    # Add an extra column to GripType.csv row
+    bad_csv = "id,name\n1,Half Crimp,extra_val\n"
+    bad_archive = _replace_member(archive_bytes, "GripType.csv", bad_csv)
+    response = import_archive(client, bad_archive)
+    assert response.status_code == 400
+    assert "row has more columns than the header" in response.text
+
+
+
+

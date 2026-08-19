@@ -366,6 +366,9 @@ def _read_manifest(zf: zipfile.ZipFile) -> dict:
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ArchiveError("manifest.json is not valid JSON.") from exc
 
+    if not isinstance(manifest, dict):
+        raise ArchiveError("manifest.json must be a JSON object.")
+
     if manifest.get("format_version") != FORMAT_VERSION:
         raise ArchiveError(
             "Unsupported or outdated export: unrecognized format_version."
@@ -445,6 +448,10 @@ def _read_member_rows(
             raise ArchiveError(f"{member.filename}: too many rows.")
         parsed: dict[str, object] = {}
         for header, raw_value in csv_row.items():
+            if header is None:
+                raise ArchiveError(
+                    f"{member.filename} row {row_num}: row has more columns than the header."
+                )
             field = inverse_renames.get(header, header)
             value = reverse_neutralize(raw_value) if raw_value is not None else ""
             try:
