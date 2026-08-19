@@ -16,6 +16,7 @@ from backend.models import (
     User,
     WarmupStepCheck,
     WorkSet,
+    utcnow,
 )
 
 
@@ -897,6 +898,40 @@ def record_max_weight_test(
     session.add(test)
     session.commit()
     session.refresh(test)
+    return test
+
+
+def max_test_history(
+    session: Session, user: User
+) -> list[tuple[MaxWeightTest, GripType]]:
+    """All MaxWeightTests for the user (including voided tests), paired with
+    their GripType, ordered newest first (date desc, then id desc)."""
+    return list(
+        session.exec(
+            select(MaxWeightTest, GripType)
+            .join(GripType)
+            .where(MaxWeightTest.user_id == user.id)
+            .order_by(MaxWeightTest.date.desc(), MaxWeightTest.id.desc())
+        ).all()
+    )
+
+
+def void_max_weight_test(
+    session: Session, user: User, test_id: int
+) -> MaxWeightTest | None:
+    """Flag a MaxWeightTest as voided (bad data).
+
+    Returns the updated MaxWeightTest, or None if the test is not found or
+    does not belong to the user.
+    """
+    test = session.get(MaxWeightTest, test_id)
+    if test is None or test.user_id != user.id:
+        return None
+    if test.voided_at is None:
+        test.voided_at = utcnow()
+        session.add(test)
+        session.commit()
+        session.refresh(test)
     return test
 
 
