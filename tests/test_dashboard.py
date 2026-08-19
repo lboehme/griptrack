@@ -59,7 +59,33 @@ def asymmetry_points(client):
     page = client.get("/dashboard").text
     points = {}
     for combo, date, gap in re.findall(
-        r'class="asymmetry-point" data-combo="([^"]+)" data-date="([\d-]+)" '
+        r'class="asymmetry-point"[^>]*data-combo="([^"]+)"[^>]*data-date="([\d-]+)" '
+        r'data-gap="([-\d.]+)"',
+        page,
+    ):
+        points.setdefault(combo, []).append((date, float(gap)))
+    return points
+
+
+def strength_asymmetry_points(client):
+    """Parse /dashboard into {combo: [(date, gap), ...]} for strength series."""
+    page = client.get("/dashboard").text
+    points = {}
+    for combo, date, gap in re.findall(
+        r'class="asymmetry-point"[^>]*data-combo="([^"]+)"[^>]*data-series="strength"[^>]*data-date="([\d-]+)" '
+        r'data-gap="([-\d.]+)"',
+        page,
+    ):
+        points.setdefault(combo, []).append((date, float(gap)))
+    return points
+
+
+def load_asymmetry_points(client):
+    """Parse /dashboard into {combo: [(date, gap), ...]} for load series."""
+    page = client.get("/dashboard").text
+    points = {}
+    for combo, date, gap in re.findall(
+        r'class="asymmetry-point"[^>]*data-combo="([^"]+)"[^>]*data-series="load"[^>]*data-date="([\d-]+)" '
         r'data-gap="([-\d.]+)"',
         page,
     ):
@@ -337,12 +363,14 @@ def test_strength_gap_trend_signed_calculation_in_both_directions(client):
             "combo": "asymmetry|half crimp|20",
             "grip_name": "half crimp",
             "edge_mm": 20,
-            "dates": ["2026-05-01", "2026-05-10", "2026-05-20"],
-            "gaps": [20.0, 0.0, -20.0],
+            "strength_dates": ["2026-05-01", "2026-05-10", "2026-05-20"],
+            "strength_gaps": [20.0, 0.0, -20.0],
+            "load_dates": [],
+            "load_gaps": [],
         }
     ]
 
-    pts = asymmetry_points(client)
+    pts = strength_asymmetry_points(client)
     assert pts["asymmetry|half crimp|20"] == [
         ("2026-05-01", 20.0),
         ("2026-05-10", 0.0),
@@ -372,7 +400,7 @@ def test_asymmetry_omits_dates_where_either_hand_lacks_current_max(client):
 
     payload = asymmetry_chart_payload(client)
     assert payload is not None
-    assert payload[0]["dates"] == ["2026-04-20", "2026-04-25"]
+    assert payload[0]["strength_dates"] == ["2026-04-20", "2026-04-25"]
 
 
 def test_asymmetry_omits_combo_tested_on_only_one_hand(client):
@@ -439,8 +467,10 @@ def test_asymmetry_per_user_data_isolation(client):
             "combo": "asymmetry|open hand|10",
             "grip_name": "open hand",
             "edge_mm": 10,
-            "dates": ["2026-05-05"],
-            "gaps": [-16.666666666666664],
+            "strength_dates": ["2026-05-05"],
+            "strength_gaps": [-16.666666666666664],
+            "load_dates": [],
+            "load_gaps": [],
         }
     ]
 
@@ -452,8 +482,10 @@ def test_asymmetry_per_user_data_isolation(client):
             "combo": "asymmetry|half crimp|20",
             "grip_name": "half crimp",
             "edge_mm": 20,
-            "dates": ["2026-05-01"],
-            "gaps": [20.0],
+            "strength_dates": ["2026-05-01"],
+            "strength_gaps": [20.0],
+            "load_dates": [],
+            "load_gaps": [],
         }
     ]
 
@@ -474,3 +506,231 @@ def test_asymmetry_ignores_voided_max_tests(client):
 
     # Now tests are voided -> no asymmetry data
     assert asymmetry_chart_payload(client) is None
+
+
+def test_load_gap_trend_signed_calculation_in_both_directions(client):
+    register(client)
+    # Session 1 (2026-06-01): L > R (+20.0%)
+    # Left: 50kg x 5 = 250; Right: 40kg x 5 = 200 -> (250 - 200) / 250 * 100 = +20.0%
+    save_work_set(client, "left", 1, "50", "5", date="2026-06-01")
+    save_work_set(client, "right", 1, "40", "5", date="2026-06-01")
+
+    # Session 2 (2026-06-05): Equal (0.0%)
+    # Left: 40kg x 5 = 200; Right: 40kg x 5 = 200 -> (200 - 200) / 200 * 100 = 0.0%
+    save_work_set(client, "left", 1, "40", "5", date="2026-06-05")
+    save_work_set(client, "right", 1, "40", "5", date="2026-06-05")
+
+    # Session 3 (2026-06-10): R > L (-20.0%)
+    # Left: 40kg x 5 = 200; Right: 50kg x 5 = 250 -> (200 - 250) / 250 * 100 = -20.0%
+    save_work_set(client, "left", 1, "40", "5", date="2026-06-10")
+    save_work_set(client, "right", 1, "50", "5", date="2026-06-10")
+
+    session, user = db_session_and_user(client)
+    trend = analytics.load_gap_trend(session, user, 1, 20)
+    assert trend == [
+        (date_type(2026, 6, 1), 20.0),
+        (date_type(2026, 6, 5), 0.0),
+        (date_type(2026, 6, 10), -20.0),
+    ]
+
+    # HTTP seam: verify JSON payload and list elements
+    payload = asymmetry_chart_payload(client)
+    assert payload == [
+        {
+            "combo": "asymmetry|half crimp|20",
+            "grip_name": "half crimp",
+            "edge_mm": 20,
+            "strength_dates": [],
+            "strength_gaps": [],
+            "load_dates": ["2026-06-01", "2026-06-05", "2026-06-10"],
+            "load_gaps": [20.0, 0.0, -20.0],
+        }
+    ]
+
+    load_pts = load_asymmetry_points(client)
+    assert load_pts["asymmetry|half crimp|20"] == [
+        ("2026-06-01", 20.0),
+        ("2026-06-05", 0.0),
+        ("2026-06-10", -20.0),
+    ]
+
+
+def test_load_gap_trend_omits_sessions_where_only_one_hand_trained(client):
+    register(client)
+    # Session 1: only left logged work sets -> no load gap point
+    save_work_set(client, "left", 1, "40", "5", date="2026-06-01")
+
+    # Session 2: both hands logged work sets -> point produced
+    save_work_set(client, "left", 1, "50", "5", date="2026-06-05")
+    save_work_set(client, "right", 1, "40", "5", date="2026-06-05")
+
+    # Session 3: only right logged work sets -> no load gap point
+    save_work_set(client, "right", 1, "40", "5", date="2026-06-10")
+
+    # Session 4: deload session where both hands logged work sets -> excluded from trend
+    save_work_set(client, "left", 1, "30", "5", date="2026-06-15")
+    save_work_set(client, "right", 1, "30", "5", date="2026-06-15")
+    client.post(
+        "/session/update",
+        data={"date": "2026-06-15", "is_deload": "on"},
+        headers={"HX-Request": "true"},
+    )
+
+    session, user = db_session_and_user(client)
+    trend = analytics.load_gap_trend(session, user, 1, 20)
+    assert trend == [(date_type(2026, 6, 5), 20.0)]
+
+    payload = asymmetry_chart_payload(client)
+    assert payload is not None
+    assert payload[0]["load_dates"] == ["2026-06-05"]
+    assert payload[0]["load_gaps"] == [20.0]
+
+
+def test_combos_with_only_session_estimate_renders_load_gap_series_and_appears_on_dashboard(client):
+    register(client)
+    # Bilateral work sets without any MaxWeightTest (trained under SessionMaxEstimate)
+    save_work_set(client, "left", 1, "35", "5", date="2026-06-01")
+    save_work_set(client, "right", 1, "30", "5", date="2026-06-01")
+
+    session, user = db_session_and_user(client)
+    view = analytics.dashboard_view(session, user)
+
+    assert len(view["asymmetry_pairs"]) == 1
+    pair = view["asymmetry_pairs"][0]
+    assert pair["combo_key"] == "asymmetry|half crimp|20"
+    assert pair["strength_trend"] == []
+    assert len(pair["load_trend"]) == 1
+    assert pair["load_trend"][0] == (date_type(2026, 6, 1), (175.0 - 150.0) / 175.0 * 100.0)
+
+    # HTTP seam
+    page = client.get("/dashboard").text
+    assert "asymmetry-card" in page
+    assert "Training Load Gap" in page
+    assert "Strength Max Gap" not in page
+
+    payload = asymmetry_chart_payload(client)
+    assert payload == [
+        {
+            "combo": "asymmetry|half crimp|20",
+            "grip_name": "half crimp",
+            "edge_mm": 20,
+            "strength_dates": [],
+            "strength_gaps": [],
+            "load_dates": ["2026-06-01"],
+            "load_gaps": [(175.0 - 150.0) / 175.0 * 100.0],
+        }
+    ]
+
+
+def test_combos_with_only_max_weight_tests_renders_strength_gap_series_only(client):
+    register(client)
+    # Bilateral MaxWeightTests without any WorkSets
+    log_max_test(client, "left", "half crimp", 20, "2026-06-01", "45")
+    log_max_test(client, "right", "half crimp", 20, "2026-06-01", "40")
+
+    session, user = db_session_and_user(client)
+    view = analytics.dashboard_view(session, user)
+
+    assert len(view["asymmetry_pairs"]) == 1
+    pair = view["asymmetry_pairs"][0]
+    assert pair["combo_key"] == "asymmetry|half crimp|20"
+    assert pair["load_trend"] == []
+    assert len(pair["strength_trend"]) == 1
+
+    # HTTP seam
+    page = client.get("/dashboard").text
+    assert "asymmetry-card" in page
+    assert "Strength Max Gap" in page
+    assert "Training Load Gap" not in page
+
+    payload = asymmetry_chart_payload(client)
+    assert payload == [
+        {
+            "combo": "asymmetry|half crimp|20",
+            "grip_name": "half crimp",
+            "edge_mm": 20,
+            "strength_dates": ["2026-06-01"],
+            "strength_gaps": [(45.0 - 40.0) / 45.0 * 100.0],
+            "load_dates": [],
+            "load_gaps": [],
+        }
+    ]
+
+
+def test_dashboard_omits_asymmetry_section_only_when_both_series_are_empty(client):
+    register(client)
+    # 1. Completely empty
+    page = client.get("/dashboard").text
+    assert "asymmetry-card" not in page
+
+    # 2. Single hand test and single hand work sets
+    log_max_test(client, "left", "half crimp", 20, "2026-06-01", "40")
+    save_work_set(client, "left", 1, "40", "5", date="2026-06-02")
+    page = client.get("/dashboard").text
+    assert "asymmetry-card" not in page
+
+    # 3. Both hands on different combos (unpaired)
+    log_max_test(client, "right", "open hand", 10, "2026-06-01", "30")
+    save_work_set(client, "right", 1, "30", "5", date="2026-06-02", grip="open hand", edge_mm=10)
+    page = client.get("/dashboard").text
+    assert "asymmetry-card" not in page
+
+    # 4. Bilateral combo with only deload session (no max test, so both series empty)
+    save_work_set(client, "left", 1, "20", "5", date="2026-06-05", grip="pinch", edge_mm=45)
+    save_work_set(client, "right", 1, "20", "5", date="2026-06-05", grip="pinch", edge_mm=45)
+    client.post(
+        "/session/update",
+        data={"date": "2026-06-05", "is_deload": "on"},
+        headers={"HX-Request": "true"},
+    )
+    session, user = db_session_and_user(client)
+    pinch_strength = analytics.strength_gap_trend(session, user, 2, 45)
+    pinch_load = analytics.load_gap_trend(session, user, 2, 45)
+    assert pinch_strength == []
+    assert pinch_load == []
+
+    page = client.get("/dashboard").text
+    assert "asymmetry-card" not in page
+
+
+def test_load_gap_per_user_data_isolation_at_http_seam(client):
+    register(client, email="userA@example.com")
+    # User A: bilateral work sets on half crimp 20mm
+    save_work_set(client, "left", 1, "50", "5", date="2026-06-01")
+    save_work_set(client, "right", 1, "40", "5", date="2026-06-01")
+
+    register_second_user(client, email="userB@example.com")
+    # User B has no data yet
+    assert asymmetry_chart_payload(client) is None
+
+    # User B logs bilateral work sets on open hand 10mm
+    save_work_set(client, "left", 1, "30", "5", date="2026-06-05", grip="open hand", edge_mm=10)
+    save_work_set(client, "right", 1, "36", "5", date="2026-06-05", grip="open hand", edge_mm=10)
+
+    user_b_payload = asymmetry_chart_payload(client)
+    assert user_b_payload == [
+        {
+            "combo": "asymmetry|open hand|10",
+            "grip_name": "open hand",
+            "edge_mm": 10,
+            "strength_dates": [],
+            "strength_gaps": [],
+            "load_dates": ["2026-06-05"],
+            "load_gaps": [-16.666666666666664],
+        }
+    ]
+
+    # Switch back to User A
+    login(client, "userA@example.com", "test-pw-1234")
+    user_a_payload = asymmetry_chart_payload(client)
+    assert user_a_payload == [
+        {
+            "combo": "asymmetry|half crimp|20",
+            "grip_name": "half crimp",
+            "edge_mm": 20,
+            "strength_dates": [],
+            "strength_gaps": [],
+            "load_dates": ["2026-06-01"],
+            "load_gaps": [20.0],
+        }
+    ]

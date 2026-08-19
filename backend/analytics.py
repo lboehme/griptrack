@@ -233,12 +233,61 @@ def strength_gap_trend(
     return trend
 
 
+def load_gap_trend(
+    session: Session, user: User, grip_type_id: int, edge_mm: int
+) -> list[tuple[date_type, float]]:
+    """Signed load/volume gap trend ((L - R) / max(L, R) * 100.0) per
+    TrainingSession for a (grip_type_id, edge_mm) combination, oldest first.
+
+    A point exists for each non-deload session where BOTH hands logged work
+    sets at that combo in that session. (Sessions where only one hand trained
+    the combo produce no point). Grouped by (date, session_number) and
+    ordered chronologically.
+    """
+    rows = session.exec(
+        select(
+            TrainingSession.date,
+            TrainingSession.session_number,
+            WorkSet.hand,
+            WorkSet.weight,
+            WorkSet.reps,
+        )
+        .join(WorkSet, WorkSet.training_session_id == TrainingSession.id)
+        .where(TrainingSession.user_id == user.id)
+        .where(WorkSet.grip_type_id == grip_type_id)
+        .where(WorkSet.edge_mm == edge_mm)
+        .where(TrainingSession.is_deload.is_(False))
+        .order_by(TrainingSession.date, TrainingSession.session_number)
+    ).all()
+
+    volumes: dict[tuple[date_type, int], dict[str, float]] = {}
+    for date, session_number, hand, weight, reps in rows:
+        key = (date, session_number)
+        if key not in volumes:
+            volumes[key] = {}
+        volumes[key][hand] = volumes[key].get(hand, 0.0) + weight * reps
+
+    trend: list[tuple[date_type, float]] = []
+    for (date, _session_number), hand_map in sorted(volumes.items()):
+        if "left" in hand_map and "right" in hand_map:
+            left_vol = hand_map["left"]
+            right_vol = hand_map["right"]
+            m = max(left_vol, right_vol)
+            if m > 0:
+                gap = (left_vol - right_vol) / m * 100.0
+                trend.append((date, gap))
+            elif left_vol == 0 and right_vol == 0:
+                trend.append((date, 0.0))
+
+    return trend
+
+
 def dashboard_view(session: Session, user: User) -> dict:
     """Everything the trends/dashboard page shows, assembled in one call.
     Finds trained combinations, computes training volume trends, evaluates
     plateau and overtraining heuristics, formats client chart data,
     calculates strength-to-grade correlation, and computes bilateral
-    strength asymmetry gap trends."""
+    strength and load asymmetry gap trends."""
     combos = []
     trained = training_log.trained_combinations(session, user)
     for combo in trained:
@@ -273,8 +322,8 @@ def dashboard_view(session: Session, user: User) -> dict:
         for combo in combos
     ]
 
-    # Bilateral asymmetry: identify (grip_type_id, edge_mm) pairs trained by
-    # both hands and compute strength gap trend.
+    # Bilateral asymmetry: identify (grip_type_id, edge_mm) pairs trained or
+    # tested by both hands and compute strength gap and load gap trends.
     grip_edges: dict[tuple[int, int], dict[str, str]] = {}
     hands_by_grip_edge: dict[tuple[int, int], set[str]] = {}
     for c in trained:
@@ -289,8 +338,9 @@ def dashboard_view(session: Session, user: User) -> dict:
     asymmetry_pairs = []
     for (grip_type_id, edge_mm), hands in sorted(hands_by_grip_edge.items()):
         if "left" in hands and "right" in hands:
-            asym_trend = strength_gap_trend(session, user, grip_type_id, edge_mm)
-            if not asym_trend:
+            strength_trend = strength_gap_trend(session, user, grip_type_id, edge_mm)
+            load_trend = load_gap_trend(session, user, grip_type_id, edge_mm)
+            if not strength_trend and not load_trend:
                 continue
             meta = grip_edges[(grip_type_id, edge_mm)]
             combo_key = f"asymmetry|{meta['grip_name']}|{edge_mm}"
@@ -301,7 +351,8 @@ def dashboard_view(session: Session, user: User) -> dict:
                     "dimension_name": meta["dimension_name"],
                     "edge_mm": edge_mm,
                     "combo_key": combo_key,
-                    "trend": asym_trend,
+                    "strength_trend": strength_trend,
+                    "load_trend": load_trend,
                 }
             )
 
@@ -310,8 +361,10 @@ def dashboard_view(session: Session, user: User) -> dict:
             "combo": pair["combo_key"],
             "grip_name": pair["grip_name"],
             "edge_mm": pair["edge_mm"],
-            "dates": [d.isoformat() for d, _ in pair["trend"]],
-            "gaps": [g for _, g in pair["trend"]],
+            "strength_dates": [d.isoformat() for d, _ in pair["strength_trend"]],
+            "strength_gaps": [g for _, g in pair["strength_trend"]],
+            "load_dates": [d.isoformat() for d, _ in pair["load_trend"]],
+            "load_gaps": [g for _, g in pair["load_trend"]],
         }
         for pair in asymmetry_pairs
     ]

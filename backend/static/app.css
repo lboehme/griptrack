@@ -1099,6 +1099,50 @@ li.climb .meta { color: var(--muted); font-size: .87rem; margin-top: .15rem; }
   font-size: .92rem;
 }
 
+.asymmetry-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  margin: .2rem 0 .8rem;
+  font-size: .875rem;
+}
+
+.asymmetry-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+}
+
+.asymmetry-legend-swatch {
+  display: inline-block;
+  width: 16px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.asymmetry-legend-swatch.strength {
+  background: var(--accent);
+}
+
+.asymmetry-legend-swatch.load {
+  background: transparent;
+  border-top: 2.5px dashed #2563eb;
+}
+
+@media (prefers-color-scheme: dark) {
+  .asymmetry-legend-swatch.load {
+    border-top-color: #60a5fa;
+  }
+}
+
+.asymmetry-series-label {
+  margin: .5rem 0 .2rem;
+  font-size: .82rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
 .asymmetry-pair:not(:last-child) {
   margin-bottom: 1.5rem;
   padding-bottom: 1.2rem;
