@@ -42,8 +42,6 @@ module = [
     "backend.analytics",
     "backend.archive",
     "backend.climbing",
-    "backend.export_spec",
-    "backend.import_restore",
     "backend.main",
     "backend.routers.climbs",
     "backend.routers.max_tests",

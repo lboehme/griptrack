@@ -165,11 +165,6 @@ class ArchiveError(Exception):
     offending file/row where possible) -- routers can render it directly."""
 
 
-# Backward compatibility aliases
-ImportRestoreError = ArchiveError
-ArchiveRestoreError = ArchiveError
-
-
 def scoped_query(
     member: ArchiveMember, user: User, training_session_ids: list[int] | None = None
 ) -> SelectOfScalar[Any]:

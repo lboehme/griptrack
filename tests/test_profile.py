@@ -161,7 +161,7 @@ def test_csv_export_returns_user_scoped_data(client):
         # TrainingSession-scoped members are present (header-only) even
         # when the user has logged no sessions -- the archive's member
         # set is fixed by format_version, not by which tables happen to
-        # be non-empty (see backend/export_spec.py).
+        # be non-empty (see backend/archive.py).
         assert "TrainingSession.csv" in names
         assert "WorkSet.csv" in names
         assert "PainReport.csv" in names

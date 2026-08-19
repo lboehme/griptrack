@@ -24,14 +24,8 @@ class SetValidationError(ValueError):
     """Validation failure in a Set commit payload."""
 
 
-ValidationError = SetValidationError
-
-
 class UnknownGripTypeError(ValueError):
     """Grip type not found."""
-
-
-UnknownGripType = UnknownGripTypeError
 
 
 def require_grip_type(session: Session, grip_type_id: int) -> GripType:

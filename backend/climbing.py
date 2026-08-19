@@ -57,6 +57,3 @@ def climbs_newest_first(session: Session, user: User) -> list[Climb]:
             .order_by(Climb.date.desc(), Climb.id.desc())
         ).all()
     )
-
-
-climb_history = climbs_newest_first

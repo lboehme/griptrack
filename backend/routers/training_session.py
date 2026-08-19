@@ -196,7 +196,7 @@ def save_focus_set(
         hands_payload = training_log.parse_hands_payload(
             left_weight, left_reps, left_rpe, right_weight, right_reps, right_rpe
         )
-    except training_log.ValidationError as e:
+    except training_log.SetValidationError as e:
         return HTMLResponse(str(e), status_code=400)
 
     try:
@@ -263,7 +263,7 @@ def restore_focus_set(
         hands_payload = training_log.parse_hands_payload(
             left_weight, left_reps, left_rpe, right_weight, right_reps, right_rpe
         )
-    except training_log.ValidationError as e:
+    except training_log.SetValidationError as e:
         return HTMLResponse(str(e), status_code=400)
 
     try:

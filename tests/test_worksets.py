@@ -995,23 +995,23 @@ def test_parse_hands_payload_single_hand_sequential():
 
 
 def test_parse_hands_payload_rejects_missing_reps():
-    with pytest.raises(training_log.ValidationError, match="left hand needs both weight and reps"):
+    with pytest.raises(training_log.SetValidationError, match="left hand needs both weight and reps"):
         training_log.parse_hands_payload(left_weight=42.5, left_reps=None)
 
 
 def test_parse_hands_payload_rejects_out_of_range_values():
-    with pytest.raises(training_log.ValidationError, match="Weight out of range"):
+    with pytest.raises(training_log.SetValidationError, match="Weight out of range"):
         training_log.parse_hands_payload(left_weight=-5.0, left_reps=5)
 
-    with pytest.raises(training_log.ValidationError, match="Reps out of range"):
+    with pytest.raises(training_log.SetValidationError, match="Reps out of range"):
         training_log.parse_hands_payload(left_weight=40.0, left_reps=0)
 
-    with pytest.raises(training_log.ValidationError, match="RPE must be between 1 and 10 in 0.5 steps"):
+    with pytest.raises(training_log.SetValidationError, match="RPE must be between 1 and 10 in 0.5 steps"):
         training_log.parse_hands_payload(left_weight=40.0, left_reps=5, left_rpe=7.3)
 
 
 def test_parse_hands_payload_rejects_empty():
-    with pytest.raises(training_log.ValidationError, match="At least one hand's weight and reps are required"):
+    with pytest.raises(training_log.SetValidationError, match="At least one hand's weight and reps are required"):
         training_log.parse_hands_payload()
 
 
