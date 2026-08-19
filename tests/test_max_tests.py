@@ -1,9 +1,14 @@
+import re
+
 from tests.helpers import (
     current_maxes,
+    grip_type_id,
     log_max_test,
     register,
     register_second_user,
+    save_work_set,
 )
+from tests.test_correlation import correlation_stat, seed_progression
 
 
 def test_current_max_per_combination_latest_test_supersedes(client):
@@ -89,7 +94,6 @@ def test_user_can_void_their_own_max_test(client):
     page = client.get("/max-tests")
     # Using a simple substring search for the void action endpoint
     # The UI should have a form or button that posts to /max-tests/{id}/void
-    import re
     match = re.search(r'action="/max-tests/(\d+)/void"', page.text)
     assert match is not None
     test_id = match.group(1)
@@ -107,7 +111,6 @@ def test_user_cannot_void_someone_elses_max_test(client):
     log_max_test(client, "left", "half crimp", 20, "2026-07-01", "40")
     
     page = client.get("/max-tests")
-    import re
     test_id = re.search(r'action="/max-tests/(\d+)/void"', page.text).group(1)
 
     register_second_user(client)
@@ -168,8 +171,6 @@ def test_adding_a_grip_type_with_an_empty_name_is_ignored(client):
 
 
 def _extract_voidable_test_ids(html: str) -> list[int]:
-    import re
-
     return [int(m) for m in re.findall(r'action="/max-tests/(\d+)/void"', html)]
 
 
@@ -179,8 +180,6 @@ def test_voiding_the_newest_test_resurfaces_an_older_one_and_reinstates_supersed
     """Fallback semantics: voiding the newest test must resurrect the
     older MaxWeightTest as CurrentMax, and any WorkSets logged since
     that older test's date must re-enter the supersede rule."""
-    from tests.helpers import save_work_set
-
     register(client)
     # Day 1: test 80 kg.
     log_max_test(client, "left", "half crimp", 20, "2026-07-01", "80")
@@ -201,15 +200,17 @@ def test_voiding_the_newest_test_resurfaces_an_older_one_and_reinstates_supersed
 
 
 def test_voided_test_drops_out_of_the_strength_grade_correlation(client):
-    """_best_pull_at filters voided tests: with every max test voided there
-    is no strength series left, so the dashboard correlation disappears."""
-    from tests.test_correlation import correlation_stat, seed_progression
-
+    """_best_pull_at filters voided tests. Voiding only the *earliest* max
+    test leaves the first climb (2026-06-02) with no strength reading
+    at-or-before its date, so that single point drops out -- taking n from
+    8 to 7, back below the n >= 8 floor, so the correlation disappears.
+    Every other climb still pairs with a later, un-voided test."""
     seed_progression(client)
-    assert correlation_stat(client) is not None
+    stat = correlation_stat(client)
+    assert stat is not None and stat[1] == 8
 
-    for test_id in _extract_voidable_test_ids(client.get("/max-tests").text):
-        client.post(f"/max-tests/{test_id}/void", follow_redirects=True)
+    earliest_id = min(_extract_voidable_test_ids(client.get("/max-tests").text))
+    client.post(f"/max-tests/{earliest_id}/void", follow_redirects=True)
 
     assert correlation_stat(client) is None
 
@@ -217,8 +218,6 @@ def test_voided_test_drops_out_of_the_strength_grade_correlation(client):
 def test_voided_test_no_longer_counts_as_the_last_used_combination(client):
     """last_used_combination filters voided tests: the session-start form
     default falls back to the previously used combo."""
-    from tests.helpers import grip_type_id
-
     register(client)
     log_max_test(client, "left", "half crimp", 20, "2026-07-01", "42.5")
     log_max_test(client, "left", "open hand", 10, "2026-07-02", "35")

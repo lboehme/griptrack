@@ -505,8 +505,12 @@ def all_app_routes():
                 collected.extend(collect_api_routes(r.routes))
         return collected
 
+    # All real verbs -- not just GET/POST -- so a future PUT/DELETE/PATCH
+    # route can't slip past the sweep. HEAD/OPTIONS are auto-added by
+    # Starlette (HEAD mirrors GET, OPTIONS is CORS) and not separately
+    # auth-gated, so they're excluded.
     for route in collect_api_routes(app.routes):
-        for method in route.methods & {"GET", "POST"}:
+        for method in route.methods & {"GET", "POST", "PUT", "DELETE", "PATCH"}:
             if (method, route.path) not in PUBLIC_ROUTES:
                 # Fill path params ({test_id} etc.) with a dummy id.
                 routes.append((method, re.sub(r"\{[^}]+\}", "1", route.path)))

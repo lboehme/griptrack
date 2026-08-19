@@ -1,4 +1,11 @@
-from tests.helpers import log_bodyweight, register, register_second_user
+from tests.helpers import (
+    grip_type_id,
+    log_bodyweight,
+    log_max_test,
+    register,
+    register_second_user,
+    save_work_set,
+)
 
 
 def test_unit_preference_is_chosen_at_registration(client):
@@ -250,10 +257,12 @@ def test_csv_export_includes_session_data_isolated_per_user(client):
     PainReport, WarmupStepCheck, SessionMaxEstimate) is scoped via
     training_session_id.in_(ts_ids). This test proves that when two users
     train on the same date, export contains only the exporting user's rows."""
+    import csv
     import io
     import zipfile
 
-    from tests.helpers import grip_type_id, log_max_test, save_work_set
+    def rows(zipf, name):
+        return list(csv.DictReader(io.StringIO(zipf.read(name).decode())))
 
     # User A trains on 2026-07-04
     register(client, "user_a@example.com", "test-pw-1234")
@@ -346,30 +355,23 @@ def test_csv_export_includes_session_data_isolated_per_user(client):
     assert response.status_code == 200
 
     with zipfile.ZipFile(io.BytesIO(response.content)) as z:
-        sessions = z.read("TrainingSession.csv").decode()
-        assert "User B notes" in sessions
-        assert "User A notes" not in sessions
-        # header + 1 session row
-        assert len(sessions.splitlines()) == 2
+        # Exactly one row per session-scoped member -- User A's same-date
+        # rows are absent -- and that row's values are User B's, checked
+        # per-column so a stray match elsewhere in the CSV can't pass it.
+        sessions = rows(z, "TrainingSession.csv")
+        assert [s["notes"] for s in sessions] == ["User B notes"]
 
-        worksets = z.read("WorkSet.csv").decode()
-        assert "30" in worksets  # User B weight
-        assert "45" not in worksets  # User A weight
-        assert len(worksets.splitlines()) == 2
+        worksets = rows(z, "WorkSet.csv")
+        assert [float(w["weight (kg)"]) for w in worksets] == [30.0]
 
-        pain = z.read("PainReport.csv").decode()
-        assert "User B tweak" in pain
-        assert "User A tweak" not in pain
-        assert len(pain.splitlines()) == 2
+        pain = rows(z, "PainReport.csv")
+        assert [p["note"] for p in pain] == ["User B tweak"]
 
-        warmup = z.read("WarmupStepCheck.csv").decode()
-        assert "right" in warmup
-        assert len(warmup.splitlines()) == 2
+        warmup = rows(z, "WarmupStepCheck.csv")
+        assert [w["hand"] for w in warmup] == ["right"]
 
-        estimates = z.read("SessionMaxEstimate.csv").decode()
-        assert "25" in estimates
-        assert "42.5" not in estimates
-        assert len(estimates.splitlines()) == 2
+        estimates = rows(z, "SessionMaxEstimate.csv")
+        assert [float(e["weight (kg)"]) for e in estimates] == [25.0]
 
 
 def test_unauthenticated_export_is_rejected(client):
