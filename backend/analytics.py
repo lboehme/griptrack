@@ -180,3 +180,47 @@ def plateau_flag(trend: list[tuple[date_type, float]]) -> bool:
     recent = volumes[-PLATEAU_RECENT_SESSIONS:]
     earlier = volumes[:-PLATEAU_RECENT_SESSIONS]
     return max(recent) <= max(earlier)
+
+
+def dashboard_view(session: Session, user: User) -> dict:
+    """Everything the trends/dashboard page shows, assembled in one call.
+    Finds trained combinations, computes training volume trends, evaluates
+    plateau and overtraining heuristics, formats client chart data, and
+    calculates strength-to-grade correlation."""
+    combos = []
+    for combo in training_log.trained_combinations(session, user):
+        trend = training_volume_trend(
+            session, user, combo["hand"], combo["grip_type_id"], combo["edge_mm"]
+        )
+        if not trend:
+            continue
+        combos.append(
+            {
+                **combo,
+                # Built once here rather than re-joined per attribute in the
+                # template (plateau/overtraining pills, volume-list rows,
+                # the chart container, and the chart_data payload below all
+                # need the same "hand|grip_name|edge_mm" key).
+                "combo_key": f"{combo['hand']}|{combo['grip_name']}|{combo['edge_mm']}",
+                "trend": trend,
+                "plateau": plateau_flag(trend),
+                "overtraining": overtraining_warning(trend),
+            }
+        )
+    # Fed to the client-side uPlot chart via the JSON-in-DOM idiom (see
+    # worksets.html's ladder-data/saved-sets-data precedent) -- one entry
+    # per trained combo, dates serialized to ISO strings since Jinja's
+    # tojson can't encode date objects directly.
+    chart_data = [
+        {
+            "combo": combo["combo_key"],
+            "dates": [d.isoformat() for d, _ in combo["trend"]],
+            "volumes": [v for _, v in combo["trend"]],
+        }
+        for combo in combos
+    ]
+    return {
+        "combos": combos,
+        "chart_data": chart_data,
+        "correlation": strength_grade_correlation(session, user),
+    }
