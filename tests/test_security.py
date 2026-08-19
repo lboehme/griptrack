@@ -392,7 +392,7 @@ def test_import_discards_a_spoofed_file_supplied_user_id(client):
 
 
 def test_import_upload_size_is_bounded(client, monkeypatch):
-    import backend.import_restore as import_restore
+    import backend.archive as archive
     from tests.helpers import export_archive, generate_invite, import_archive
 
     register(client, "founder@example.com", "test-pw-1234")
@@ -401,14 +401,14 @@ def test_import_upload_size_is_bounded(client, monkeypatch):
     code = generate_invite(client)
     register(client, "friend@example.com", "test-pw-5678", invite_code=code)
 
-    monkeypatch.setattr(import_restore, "MAX_IMPORT_UPLOAD_BYTES", 100)
+    monkeypatch.setattr(archive, "MAX_IMPORT_UPLOAD_BYTES", 100)
     response = import_archive(client, archive_bytes)
     assert response.status_code == 400
     assert "large" in response.text.lower()
 
 
 def test_import_per_member_decompressed_size_is_bounded(client, monkeypatch):
-    import backend.import_restore as import_restore
+    import backend.archive as archive
     from tests.helpers import export_archive, generate_invite, import_archive
 
     register(client, "founder@example.com", "test-pw-1234")
@@ -417,14 +417,14 @@ def test_import_per_member_decompressed_size_is_bounded(client, monkeypatch):
     code = generate_invite(client)
     register(client, "friend@example.com", "test-pw-5678", invite_code=code)
 
-    monkeypatch.setattr(import_restore, "MAX_IMPORT_MEMBER_BYTES", 5)
+    monkeypatch.setattr(archive, "MAX_IMPORT_MEMBER_BYTES", 5)
     response = import_archive(client, archive_bytes)
     assert response.status_code == 400
     assert "exceeds" in response.text.lower()
 
 
 def test_import_member_count_is_bounded(client, monkeypatch):
-    import backend.import_restore as import_restore
+    import backend.archive as archive
     from tests.helpers import export_archive, generate_invite, import_archive
 
     register(client, "founder@example.com", "test-pw-1234")
@@ -433,7 +433,7 @@ def test_import_member_count_is_bounded(client, monkeypatch):
     code = generate_invite(client)
     register(client, "friend@example.com", "test-pw-5678", invite_code=code)
 
-    monkeypatch.setattr(import_restore, "MAX_IMPORT_MEMBERS", 3)
+    monkeypatch.setattr(archive, "MAX_IMPORT_MEMBERS", 3)
     response = import_archive(client, archive_bytes)
     assert response.status_code == 400
     assert "too many files" in response.text.lower()
@@ -446,7 +446,7 @@ def test_import_row_count_per_member_is_bounded(client, monkeypatch):
     Climb.csv in archive order, so the cap is set above both of those and
     below the climb count to prove it's actually bounding the row the test
     means to bound."""
-    import backend.import_restore as import_restore
+    import backend.archive as archive
     from tests.helpers import export_archive, generate_invite, import_archive, log_climb
 
     register(client, "founder@example.com", "test-pw-1234")
@@ -457,7 +457,7 @@ def test_import_row_count_per_member_is_bounded(client, monkeypatch):
     code = generate_invite(client)
     register(client, "friend@example.com", "test-pw-5678", invite_code=code)
 
-    monkeypatch.setattr(import_restore, "MAX_IMPORT_ROWS_PER_MEMBER", 8)
+    monkeypatch.setattr(archive, "MAX_IMPORT_ROWS_PER_MEMBER", 8)
     response = import_archive(client, archive_bytes)
     assert response.status_code == 400
     assert "too many rows" in response.text.lower()

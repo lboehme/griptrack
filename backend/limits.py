@@ -20,7 +20,7 @@ MAX_PLATE_COUNT = 100
 # params against absurd values.
 MAX_SESSION_NUMBER = 20
 
-# Import (backend.import_restore, #102) is an untrusted-file ingress point:
+# Import (backend.archive, #102, #120) is an untrusted-file ingress point:
 # a personal instrument's own export archive is tiny, so these bounds are
 # generous headroom, not a real-usage estimate — they exist to cap the work
 # a malicious or corrupted upload can force (zip-bomb guard, ADR-0008).

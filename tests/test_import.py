@@ -323,3 +323,173 @@ def test_import_rejects_a_non_numeric_cell_with_a_400_pointing_at_it(client):
     # Nothing landed: the fresh account is still empty.
     with zipfile.ZipFile(io.BytesIO(export_archive(client))) as z:
         assert len(z.read("MaxWeightTest.csv").decode().splitlines()) == 1
+
+
+def test_archive_module_round_trip_at_module_seam():
+    """Ticket #120: Verify archive.create_archive and archive.restore_archive
+    at the backend.archive module seam directly without HTTP overhead."""
+    from datetime import date as date_type
+
+    from sqlalchemy.pool import StaticPool
+    from sqlmodel import Session, SQLModel, create_engine, select
+
+    import backend.archive as archive
+    from backend.models import (
+        STARTER_GRIP_TYPES,
+        BodyWeightLog,
+        Climb,
+        GripType,
+        MaxWeightTest,
+        PainReport,
+        PlateInventoryItem,
+        TrainingSession,
+        User,
+        WorkSet,
+    )
+
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    SQLModel.metadata.create_all(engine)
+    session = Session(engine)
+    for name in STARTER_GRIP_TYPES:
+        dimension = "block width" if name == "pinch" else "edge depth"
+        session.add(GripType(name=name, dimension_name=dimension))
+    session.commit()
+
+    # Create User A
+    user_a = User(email="user_a@example.com", hashed_password="pw", unit_pref="kg")
+    session.add(user_a)
+    session.commit()
+    session.refresh(user_a)
+
+    grip = session.exec(select(GripType).where(GripType.name == "half crimp")).first()
+    assert grip is not None
+
+    bw = BodyWeightLog(user_id=user_a.id, date=date_type(2026, 7, 1), weight=72.5)
+    climb = Climb(
+        user_id=user_a.id,
+        date=date_type(2026, 7, 2),
+        discipline="boulder",
+        grade="V6",
+        style="redpoint",
+        notes="=HYPERLINK(test)",
+    )
+    max_test = MaxWeightTest(
+        user_id=user_a.id,
+        hand="left",
+        grip_type_id=grip.id,
+        edge_mm=20,
+        date=date_type(2026, 7, 1),
+        weight=42.0,
+    )
+    ts = TrainingSession(
+        user_id=user_a.id,
+        date=date_type(2026, 7, 3),
+        session_number=1,
+        notes="strong session",
+        is_deload=True,
+    )
+    session.add_all([bw, climb, max_test, ts])
+    session.commit()
+    session.refresh(ts)
+
+    ws = WorkSet(
+        training_session_id=ts.id,
+        hand="left",
+        grip_type_id=grip.id,
+        edge_mm=20,
+        weight=35.0,
+        reps=5,
+        set_number=1,
+        rpe=8.5,
+    )
+    pain = PainReport(
+        training_session_id=ts.id,
+        hand="left",
+        severity=1,
+        note="slight twinge",
+    )
+    plate = PlateInventoryItem(
+        user_id=user_a.id,
+        weight=5.0,
+        count=4,
+    )
+    session.add_all([ws, pain, plate])
+    session.commit()
+
+    # Generate archive at module seam
+    archive_bytes = archive.create_archive(session, user_a)
+    assert isinstance(archive_bytes, bytes)
+    assert len(archive_bytes) > 0
+
+    # Create fresh empty User B
+    user_b = User(email="user_b@example.com", hashed_password="pw", unit_pref="lbs")
+    session.add(user_b)
+    session.commit()
+    session.refresh(user_b)
+    # Seed default plates for user_b
+    session.add(PlateInventoryItem(user_id=user_b.id, weight=20.0, count=2))
+    session.commit()
+
+    # Empty check should pass (seeded plates don't count)
+    assert not archive.account_has_data(session, user_b)
+
+    # Restore archive at module seam
+    archive.restore_archive(session, user_b, archive_bytes)
+
+    # Verify user_b has the restored data
+    restored_bw = session.exec(
+        select(BodyWeightLog).where(BodyWeightLog.user_id == user_b.id)
+    ).all()
+    assert len(restored_bw) == 1
+    assert restored_bw[0].weight == 72.5
+    assert restored_bw[0].date == date_type(2026, 7, 1)
+
+    restored_climbs = session.exec(
+        select(Climb).where(Climb.user_id == user_b.id)
+    ).all()
+    assert len(restored_climbs) == 1
+    assert restored_climbs[0].grade == "V6"
+    assert restored_climbs[0].notes == "=HYPERLINK(test)"  # formula reverse-neutralized!
+
+    restored_tests = session.exec(
+        select(MaxWeightTest).where(MaxWeightTest.user_id == user_b.id)
+    ).all()
+    assert len(restored_tests) == 1
+    assert restored_tests[0].weight == 42.0
+    assert restored_tests[0].grip_type_id == grip.id
+
+    restored_sessions = session.exec(
+        select(TrainingSession).where(TrainingSession.user_id == user_b.id)
+    ).all()
+    assert len(restored_sessions) == 1
+    assert restored_sessions[0].notes == "strong session"
+    assert restored_sessions[0].is_deload is True
+    assert restored_sessions[0].id != ts.id  # Discarded old PK
+
+    restored_ws = session.exec(
+        select(WorkSet).where(WorkSet.training_session_id == restored_sessions[0].id)
+    ).all()
+    assert len(restored_ws) == 1
+    assert restored_ws[0].weight == 35.0
+    assert restored_ws[0].rpe == 8.5
+    assert restored_ws[0].grip_type_id == grip.id
+
+    restored_pain = session.exec(
+        select(PainReport).where(PainReport.training_session_id == restored_sessions[0].id)
+    ).all()
+    assert len(restored_pain) == 1
+    assert restored_pain[0].note == "slight twinge"
+
+    restored_plates = session.exec(
+        select(PlateInventoryItem).where(PlateInventoryItem.user_id == user_b.id)
+    ).all()
+    assert len(restored_plates) == 1
+    assert restored_plates[0].weight == 5.0
+    assert restored_plates[0].count == 4
+
+    # Verify unit pref was adopted from manifest (kg)
+    session.refresh(user_b)
+    assert user_b.unit_pref == "kg"
+

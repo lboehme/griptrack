@@ -217,7 +217,7 @@ def test_csv_export_manifest_carries_format_version_unit_and_timestamp(client):
     import zipfile
     from datetime import datetime
 
-    from backend.export_spec import FORMAT_VERSION
+    from backend.archive import FORMAT_VERSION
 
     register(client, "lifter@example.com", "test-pw-1234", unit_pref="lbs")
 
