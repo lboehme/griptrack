@@ -54,12 +54,15 @@ def volume_points(client):
     return points
 
 
-def asymmetry_points(client):
-    """Parse /dashboard into {combo: [(date, gap), ...]} in page order."""
+def _asymmetry_points(client, series):
+    """Parse /dashboard into {combo: [(date, gap), ...]} for the given
+    asymmetry series ("strength" or "load"), in page order."""
     page = client.get("/dashboard").text
     points = {}
     for combo, date, gap in re.findall(
-        r'class="asymmetry-point"[^>]*data-combo="([^"]+)"[^>]*data-date="([\d-]+)" '
+        r'class="asymmetry-point"[^>]*data-combo="([^"]+)"[^>]*data-series="'
+        + series
+        + r'"[^>]*data-date="([\d-]+)" '
         r'data-gap="([-\d.]+)"',
         page,
     ):
@@ -69,28 +72,12 @@ def asymmetry_points(client):
 
 def strength_asymmetry_points(client):
     """Parse /dashboard into {combo: [(date, gap), ...]} for strength series."""
-    page = client.get("/dashboard").text
-    points = {}
-    for combo, date, gap in re.findall(
-        r'class="asymmetry-point"[^>]*data-combo="([^"]+)"[^>]*data-series="strength"[^>]*data-date="([\d-]+)" '
-        r'data-gap="([-\d.]+)"',
-        page,
-    ):
-        points.setdefault(combo, []).append((date, float(gap)))
-    return points
+    return _asymmetry_points(client, "strength")
 
 
 def load_asymmetry_points(client):
     """Parse /dashboard into {combo: [(date, gap), ...]} for load series."""
-    page = client.get("/dashboard").text
-    points = {}
-    for combo, date, gap in re.findall(
-        r'class="asymmetry-point"[^>]*data-combo="([^"]+)"[^>]*data-series="load"[^>]*data-date="([\d-]+)" '
-        r'data-gap="([-\d.]+)"',
-        page,
-    ):
-        points.setdefault(combo, []).append((date, float(gap)))
-    return points
+    return _asymmetry_points(client, "load")
 
 
 def plateau_flags(client):

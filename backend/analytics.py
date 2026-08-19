@@ -187,6 +187,13 @@ def plateau_flag(trend: list[tuple[date_type, float]]) -> bool:
     return max(recent) <= max(earlier)
 
 
+def signed_gap_pct(left: float, right: float) -> float:
+    """Signed L/R gap as a percentage of the larger side:
+    (left - right) / max(left, right) * 100.0. Positive means left is larger.
+    Callers guarantee at least one side is positive."""
+    return (left - right) / max(left, right) * 100.0
+
+
 def strength_gap_trend(
     session: Session, user: User, grip_type_id: int, edge_mm: int
 ) -> list[tuple[date_type, float]]:
@@ -231,9 +238,7 @@ def strength_gap_trend(
             and left_max > 0
             and right_max > 0
         ):
-            m = max(left_max, right_max)
-            gap = (left_max - right_max) / m * 100.0
-            trend.append((d, gap))
+            trend.append((d, signed_gap_pct(left_max, right_max)))
 
     return trend
 
@@ -275,27 +280,22 @@ def load_gap_trend(
     trend: list[tuple[date_type, float]] = []
     for (date, _session_number), hand_map in sorted(volumes.items()):
         if "left" in hand_map and "right" in hand_map:
-            left_vol = hand_map["left"]
-            right_vol = hand_map["right"]
-            m = max(left_vol, right_vol)
-            if m > 0:
-                gap = (left_vol - right_vol) / m * 100.0
-                trend.append((date, gap))
-            elif left_vol == 0 and right_vol == 0:
-                trend.append((date, 0.0))
+            # Per-hand volume is always positive when present (WorkSet weight
+            # and reps are validated > 0), so max(left, right) > 0 always holds.
+            trend.append((date, signed_gap_pct(hand_map["left"], hand_map["right"])))
 
     return trend
 
 
-def asymmetry_warning(load_gap_trend: list[tuple[date_type, float]]) -> bool:
+def asymmetry_warning(gap_trend: list[tuple[date_type, float]]) -> bool:
     """AsymmetryWarning: bilateral training load gap has widened by >= ASYM_DRIFT_PP
     percentage points compared to the user's personal baseline window, OR recent
     load asymmetry reaches/exceeds ASYM_BACKSTOP_PCT. Requires at least
     ASYM_RECENT_SESSIONS + ASYM_MIN_BASELINE_SESSIONS data points (thin data gates
     both arms). Narrowing gaps never warn."""
-    if len(load_gap_trend) < ASYM_RECENT_SESSIONS + ASYM_MIN_BASELINE_SESSIONS:
+    if len(gap_trend) < ASYM_RECENT_SESSIONS + ASYM_MIN_BASELINE_SESSIONS:
         return False
-    gaps = [abs(gap) for _, gap in load_gap_trend]
+    gaps = [abs(gap) for _, gap in gap_trend]
     recent = sum(gaps[-ASYM_RECENT_SESSIONS:]) / ASYM_RECENT_SESSIONS
     baseline_window = gaps[
         -(ASYM_RECENT_SESSIONS + ASYM_BASELINE_SESSIONS) : -ASYM_RECENT_SESSIONS

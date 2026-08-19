@@ -119,6 +119,11 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   }
 
+  const formatSignedPct = (val) =>
+    (val > 0 ? "+" : "") +
+    (val % 1 === 0 ? val.toFixed(0) : val.toFixed(1)) +
+    "%";
+
   function asymmetryEndpointLabelPlugin() {
     return {
       hooks: {
@@ -164,21 +169,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 ctx.fillStyle = topEp.color;
                 ctx.textBaseline = "bottom";
-                const val1 = topEp.val;
-                const formatted1 =
-                  (val1 > 0 ? "+" : "") +
-                  (val1 % 1 === 0 ? val1.toFixed(0) : val1.toFixed(1)) +
-                  "%";
-                ctx.fillText(formatted1, topEp.xPos, topEp.yPos - 12);
+                ctx.fillText(formatSignedPct(topEp.val), topEp.xPos, topEp.yPos - 12);
 
                 ctx.fillStyle = botEp.color;
                 ctx.textBaseline = "top";
-                const val2 = botEp.val;
-                const formatted2 =
-                  (val2 > 0 ? "+" : "") +
-                  (val2 % 1 === 0 ? val2.toFixed(0) : val2.toFixed(1)) +
-                  "%";
-                ctx.fillText(formatted2, botEp.xPos, botEp.yPos + 12);
+                ctx.fillText(formatSignedPct(botEp.val), botEp.xPos, botEp.yPos + 12);
 
                 ctx.restore();
                 return;
@@ -188,12 +183,7 @@ document.addEventListener("DOMContentLoaded", () => {
             endpoints.forEach((ep) => {
               ctx.fillStyle = ep.color;
               ctx.textBaseline = "bottom";
-              const val = ep.val;
-              const formatted =
-                (val > 0 ? "+" : "") +
-                (val % 1 === 0 ? val.toFixed(0) : val.toFixed(1)) +
-                "%";
-              ctx.fillText(formatted, ep.xPos, ep.yPos - 12);
+              ctx.fillText(formatSignedPct(ep.val), ep.xPos, ep.yPos - 12);
             });
 
             ctx.restore();
