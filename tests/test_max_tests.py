@@ -127,3 +127,42 @@ def test_max_tests_page_uses_segmented_radio_group_for_hand(client):
     assert page.count('input type="radio" name="hand" value="left"') == 2
     assert page.count('input type="radio" name="hand" value="right"') == 2
 
+
+def test_max_test_with_invalid_hand_or_unknown_grip_is_rejected(client):
+    register(client)
+
+    bad_hand = client.post(
+        "/max-tests",
+        data={
+            "hand": "tentacle",
+            "grip_type_id": 1,
+            "edge_mm": 20,
+            "date": "2026-07-01",
+            "weight": "40",
+        },
+        follow_redirects=False,
+    )
+    assert bad_hand.status_code == 400
+
+    unknown_grip = client.post(
+        "/max-tests",
+        data={
+            "hand": "left",
+            "grip_type_id": 9999,
+            "edge_mm": 20,
+            "date": "2026-07-01",
+            "weight": "40",
+        },
+        follow_redirects=False,
+    )
+    assert unknown_grip.status_code == 400
+
+
+def test_adding_a_grip_type_with_an_empty_name_is_ignored(client):
+    register(client)  # founder = admin
+    before = client.get("/max-tests").text
+
+    response = client.post("/grip-types", data={"name": "   "}, follow_redirects=True)
+    assert response.status_code == 200
+    assert client.get("/max-tests").text == before
+
