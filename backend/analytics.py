@@ -13,11 +13,16 @@ from backend.models import (
     WorkSet,
 )
 
-# Heuristic tuning (see CONTEXT.md: Plateau / OvertrainingWarning).
+# Heuristic tuning (see CONTEXT.md: Plateau / OvertrainingWarning / AsymmetryWarning).
 # Deliberately simple: revisit once real data exists.
 PLATEAU_RECENT_SESSIONS = 4
 OVERTRAINING_TRAILING_SESSIONS = 4
 OVERTRAINING_SPIKE_FACTOR = 1.25
+ASYM_RECENT_SESSIONS = 3
+ASYM_BASELINE_SESSIONS = 6
+ASYM_MIN_BASELINE_SESSIONS = 3
+ASYM_DRIFT_PP = 5.0
+ASYM_BACKSTOP_PCT = 15.0
 
 
 # Standard Font -> V-scale conversion (approximate, as all such tables are).
@@ -282,6 +287,23 @@ def load_gap_trend(
     return trend
 
 
+def asymmetry_warning(load_gap_trend: list[tuple[date_type, float]]) -> bool:
+    """AsymmetryWarning: bilateral training load gap has widened by >= ASYM_DRIFT_PP
+    percentage points compared to the user's personal baseline window, OR recent
+    load asymmetry reaches/exceeds ASYM_BACKSTOP_PCT. Requires at least
+    ASYM_RECENT_SESSIONS + ASYM_MIN_BASELINE_SESSIONS data points (thin data gates
+    both arms). Narrowing gaps never warn."""
+    if len(load_gap_trend) < ASYM_RECENT_SESSIONS + ASYM_MIN_BASELINE_SESSIONS:
+        return False
+    gaps = [abs(gap) for _, gap in load_gap_trend]
+    recent = sum(gaps[-ASYM_RECENT_SESSIONS:]) / ASYM_RECENT_SESSIONS
+    baseline_window = gaps[
+        -(ASYM_RECENT_SESSIONS + ASYM_BASELINE_SESSIONS) : -ASYM_RECENT_SESSIONS
+    ]
+    baseline = sum(baseline_window) / len(baseline_window)
+    return (recent - baseline >= ASYM_DRIFT_PP) or (recent >= ASYM_BACKSTOP_PCT)
+
+
 def dashboard_view(session: Session, user: User) -> dict:
     """Everything the trends/dashboard page shows, assembled in one call.
     Finds trained combinations, computes training volume trends, evaluates
@@ -353,6 +375,7 @@ def dashboard_view(session: Session, user: User) -> dict:
                     "combo_key": combo_key,
                     "strength_trend": strength_trend,
                     "load_trend": load_trend,
+                    "asymmetry_warning": asymmetry_warning(load_trend),
                 }
             )
 

@@ -49,6 +49,7 @@
   <div class="asymmetry-pair">
     <h4 style="margin: .6rem 0 .3rem; font-size: 1.05rem;">
       {{ pair.grip_name }} @ {{ pair.edge_mm }} mm {{ pair.dimension_name }}
+      {% if pair.asymmetry_warning %}<span class="pill asymmetry-warning-flag" data-combo="{{ pair.combo_key }}">⚠ asymmetry drift</span>{% endif %}
     </h4>
     <div class="asymmetry-chart" data-chart-asymmetry="{{ pair.combo_key }}" role="img" aria-label="Asymmetry trend for {{ pair.grip_name }} @ {{ pair.edge_mm }} mm"></div>
     {% if pair.strength_trend %}
