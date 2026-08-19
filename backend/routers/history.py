@@ -1,10 +1,9 @@
 from fastapi import APIRouter, Depends, Request
 from sqlmodel import Session
 
-from backend import auth, training_log
+from backend import auth, climbing, training_log
 from backend.db import get_session
 from backend.models import User
-from backend.routers.climbs import climbs_newest_first
 from backend.templating import templates
 
 router = APIRouter()
@@ -24,6 +23,6 @@ def history_page(
             "history": training_log.session_history(session, user),
             "grip_names": training_log.grip_names(session),
             "grip_dimension_names": training_log.grip_dimension_names(session),
-            "climbs": climbs_newest_first(session, user),
+            "climbs": climbing.climbs_newest_first(session, user),
         },
     )

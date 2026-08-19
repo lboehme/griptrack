@@ -1,8 +1,10 @@
 import re
 from datetime import date as date_type
 
+import pytest
 from sqlmodel import select
 
+from backend import climbing
 from backend.db import get_session
 from backend.models import Climb, User
 from tests.helpers import log_climb, register, register_second_user
@@ -156,3 +158,40 @@ def test_existing_sport_rows_still_render_in_history_unchanged(client):
     sport_li = re.search(r'<li class="climb"[^>]*data-discipline="sport"[^>]*>.*?</li>', page, re.DOTALL)
     assert sport_li is not None
     assert "grade-unparsed" not in sport_li.group(0)
+
+
+def test_climbing_domain_log_climb_and_history(client):
+    register(client)
+    session = next(client.app.dependency_overrides[get_session]())
+    user = session.exec(select(User).where(User.email == "lifter@example.com")).one()
+
+    # Recognized grade
+    climb, recognized = climbing.log_climb(
+        session, user, date_type(2026, 7, 10), "V7", "flash", "Smooth crux"
+    )
+    assert climb.id is not None
+    assert climb.discipline == "boulder"
+    assert climb.grade == "V7"
+    assert climb.style == "flash"
+    assert climb.notes == "Smooth crux"
+    assert recognized is True
+
+    # Unrecognized grade
+    climb_unrec, recognized_unrec = climbing.log_climb(
+        session, user, date_type(2026, 7, 11), "project", "redpoint"
+    )
+    assert climb_unrec.id is not None
+    assert climb_unrec.grade == "project"
+    assert recognized_unrec is False
+
+    # climbs_newest_first orders by date desc, id desc
+    history = climbing.climbs_newest_first(session, user)
+    assert len(history) == 2
+    assert history[0].id == climb_unrec.id
+    assert history[1].id == climb.id
+
+    # Invalid style raises ValueError
+    with pytest.raises(ValueError, match="Style must be one of"):
+        climbing.log_climb(session, user, date_type(2026, 7, 12), "V5", "invalid_style")
+
+    session.close()
