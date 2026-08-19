@@ -1,7 +1,18 @@
 import json
 import re
 
-from tests.helpers import log_max_test, register, save_work_set
+from sqlmodel import select
+
+from backend import analytics
+from backend.db import get_session
+from backend.models import User
+from tests.helpers import (
+    log_bodyweight,
+    log_climb,
+    log_max_test,
+    register,
+    save_work_set,
+)
 
 
 def chart_payload(client):
@@ -158,3 +169,109 @@ def test_dashboard_shows_training_volume_per_session_per_combo(client):
         ("2026-06-10", 412.5),
     ]
     assert points["left|open hand|10"] == [("2026-06-10", 150.0)]
+
+
+def db_session_and_user(client):
+    session = next(client.app.dependency_overrides[get_session]())
+    user = session.exec(select(User)).first()
+    return session, user
+
+
+def test_dashboard_view_empty_state(client):
+    register(client)
+    session, user = db_session_and_user(client)
+
+    view = analytics.dashboard_view(session, user)
+
+    assert view == {
+        "combos": [],
+        "chart_data": [],
+        "correlation": {"points": [], "n": 0, "r": None},
+    }
+
+
+def test_dashboard_view_aggregation_encapsulation(client):
+    register(client)
+    # Set up user data:
+    # Combo 1: stalled volume (plateau)
+    log_max_test(client, "left", "half crimp", 20, "2026-05-01", "40")
+    for day, volume in enumerate([400, 410, 420, 420, 415, 410, 420]):
+        save_work_set(
+            client, "left", 1, str(volume), "1", date=f"2026-06-{day + 1:02d}"
+        )
+
+    # Combo 2: volume spike + short rest (overtraining warning)
+    log_max_test(client, "left", "open hand", 10, "2026-05-01", "30")
+    for date in ("2026-06-01", "2026-06-08", "2026-06-15", "2026-06-22"):
+        save_work_set(
+            client, "left", 1, "400", "1", date=date, grip="open hand", edge_mm=10
+        )
+    save_work_set(
+        client, "left", 1, "550", "1", date="2026-06-24", grip="open hand", edge_mm=10
+    )
+
+    # Climb + bodyweight for correlation
+    log_bodyweight(client, "2026-06-01", "70")
+    log_climb(client, "2026-06-05", "V4")
+
+    session, user = db_session_and_user(client)
+    view = analytics.dashboard_view(session, user)
+
+    assert "combos" in view
+    assert "chart_data" in view
+    assert "correlation" in view
+
+    assert len(view["combos"]) == 2
+    combo_map = {c["combo_key"]: c for c in view["combos"]}
+
+    c1 = combo_map["left|half crimp|20"]
+    assert c1["hand"] == "left"
+    assert c1["grip_name"] == "half crimp"
+    assert c1["edge_mm"] == 20
+    assert c1["plateau"] is True
+    assert c1["overtraining"] is False
+    assert len(c1["trend"]) == 7
+
+    c2 = combo_map["left|open hand|10"]
+    assert c2["hand"] == "left"
+    assert c2["grip_name"] == "open hand"
+    assert c2["edge_mm"] == 10
+    assert c2["plateau"] is False
+    assert c2["overtraining"] is True
+    assert len(c2["trend"]) == 5
+
+    # Check chart_data format
+    chart_map = {cd["combo"]: cd for cd in view["chart_data"]}
+    assert "left|half crimp|20" in chart_map
+    assert "left|open hand|10" in chart_map
+
+    cd1 = chart_map["left|half crimp|20"]
+    assert cd1["dates"] == [f"2026-06-{day + 1:02d}" for day in range(7)]
+    assert cd1["volumes"] == [400.0, 410.0, 420.0, 420.0, 415.0, 410.0, 420.0]
+
+    cd2 = chart_map["left|open hand|10"]
+    assert cd2["dates"] == [
+        "2026-06-01",
+        "2026-06-08",
+        "2026-06-15",
+        "2026-06-22",
+        "2026-06-24",
+    ]
+    assert cd2["volumes"] == [400.0, 400.0, 400.0, 400.0, 550.0]
+
+    # Check correlation
+    assert view["correlation"]["n"] == 1
+    assert len(view["correlation"]["points"]) == 1
+    assert view["correlation"]["points"][0]["grade"] == "V4"
+
+
+def test_dashboard_view_excludes_combos_without_training_volume(client):
+    register(client)
+    # A max test recorded, but no training sessions/work sets logged for this combo.
+    log_max_test(client, "left", "pinch", 45, "2026-05-01", "30")
+
+    session, user = db_session_and_user(client)
+    view = analytics.dashboard_view(session, user)
+
+    assert view["combos"] == []
+    assert view["chart_data"] == []
