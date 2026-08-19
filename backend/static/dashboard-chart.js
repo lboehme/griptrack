@@ -224,7 +224,15 @@ document.addEventListener("DOMContentLoaded", () => {
         const target = targetsByCombo.get(combo.combo);
         if (!target || !combo.dates.length) return;
 
-        const xs = combo.dates.map(toUnixSeconds);
+        let lastVolTs = -Infinity;
+        const xs = combo.dates.map((d) => {
+          let ts = toUnixSeconds(d);
+          if (ts <= lastVolTs) {
+            ts = lastVolTs + 3600;
+          }
+          lastVolTs = ts;
+          return ts;
+        });
         const ys = combo.volumes;
 
         const opts = {
@@ -303,13 +311,25 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!strengthDates.length && !loadDates.length) return;
 
         const strengthMap = new Map();
+        let lastStrengthTs = -Infinity;
         strengthDates.forEach((d, i) => {
-          strengthMap.set(toUnixSeconds(d), strengthGaps[i]);
+          let ts = toUnixSeconds(d);
+          if (ts <= lastStrengthTs) {
+            ts = lastStrengthTs + 3600;
+          }
+          lastStrengthTs = ts;
+          strengthMap.set(ts, strengthGaps[i]);
         });
 
         const loadMap = new Map();
+        let lastLoadTs = -Infinity;
         loadDates.forEach((d, i) => {
-          loadMap.set(toUnixSeconds(d), loadGaps[i]);
+          let ts = toUnixSeconds(d);
+          if (ts <= lastLoadTs) {
+            ts = lastLoadTs + 3600;
+          }
+          lastLoadTs = ts;
+          loadMap.set(ts, loadGaps[i]);
         });
 
         const allTimestamps = Array.from(

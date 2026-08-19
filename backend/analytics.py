@@ -301,6 +301,8 @@ def asymmetry_warning(load_gap_trend: list[tuple[date_type, float]]) -> bool:
         -(ASYM_RECENT_SESSIONS + ASYM_BASELINE_SESSIONS) : -ASYM_RECENT_SESSIONS
     ]
     baseline = sum(baseline_window) / len(baseline_window)
+    if recent < baseline:
+        return False
     return (recent - baseline >= ASYM_DRIFT_PP) or (recent >= ASYM_BACKSTOP_PCT)
 
 

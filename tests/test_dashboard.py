@@ -851,6 +851,18 @@ def test_asymmetry_warning_silent_on_narrowing_gap():
     ]
     assert analytics.asymmetry_warning(trend_narrowing) is False
 
+    # Narrowing gap above 15% backstop (e.g. baseline 20.0%, recent 16.0%):
+    # Gap narrowed, so it must not warn despite recent >= 15.0%
+    trend_narrowing_above_backstop = [
+        (date_type(2026, 6, 1), 20.0),
+        (date_type(2026, 6, 2), 20.0),
+        (date_type(2026, 6, 3), 20.0),
+        (date_type(2026, 6, 4), 16.0),
+        (date_type(2026, 6, 5), 16.0),
+        (date_type(2026, 6, 6), 16.0),
+    ]
+    assert analytics.asymmetry_warning(trend_narrowing_above_backstop) is False
+
 
 def test_dashboard_asymmetry_warning_renders_when_warning_fires_and_absent_when_false(client):
     register(client)
