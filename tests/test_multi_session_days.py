@@ -293,3 +293,18 @@ def test_existing_migration_data_lands_on_session_number_one(client):
         },
     ).text
     assert current_set_field(page, "left", "weight") == "40.0"
+
+
+def test_session_create_with_an_unknown_page_is_rejected(client):
+    register(client)
+    response = client.post(
+        "/session/create",
+        data={
+            "page": "sneaky",
+            "grip_type_id": grip_type_id(client, "half crimp"),
+            "edge_mm": 20,
+            "date": "2026-07-04",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 400

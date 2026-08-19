@@ -1,4 +1,11 @@
-from tests.helpers import log_bodyweight, register, register_second_user
+from tests.helpers import (
+    grip_type_id,
+    log_bodyweight,
+    log_max_test,
+    register,
+    register_second_user,
+    save_work_set,
+)
 
 
 def test_unit_preference_is_chosen_at_registration(client):
@@ -92,6 +99,14 @@ def test_hand_order_preference_defaults_and_is_editable(client):
 
     assert response.status_code == 200
     assert "sequential" in client.get("/profile").text
+
+
+def test_profile_update_with_invalid_hand_order_pref_is_rejected(client):
+    register(client)
+    response = client.post(
+        "/profile", data={"hand_order_pref": "random"}, follow_redirects=False
+    )
+    assert response.status_code == 400
 
 
 def test_csv_export_returns_user_scoped_data(client):
@@ -235,3 +250,130 @@ def test_csv_export_neutralizes_spreadsheet_formula_cells(client):
         climbs = z.read("Climb.csv").decode()
         assert "'=HYPERLINK" in climbs
         assert ",=HYPERLINK" not in climbs
+
+
+def test_csv_export_includes_session_data_isolated_per_user(client):
+    """S1: The session-data half of the export (TrainingSession, WorkSet,
+    PainReport, WarmupStepCheck, SessionMaxEstimate) is scoped via
+    training_session_id.in_(ts_ids). This test proves that when two users
+    train on the same date, export contains only the exporting user's rows."""
+    import csv
+    import io
+    import zipfile
+
+    def rows(zipf, name):
+        return list(csv.DictReader(io.StringIO(zipf.read(name).decode())))
+
+    # User A trains on 2026-07-04
+    register(client, "user_a@example.com", "test-pw-1234")
+    grip_id = grip_type_id(client, "half crimp")
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "50")
+    save_work_set(client, "left", 1, "45", "5", date="2026-07-04")
+    client.post(
+        "/session/pain-report",
+        data={
+            "date": "2026-07-04",
+            "hand": "left",
+            "severity": "2",
+            "note": "User A tweak",
+        },
+        headers={"HX-Request": "true"},
+    )
+    client.post(
+        "/session/check",
+        data={
+            "grip_type_id": grip_id,
+            "edge_mm": 20,
+            "date": "2026-07-04",
+            "hand": "left",
+            "step_index": 0,
+        },
+        headers={"HX-Request": "true"},
+    )
+    client.post(
+        "/session/estimate",
+        data={
+            "grip_type_id": grip_id,
+            "edge_mm": 20,
+            "date": "2026-07-04",
+            "hand": "left",
+            "weight": "42.5",
+        },
+        follow_redirects=True,
+    )
+    client.post(
+        "/session/update",
+        data={"date": "2026-07-04", "notes": "User A notes", "is_deload": "on"},
+        headers={"HX-Request": "true"},
+    )
+
+    # User B trains on the same date: 2026-07-04
+    register_second_user(client, "user_b@example.com", "test-pw-1234")
+    grip_id_b = grip_type_id(client, "half crimp")
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "35")
+    save_work_set(client, "left", 1, "30", "5", date="2026-07-04")
+    client.post(
+        "/session/pain-report",
+        data={
+            "date": "2026-07-04",
+            "hand": "right",
+            "severity": "1",
+            "note": "User B tweak",
+        },
+        headers={"HX-Request": "true"},
+    )
+    client.post(
+        "/session/check",
+        data={
+            "grip_type_id": grip_id_b,
+            "edge_mm": 20,
+            "date": "2026-07-04",
+            "hand": "right",
+            "step_index": 1,
+        },
+        headers={"HX-Request": "true"},
+    )
+    client.post(
+        "/session/estimate",
+        data={
+            "grip_type_id": grip_id_b,
+            "edge_mm": 20,
+            "date": "2026-07-04",
+            "hand": "left",
+            "weight": "25.0",
+        },
+        follow_redirects=True,
+    )
+    client.post(
+        "/session/update",
+        data={"date": "2026-07-04", "notes": "User B notes"},
+        headers={"HX-Request": "true"},
+    )
+
+    # Export User B data
+    response = client.get("/profile/export")
+    assert response.status_code == 200
+
+    with zipfile.ZipFile(io.BytesIO(response.content)) as z:
+        # Exactly one row per session-scoped member -- User A's same-date
+        # rows are absent -- and that row's values are User B's, checked
+        # per-column so a stray match elsewhere in the CSV can't pass it.
+        sessions = rows(z, "TrainingSession.csv")
+        assert [s["notes"] for s in sessions] == ["User B notes"]
+
+        worksets = rows(z, "WorkSet.csv")
+        assert [float(w["weight (kg)"]) for w in worksets] == [30.0]
+
+        pain = rows(z, "PainReport.csv")
+        assert [p["note"] for p in pain] == ["User B tweak"]
+
+        warmup = rows(z, "WarmupStepCheck.csv")
+        assert [w["hand"] for w in warmup] == ["right"]
+
+        estimates = rows(z, "SessionMaxEstimate.csv")
+        assert [float(e["weight (kg)"]) for e in estimates] == [25.0]
+
+
+def test_unauthenticated_export_is_rejected(client):
+    response = client.get("/profile/export", follow_redirects=False)
+    assert response.status_code == 401

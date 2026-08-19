@@ -1,9 +1,14 @@
+import re
+
 from tests.helpers import (
     current_maxes,
+    grip_type_id,
     log_max_test,
     register,
     register_second_user,
+    save_work_set,
 )
+from tests.test_correlation import correlation_stat, seed_progression
 
 
 def test_current_max_per_combination_latest_test_supersedes(client):
@@ -89,7 +94,6 @@ def test_user_can_void_their_own_max_test(client):
     page = client.get("/max-tests")
     # Using a simple substring search for the void action endpoint
     # The UI should have a form or button that posts to /max-tests/{id}/void
-    import re
     match = re.search(r'action="/max-tests/(\d+)/void"', page.text)
     assert match is not None
     test_id = match.group(1)
@@ -107,7 +111,6 @@ def test_user_cannot_void_someone_elses_max_test(client):
     log_max_test(client, "left", "half crimp", 20, "2026-07-01", "40")
     
     page = client.get("/max-tests")
-    import re
     test_id = re.search(r'action="/max-tests/(\d+)/void"', page.text).group(1)
 
     register_second_user(client)
@@ -126,4 +129,118 @@ def test_max_tests_page_uses_segmented_radio_group_for_hand(client):
     assert page.count('class="segmented-group"') == 2
     assert page.count('input type="radio" name="hand" value="left"') == 2
     assert page.count('input type="radio" name="hand" value="right"') == 2
+
+
+def test_max_test_with_invalid_hand_or_unknown_grip_is_rejected(client):
+    register(client)
+
+    bad_hand = client.post(
+        "/max-tests",
+        data={
+            "hand": "tentacle",
+            "grip_type_id": 1,
+            "edge_mm": 20,
+            "date": "2026-07-01",
+            "weight": "40",
+        },
+        follow_redirects=False,
+    )
+    assert bad_hand.status_code == 400
+
+    unknown_grip = client.post(
+        "/max-tests",
+        data={
+            "hand": "left",
+            "grip_type_id": 9999,
+            "edge_mm": 20,
+            "date": "2026-07-01",
+            "weight": "40",
+        },
+        follow_redirects=False,
+    )
+    assert unknown_grip.status_code == 400
+
+
+def test_adding_a_grip_type_with_an_empty_name_is_ignored(client):
+    register(client)  # founder = admin
+    before = client.get("/max-tests").text
+
+    response = client.post("/grip-types", data={"name": "   "}, follow_redirects=True)
+    assert response.status_code == 200
+    assert client.get("/max-tests").text == before
+
+
+def _extract_voidable_test_ids(html: str) -> list[int]:
+    return [int(m) for m in re.findall(r'action="/max-tests/(\d+)/void"', html)]
+
+
+def test_voiding_the_newest_test_resurfaces_an_older_one_and_reinstates_supersede(
+    client,
+):
+    """Fallback semantics: voiding the newest test must resurrect the
+    older MaxWeightTest as CurrentMax, and any WorkSets logged since
+    that older test's date must re-enter the supersede rule."""
+    register(client)
+    # Day 1: test 80 kg.
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "80")
+    # Day 2: heavy work set at 85 kg (supersedes the 80 kg test).
+    save_work_set(client, "left", 1, "85", "5", date="2026-07-02")
+    assert current_maxes(client)[("left", "half crimp", 20)] == 85.0
+
+    # Day 3: deliberate retest resets CurrentMax down to 70 kg.
+    log_max_test(client, "left", "half crimp", 20, "2026-07-03", "70")
+    assert current_maxes(client)[("left", "half crimp", 20)] == 70.0
+
+    # Void the day 3 retest: CurrentMax falls back to 85 kg because
+    # the 80 kg day 1 test resurfaces and the 85 kg day 2 work set logged after
+    # its date supersedes it.
+    newest_id = max(_extract_voidable_test_ids(client.get("/max-tests").text))
+    client.post(f"/max-tests/{newest_id}/void", follow_redirects=True)
+    assert current_maxes(client)[("left", "half crimp", 20)] == 85.0
+
+
+def test_voided_test_drops_out_of_the_strength_grade_correlation(client):
+    """_best_pull_at filters voided tests. Voiding only the *earliest* max
+    test leaves the first climb (2026-06-02) with no strength reading
+    at-or-before its date, so that single point drops out -- taking n from
+    8 to 7, back below the n >= 8 floor, so the correlation disappears.
+    Every other climb still pairs with a later, un-voided test."""
+    seed_progression(client)
+    stat = correlation_stat(client)
+    assert stat is not None and stat[1] == 8
+
+    earliest_id = min(_extract_voidable_test_ids(client.get("/max-tests").text))
+    client.post(f"/max-tests/{earliest_id}/void", follow_redirects=True)
+
+    assert correlation_stat(client) is None
+
+
+def test_voided_test_no_longer_counts_as_the_last_used_combination(client):
+    """last_used_combination filters voided tests: the session-start form
+    default falls back to the previously used combo."""
+    register(client)
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "42.5")
+    log_max_test(client, "left", "open hand", 10, "2026-07-02", "35")
+
+    page = client.get("/session/new").text
+    assert f'value="{grip_type_id(client, "open hand")}" selected' in page
+
+    newest_id = max(_extract_voidable_test_ids(client.get("/max-tests").text))
+    client.post(f"/max-tests/{newest_id}/void", follow_redirects=True)
+
+    page = client.get("/session/new").text
+    assert f'value="{grip_type_id(client, "half crimp")}" selected' in page
+
+
+def test_voided_test_row_is_struck_through_and_not_voidable_again(client):
+    register(client)
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "40")
+
+    test_id = _extract_voidable_test_ids(client.get("/max-tests").text)[0]
+    client.post(f"/max-tests/{test_id}/void", follow_redirects=True)
+
+    page = client.get("/max-tests").text
+    assert "line-through" in page
+    assert ">Voided<" in page
+    assert _extract_voidable_test_ids(page) == []  # no second Void button
 

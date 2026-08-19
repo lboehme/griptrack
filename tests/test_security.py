@@ -341,7 +341,7 @@ def test_register_is_rate_limited(client):
     assert blocked.status_code == 429
     
     # Even a valid registration is blocked while rate-limited
-    valid = register(client, "newuser@example.com", "long-pw", invite_code=code)
+    valid = register(client, "newuser@example.com", "long-enough-pw", invite_code=code)
     assert valid.status_code == 429
 
 
@@ -462,3 +462,62 @@ def test_import_row_count_per_member_is_bounded(client, monkeypatch):
     assert response.status_code == 400
     assert "too many rows" in response.text.lower()
     assert "Climb.csv" in response.text
+
+
+# --- Structural auth sweep (S2) --------------------------------------------
+
+# Routes that are deliberately reachable without a session. Everything
+# else registered on the app must 401 when hit unauthenticated — this is
+# structural coverage for "the author remembered Depends(auth.current_user)",
+# including for every future route.
+PUBLIC_ROUTES = {
+    ("GET", "/"),  # home degrades to an anonymous landing page
+    ("GET", "/health"),
+    ("GET", "/login"),
+    ("POST", "/login"),
+    ("GET", "/register"),
+    ("POST", "/register"),
+    ("POST", "/logout"),
+    ("GET", "/offline"),
+    ("GET", "/sw.js"),
+    ("GET", "/manifest.webmanifest"),
+}
+
+
+def all_app_routes():
+    import re
+
+    from fastapi.routing import APIRoute
+
+    from backend.main import create_app
+
+    routes = []
+    app = create_app()
+
+    def collect_api_routes(route_list):
+        collected = []
+        for r in route_list:
+            if isinstance(r, APIRoute):
+                collected.append(r)
+            elif hasattr(r, "original_router") and hasattr(r.original_router, "routes"):
+                collected.extend(collect_api_routes(r.original_router.routes))
+            elif hasattr(r, "routes"):
+                collected.extend(collect_api_routes(r.routes))
+        return collected
+
+    # All real verbs -- not just GET/POST -- so a future PUT/DELETE/PATCH
+    # route can't slip past the sweep. HEAD/OPTIONS are auto-added by
+    # Starlette (HEAD mirrors GET, OPTIONS is CORS) and not separately
+    # auth-gated, so they're excluded.
+    for route in collect_api_routes(app.routes):
+        for method in route.methods & {"GET", "POST", "PUT", "DELETE", "PATCH"}:
+            if (method, route.path) not in PUBLIC_ROUTES:
+                # Fill path params ({test_id} etc.) with a dummy id.
+                routes.append((method, re.sub(r"\{[^}]+\}", "1", route.path)))
+    return sorted(routes)
+
+
+@pytest.mark.parametrize("method,path", all_app_routes())
+def test_every_non_public_route_requires_authentication(client, method, path):
+    response = client.request(method, path, follow_redirects=False)
+    assert response.status_code == 401, f"{method} {path} did not 401"
