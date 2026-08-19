@@ -4,6 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from backend import plates
+from backend.limits import MAX_REPS, MAX_WEIGHT
 from backend.models import (
     BodyWeightLog,
     GripType,
@@ -16,6 +17,27 @@ from backend.models import (
     WarmupStepCheck,
     WorkSet,
 )
+
+
+class SetValidationError(ValueError):
+    """Validation failure in a Set commit payload."""
+
+
+ValidationError = SetValidationError
+
+
+class UnknownGripTypeError(ValueError):
+    """Grip type not found."""
+
+
+UnknownGripType = UnknownGripTypeError
+
+
+def require_grip_type(session: Session, grip_type_id: int) -> GripType:
+    grip = session.get(GripType, grip_type_id)
+    if grip is None:
+        raise UnknownGripTypeError(f"Unknown grip type id: {grip_type_id}")
+    return grip
 
 
 def bodyweight_at(
@@ -369,6 +391,106 @@ def restore_set_at(
 
     if commit:
         session.commit()
+
+
+def parse_hands_payload(
+    left_weight: float | None = None,
+    left_reps: int | None = None,
+    left_rpe: float | None = None,
+    right_weight: float | None = None,
+    right_reps: int | None = None,
+    right_rpe: float | None = None,
+) -> dict[str, tuple[float, int, float | None]]:
+    """Validate the per-hand Set-commit payload shared by Set commit and restore:
+    every present hand gets the same bounds and RPE grid as /session/workset,
+    *before* anything touches the DB, so an invalid or partial payload writes
+    nothing. A hand with all three fields None wasn't submitted (sequential
+    hand order) and is skipped. Raises SetValidationError on the first
+    validation failure. Returns the validated `{hand: (weight, reps, rpe)}` dict.
+    """
+    raw = {
+        "left": (left_weight, left_reps, left_rpe),
+        "right": (right_weight, right_reps, right_rpe),
+    }
+    hands_payload: dict[str, tuple[float, int, float | None]] = {}
+    for hand, (weight, reps, rpe) in raw.items():
+        if weight is None and reps is None and rpe is None:
+            continue  # this hand wasn't submitted (sequential hand order)
+        if weight is None or reps is None:
+            raise SetValidationError(f"{hand} hand needs both weight and reps.")
+        if not (0 < weight <= MAX_WEIGHT):
+            raise SetValidationError("Weight out of range.")
+        if not (1 <= reps <= MAX_REPS):
+            raise SetValidationError("Reps out of range.")
+        if rpe is not None and not (1.0 <= rpe <= 10.0 and (rpe * 2) == int(rpe * 2)):
+            raise SetValidationError("RPE must be between 1 and 10 in 0.5 steps.")
+        hands_payload[hand] = (weight, reps, rpe)
+
+    if not hands_payload:
+        raise SetValidationError("At least one hand's weight and reps are required.")
+    return hands_payload
+
+
+def commit_focus_set(
+    session: Session,
+    user: User,
+    grip_type_id: int,
+    edge_mm: int,
+    date: date_type,
+    set_number: int,
+    session_number: int | None,
+    hands_payload: dict[str, tuple[float, int, float | None]],
+) -> TrainingSession:
+    """Set commit (docs/adr/0007-set-commit-over-per-cell-autosave.md):
+    writes both hands' WorkSets for one set_number in a single atomic
+    transaction. Validates grip type, finds/starts session, stages both hands
+    with record_work_set(commit=False), commits atomically, and returns the
+    training session."""
+    require_grip_type(session, grip_type_id)
+    training_session = start_or_get_session(session, user, date, session_number)
+    for hand, (weight, reps, rpe) in hands_payload.items():
+        record_work_set(
+            session,
+            training_session,
+            hand,
+            grip_type_id,
+            edge_mm,
+            set_number,
+            weight,
+            reps,
+            rpe,
+            commit=False,
+        )
+    session.commit()
+    return training_session
+
+
+def restore_focus_set(
+    session: Session,
+    user: User,
+    grip_type_id: int,
+    edge_mm: int,
+    date: date_type,
+    set_number: int,
+    session_number: int | None,
+    hands_payload: dict[str, tuple[float, int, float | None]],
+) -> TrainingSession:
+    """Undo counterpart to delete_set_and_renumber: validates grip type,
+    starts or gets the session, re-inserts the deleted set at its original
+    set_number (shifting higher sets back up) with the supplied values in one
+    transaction, and returns the training session."""
+    require_grip_type(session, grip_type_id)
+    training_session = start_or_get_session(session, user, date, session_number)
+    restore_set_at(
+        session,
+        training_session,
+        grip_type_id,
+        edge_mm,
+        set_number,
+        hands_payload,
+        commit=True,
+    )
+    return training_session
 
 
 def worksets_for_combo(

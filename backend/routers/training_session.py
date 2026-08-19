@@ -39,8 +39,10 @@ def combo_redirect(
 
 
 def require_grip_type(session: Session, grip_type_id: int) -> None:
-    if session.get(GripType, grip_type_id) is None:
-        raise HTTPException(status_code=404, detail="Unknown grip type")
+    try:
+        training_log.require_grip_type(session, grip_type_id)
+    except training_log.UnknownGripTypeError:
+        raise HTTPException(status_code=404, detail="Unknown grip type") from None
 
 
 def needs_creation_confirmation(
@@ -168,50 +170,6 @@ def save_work_set(
     return combo_redirect("worksets", grip_type_id, edge_mm, date, hand, session_number)
 
 
-def parse_hands_payload(
-    left_weight: float | None,
-    left_reps: int | None,
-    left_rpe: float | None,
-    right_weight: float | None,
-    right_reps: int | None,
-    right_rpe: float | None,
-) -> dict[str, tuple[float, int, float | None]] | HTMLResponse:
-    """Validate the per-hand Set-commit payload shared by /session/set and
-    /session/set/restore: every present hand gets the same bounds and RPE
-    grid as /session/workset, *before* anything touches the DB, so an
-    invalid or partial payload writes nothing. A hand with all three fields
-    None wasn't submitted (sequential hand order) and is skipped. Returns
-    the validated `{hand: (weight, reps, rpe)}` dict, or an HTMLResponse the
-    caller should return as-is on the first validation failure."""
-    raw = {
-        "left": (left_weight, left_reps, left_rpe),
-        "right": (right_weight, right_reps, right_rpe),
-    }
-    hands_payload: dict[str, tuple[float, int, float | None]] = {}
-    for hand, (weight, reps, rpe) in raw.items():
-        if weight is None and reps is None and rpe is None:
-            continue  # this hand wasn't submitted (sequential hand order)
-        if weight is None or reps is None:
-            return HTMLResponse(
-                f"{hand} hand needs both weight and reps.", status_code=400
-            )
-        if not (0 < weight <= MAX_WEIGHT):
-            return HTMLResponse("Weight out of range.", status_code=400)
-        if not (1 <= reps <= MAX_REPS):
-            return HTMLResponse("Reps out of range.", status_code=400)
-        if rpe is not None and not (1.0 <= rpe <= 10.0 and (rpe * 2) == int(rpe * 2)):
-            return HTMLResponse(
-                "RPE must be between 1 and 10 in 0.5 steps.", status_code=400
-            )
-        hands_payload[hand] = (weight, reps, rpe)
-
-    if not hands_payload:
-        return HTMLResponse(
-            "At least one hand's weight and reps are required.", status_code=400
-        )
-    return hands_payload
-
-
 @router.post("/session/set")
 def save_focus_set(
     request: Request,
@@ -233,33 +191,21 @@ def save_focus_set(
     writes both hands' WorkSets for one set_number in a single atomic
     request instead of two calls to the per-hand /session/workset — a
     half-failure on flaky gym wifi must never log one hand and not the
-    other.
-
-    The payload is fully validated by parse_hands_payload *before* anything
-    touches the session or the database. Once validation passes, both hands
-    are staged with record_work_set(commit=False) and committed together in
-    one transaction. Re-posting the same (session, hand, set_number) upserts
-    in place (also the edit-mode path, #80) rather than duplicating."""
-    hands_payload = parse_hands_payload(
-        left_weight, left_reps, left_rpe, right_weight, right_reps, right_rpe
-    )
-    if isinstance(hands_payload, HTMLResponse):
-        return hands_payload
-
-    # Reject an unknown grip_type_id before any DB write, matching the GET
-    # worksets page — otherwise an out-of-range id would 500 (or create an
-    # orphan WorkSet row) instead of a clean 404.
-    require_grip_type(session, grip_type_id)
-
-    training_session = training_log.start_or_get_session(
-        session, user, date, session_number
-    )
-    for hand, (weight, reps, rpe) in hands_payload.items():
-        training_log.record_work_set(
-            session, training_session, hand, grip_type_id, edge_mm, set_number,
-            weight, reps, rpe, commit=False,
+    other."""
+    try:
+        hands_payload = training_log.parse_hands_payload(
+            left_weight, left_reps, left_rpe, right_weight, right_reps, right_rpe
         )
-    session.commit()
+    except training_log.ValidationError as e:
+        return HTMLResponse(str(e), status_code=400)
+
+    try:
+        training_log.commit_focus_set(
+            session, user, grip_type_id, edge_mm, date, set_number,
+            session_number, hands_payload,
+        )
+    except training_log.UnknownGripTypeError:
+        raise HTTPException(status_code=404, detail="Unknown grip type") from None
 
     if request.headers.get("HX-Request"):
         return Response(status_code=204)
@@ -313,19 +259,20 @@ def restore_focus_set(
     its original set_number (shifting higher sets back up) with the values
     the client held during the undo window. Same payload validation as
     /session/set."""
-    hands_payload = parse_hands_payload(
-        left_weight, left_reps, left_rpe, right_weight, right_reps, right_rpe
-    )
-    if isinstance(hands_payload, HTMLResponse):
-        return hands_payload
+    try:
+        hands_payload = training_log.parse_hands_payload(
+            left_weight, left_reps, left_rpe, right_weight, right_reps, right_rpe
+        )
+    except training_log.ValidationError as e:
+        return HTMLResponse(str(e), status_code=400)
 
-    require_grip_type(session, grip_type_id)
-    training_session = training_log.start_or_get_session(
-        session, user, date, session_number
-    )
-    training_log.restore_set_at(
-        session, training_session, grip_type_id, edge_mm, set_number, hands_payload
-    )
+    try:
+        training_log.restore_focus_set(
+            session, user, grip_type_id, edge_mm, date, set_number,
+            session_number, hands_payload,
+        )
+    except training_log.UnknownGripTypeError:
+        raise HTTPException(status_code=404, detail="Unknown grip type") from None
 
     if request.headers.get("HX-Request"):
         return Response(status_code=204)
