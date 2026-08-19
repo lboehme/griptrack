@@ -341,7 +341,7 @@ def test_register_is_rate_limited(client):
     assert blocked.status_code == 429
     
     # Even a valid registration is blocked while rate-limited
-    valid = register(client, "newuser@example.com", "long-pw", invite_code=code)
+    valid = register(client, "newuser@example.com", "long-enough-pw", invite_code=code)
     assert valid.status_code == 429
 
 
