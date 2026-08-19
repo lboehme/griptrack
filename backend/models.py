@@ -10,7 +10,7 @@ def utcnow() -> datetime:
 
 
 # Fixed vocabulary for User.unit_pref -- shared by backend.auth (registration
-# validation) and backend.import_restore (manifest validation, ADR-0008).
+# validation) and backend.archive (manifest validation, ADR-0008).
 VALID_UNITS = ("kg", "lbs")
 
 

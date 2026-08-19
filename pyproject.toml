@@ -40,6 +40,7 @@ exclude = ["migrations/versions/", "^build/"]
 [[tool.mypy.overrides]]
 module = [
     "backend.analytics",
+    "backend.archive",
     "backend.export_spec",
     "backend.import_restore",
     "backend.main",
