@@ -17,6 +17,7 @@ document.addEventListener("DOMContentLoaded", () => {
     light: {
       surface: "#ffffff",
       mark: "#e8532c",
+      loadMark: "#2563eb",
       ink: "#68727f",
       grid: "#eef0f3",
       text: "#14181f",
@@ -26,6 +27,7 @@ document.addEventListener("DOMContentLoaded", () => {
     dark: {
       surface: "#14171e",
       mark: "#ef5a30",
+      loadMark: "#60a5fa",
       ink: "#93a4b4",
       grid: "#262c37",
       text: "#eceef1",
@@ -117,27 +119,83 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   }
 
-  function asymmetryEndpointLabelPlugin(gaps) {
+  function asymmetryEndpointLabelPlugin() {
     return {
       hooks: {
         draw: [
           (u) => {
-            if (!gaps.length) return;
-            const lastIndex = gaps.length - 1;
-            const xPos = u.valToPos(u.data[0][lastIndex], "x", true);
-            const yPos = u.valToPos(gaps[lastIndex], "y", true);
             const ctx = u.ctx;
+            const endpoints = [];
+            for (let sIdx = 1; sIdx < u.series.length; sIdx++) {
+              const sData = u.data[sIdx];
+              if (!sData || !sData.length) continue;
+              let lastIdx = -1;
+              for (let i = sData.length - 1; i >= 0; i--) {
+                if (sData[i] != null) {
+                  lastIdx = i;
+                  break;
+                }
+              }
+              if (lastIdx !== -1) {
+                const val = sData[lastIdx];
+                const xPos = u.valToPos(u.data[0][lastIdx], "x", true);
+                const yPos = u.valToPos(val, "y", true);
+                endpoints.push({
+                  xPos,
+                  yPos,
+                  val,
+                  color: u.series[sIdx].stroke || palette.text,
+                });
+              }
+            }
+
+            if (!endpoints.length) return;
+
             ctx.save();
-            ctx.fillStyle = palette.text;
             ctx.font = "bold 11px system-ui, sans-serif";
             ctx.textAlign = "center";
-            ctx.textBaseline = "bottom";
-            const val = gaps[lastIndex];
-            const formatted =
-              (val > 0 ? "+" : "") +
-              (val % 1 === 0 ? val.toFixed(0) : val.toFixed(1)) +
-              "%";
-            ctx.fillText(formatted, xPos, yPos - 14);
+
+            if (endpoints.length === 2) {
+              const [ep1, ep2] = endpoints;
+              const closeX = Math.abs(ep1.xPos - ep2.xPos) < 30;
+              const closeY = Math.abs(ep1.yPos - ep2.yPos) < 18;
+              if (closeX && closeY) {
+                const [topEp, botEp] = ep1.yPos <= ep2.yPos ? [ep1, ep2] : [ep2, ep1];
+
+                ctx.fillStyle = topEp.color;
+                ctx.textBaseline = "bottom";
+                const val1 = topEp.val;
+                const formatted1 =
+                  (val1 > 0 ? "+" : "") +
+                  (val1 % 1 === 0 ? val1.toFixed(0) : val1.toFixed(1)) +
+                  "%";
+                ctx.fillText(formatted1, topEp.xPos, topEp.yPos - 12);
+
+                ctx.fillStyle = botEp.color;
+                ctx.textBaseline = "top";
+                const val2 = botEp.val;
+                const formatted2 =
+                  (val2 > 0 ? "+" : "") +
+                  (val2 % 1 === 0 ? val2.toFixed(0) : val2.toFixed(1)) +
+                  "%";
+                ctx.fillText(formatted2, botEp.xPos, botEp.yPos + 12);
+
+                ctx.restore();
+                return;
+              }
+            }
+
+            endpoints.forEach((ep) => {
+              ctx.fillStyle = ep.color;
+              ctx.textBaseline = "bottom";
+              const val = ep.val;
+              const formatted =
+                (val > 0 ? "+" : "") +
+                (val % 1 === 0 ? val.toFixed(0) : val.toFixed(1)) +
+                "%";
+              ctx.fillText(formatted, ep.xPos, ep.yPos - 12);
+            });
+
             ctx.restore();
           },
         ],
@@ -216,7 +274,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // 2. Strength gap asymmetry trend charts
+  // 2. Strength gap and Load gap asymmetry trend charts
   const asymmetryDataEl = document.getElementById("asymmetry-chart-data");
   if (asymmetryDataEl) {
     let asymmetryPairs;
@@ -235,10 +293,70 @@ document.addEventListener("DOMContentLoaded", () => {
 
       asymmetryPairs.forEach((pair) => {
         const target = targetsByAsymmetry.get(pair.combo);
-        if (!target || !pair.dates.length) return;
+        if (!target) return;
 
-        const xs = pair.dates.map(toUnixSeconds);
-        const ys = pair.gaps;
+        const strengthDates = pair.strength_dates || [];
+        const strengthGaps = pair.strength_gaps || [];
+        const loadDates = pair.load_dates || [];
+        const loadGaps = pair.load_gaps || [];
+
+        if (!strengthDates.length && !loadDates.length) return;
+
+        const strengthMap = new Map();
+        strengthDates.forEach((d, i) => {
+          strengthMap.set(toUnixSeconds(d), strengthGaps[i]);
+        });
+
+        const loadMap = new Map();
+        loadDates.forEach((d, i) => {
+          loadMap.set(toUnixSeconds(d), loadGaps[i]);
+        });
+
+        const allTimestamps = Array.from(
+          new Set([...strengthMap.keys(), ...loadMap.keys()])
+        ).sort((a, b) => a - b);
+
+        const seriesOpts = [{}];
+        const chartData = [allTimestamps];
+
+        if (strengthDates.length > 0) {
+          seriesOpts.push({
+            label: "Strength Gap",
+            stroke: palette.mark,
+            width: 2,
+            points: {
+              show: true,
+              size: 8,
+              stroke: palette.surface,
+              width: 2,
+              fill: palette.mark,
+            },
+            spanGaps: true,
+          });
+          chartData.push(
+            allTimestamps.map((t) => (strengthMap.has(t) ? strengthMap.get(t) : null))
+          );
+        }
+
+        if (loadDates.length > 0) {
+          seriesOpts.push({
+            label: "Load Gap",
+            stroke: palette.loadMark,
+            width: 2,
+            dash: [5, 4],
+            points: {
+              show: true,
+              size: 7,
+              stroke: palette.surface,
+              width: 2,
+              fill: palette.loadMark,
+            },
+            spanGaps: true,
+          });
+          chartData.push(
+            allTimestamps.map((t) => (loadMap.has(t) ? loadMap.get(t) : null))
+          );
+        }
 
         const opts = {
           width: target.clientWidth || 320,
@@ -255,20 +373,7 @@ document.addEventListener("DOMContentLoaded", () => {
           },
           cursor: { show: false },
           legend: { show: false },
-          series: [
-            {},
-            {
-              stroke: palette.mark,
-              width: 2,
-              points: {
-                show: true,
-                size: 8,
-                stroke: palette.surface,
-                width: 2,
-                fill: palette.mark,
-              },
-            },
-          ],
+          series: seriesOpts,
           axes: [
             {
               stroke: palette.ink,
@@ -284,10 +389,10 @@ document.addEventListener("DOMContentLoaded", () => {
               values: (u, vals) => vals.map((v) => (v > 0 ? `+${v}%` : `${v}%`)),
             },
           ],
-          plugins: [asymmetryBandsPlugin(), asymmetryEndpointLabelPlugin(ys)],
+          plugins: [asymmetryBandsPlugin(), asymmetryEndpointLabelPlugin()],
         };
 
-        const chart = new uPlot(opts, [xs, ys], target);
+        const chart = new uPlot(opts, chartData, target);
         chart.root.style.background = palette.surface;
         chart.root.style.borderRadius = "10px";
         charts.push({ chart, target });
