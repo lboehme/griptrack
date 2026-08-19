@@ -284,10 +284,13 @@ def restore_archive(session: Session, user: User, upload_bytes: bytes) -> None:
     unit = manifest["unit"]
 
     grip_member = next(m for m in ARCHIVE_MEMBERS if m.model is GripType)
-    grip_name_by_old_id: dict[int, str] = {
-        int(row["id"]): str(row["name"])
-        for _, row in _read_member_rows(zf, grip_member, unit)
-    }
+    grip_name_by_old_id: dict[int, str] = {}
+    for row_num, row in _read_member_rows(zf, grip_member, unit):
+        old_id = row.get("id")
+        if old_id is None:
+            raise ArchiveError(f"{grip_member.filename} row {row_num}: missing id.")
+        grip_name_by_old_id[int(old_id)] = str(row["name"])
+
     local_grip_id_by_name: dict[str, int] = {
         g.name: g.id for g in session.exec(select(GripType)).all() if g.id is not None
     }
@@ -312,6 +315,11 @@ def restore_archive(session: Session, user: User, upload_bytes: bytes) -> None:
             if member.model is TrainingSession:
                 pending: list[tuple[int, TrainingSession]] = []
                 for row_num, parsed in rows:
+                    old_id = parsed.get("id")
+                    if old_id is None:
+                        raise ArchiveError(
+                            f"{member.filename} row {row_num}: missing id."
+                        )
                     obj = _build_row(
                         member,
                         row_num,
@@ -321,8 +329,9 @@ def restore_archive(session: Session, user: User, upload_bytes: bytes) -> None:
                         grip_name_by_old_id,
                         local_grip_id_by_name,
                     )
+                    assert isinstance(obj, TrainingSession)
                     session.add(obj)
-                    pending.append((int(parsed["id"]), obj))  # type: ignore[arg-type]
+                    pending.append((int(old_id), obj))
                 session.flush()
                 for old_id, obj in pending:
                     training_session_id_map[old_id] = obj.id  # type: ignore[assignment]

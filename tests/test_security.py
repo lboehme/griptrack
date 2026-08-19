@@ -521,3 +521,55 @@ def all_app_routes():
 def test_every_non_public_route_requires_authentication(client, method, path):
     response = client.request(method, path, follow_redirects=False)
     assert response.status_code == 401, f"{method} {path} did not 401"
+
+
+def test_climb_input_limits_are_enforced(client):
+    from backend.limits import MAX_GRADE_LENGTH, MAX_NOTES_LENGTH
+    register(client)
+
+    # Grade exceeding MAX_GRADE_LENGTH
+    resp = client.post(
+        "/climbs",
+        data={"date": "2026-07-04", "discipline": "boulder", "grade": "V" * (MAX_GRADE_LENGTH + 1), "style": "flash"},
+    )
+    assert resp.status_code == 422
+
+    # Notes exceeding MAX_NOTES_LENGTH
+    resp = client.post(
+        "/climbs",
+        data={
+            "date": "2026-07-04",
+            "discipline": "boulder",
+            "grade": "V5",
+            "style": "flash",
+            "notes": "x" * (MAX_NOTES_LENGTH + 1),
+        },
+    )
+    assert resp.status_code == 422
+
+
+def test_guided_max_test_input_limits_are_enforced(client):
+    from backend.limits import MAX_EDGE_MM, MAX_WEIGHT
+    register(client)
+    gid = grip_type_id(client, "half crimp")
+
+    # Estimate exceeding MAX_WEIGHT
+    resp = client.post(
+        "/max-tests/guided",
+        data={"grip_type_id": gid, "edge_mm": 20, "date": "2026-07-04", "hand": "left", "estimate": MAX_WEIGHT + 1},
+    )
+    assert resp.status_code == 422
+
+    # Edge exceeding MAX_EDGE_MM
+    resp = client.post(
+        "/max-tests/guided",
+        data={"grip_type_id": gid, "edge_mm": MAX_EDGE_MM + 1, "date": "2026-07-04", "hand": "left", "estimate": 20.0},
+    )
+    assert resp.status_code == 422
+
+
+def test_auth_name_limit_is_enforced(client):
+    from backend.limits import MAX_NAME_LENGTH
+    resp = register(client, name="A" * (MAX_NAME_LENGTH + 1))
+    assert resp.status_code == 422
+

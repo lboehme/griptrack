@@ -524,5 +524,42 @@ def test_import_rejects_csv_row_with_extra_columns(client):
     assert "row has more columns than the header" in response.text
 
 
+def test_import_rejects_griptype_with_missing_id(client):
+    register(client, "author3@example.com", "test-pw-1234")
+    log_bodyweight(client, "2026-07-01", "70.0")
+    archive_bytes = export_archive(client)
+
+    code = generate_invite(client)
+    register(client, "newuser3@example.com", "test-pw-5678", invite_code=code)
+
+    bad_csv = "id,name\n,Half Crimp\n"
+    bad_archive = _replace_member(archive_bytes, "GripType.csv", bad_csv)
+    response = import_archive(client, bad_archive)
+    assert response.status_code == 400
+    assert "GripType.csv row 2: missing id" in response.text
+
+
+def test_import_rejects_trainingsession_with_missing_id(client):
+    register(client, "author4@example.com", "test-pw-1234")
+    from tests.helpers import save_focus_set
+    save_focus_set(client, set_number=1, left=(10.0, 5, 8.0), right=(10.0, 5, 8.0))
+    archive_bytes = export_archive(client)
+
+    code = generate_invite(client)
+    register(client, "newuser4@example.com", "test-pw-5678", invite_code=code)
+
+    members = _zip_members(archive_bytes)
+    csv_text = members["TrainingSession.csv"].decode("utf-8")
+    lines = csv_text.splitlines()
+    bad_row = "," + lines[1].split(",", 1)[1]
+    bad_csv = "\n".join([lines[0], bad_row, ""])
+    bad_archive = _replace_member(archive_bytes, "TrainingSession.csv", bad_csv)
+    response = import_archive(client, bad_archive)
+    assert response.status_code == 400
+    assert "TrainingSession.csv row 2: missing id" in response.text
+
+
+
+
 
 
