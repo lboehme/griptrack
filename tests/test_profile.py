@@ -94,6 +94,14 @@ def test_hand_order_preference_defaults_and_is_editable(client):
     assert "sequential" in client.get("/profile").text
 
 
+def test_profile_update_with_invalid_hand_order_pref_is_rejected(client):
+    register(client)
+    response = client.post(
+        "/profile", data={"hand_order_pref": "random"}, follow_redirects=False
+    )
+    assert response.status_code == 400
+
+
 def test_csv_export_returns_user_scoped_data(client):
     import io
     import zipfile
