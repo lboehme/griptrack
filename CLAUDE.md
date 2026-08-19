@@ -46,26 +46,34 @@ through an explicit design-interview session (the `grilling` +
 - `CONTEXT.md` — the project glossary (canonical terms, what to avoid). Keep
   it current as the domain model evolves; this is an active discipline, not
   a one-time snapshot.
-- `docs/adr/` — recorded architectural decisions (5 so far). Read these
+- `docs/adr/` — recorded architectural decisions (9 so far). Read these
   before revisiting any of the choices below; each explains a real
   trade-off that was deliberately made.
 
-**Current state (2026-07-30):** the full PRD (issue #1), Waves 0–2 of the
-post-review roadmap, and the Focus session-logging redesign (#76) are
-implemented and deployed to Fly — auth (with
-session revocation), profile, plates, max tests (guided routine, voidable),
-session logging (multi-session days, notes/deload/pain reports), boulder
-climb logging with loud grade feedback, history, CSV export, PWA
-(manifest + service worker with content-hash cache version), and the
-analytics dashboard (deload-aware volume trend, plateau, overtraining
-warning, Spearman %BW-vs-grade correlation with an n≥8 floor), and the
-Focus session screens (one-set-at-a-time hand cards, warmup card ladder,
-atomic set commit, edit mode, throwaway rest countdown) — 203 tests at the
-HTTP seam plus a thin `pytest-playwright` browser-smoke layer (6 specs) and
-ruff/mypy/pip-audit gates. Remaining open work: Asymmetry Analytics
-(#45–#48), the Wave 4 retention PRD (#59, needs its own grill), and the
-deferred #20/#28. Work test-first (see the `tdd` skill) and keep migrations
-in lockstep with model changes.
+**Current state (2026-08-19):** the full PRD (issue #1), Waves 0–2 of the
+post-review roadmap, the Focus session-logging redesign (#76), the **Android
+pivot** (runtime slimming #87 + the on-device app #93 and their slices), and
+**CSV import** (#100) are all implemented — auth (with session revocation),
+profile, plates, max tests (guided routine, voidable), session logging
+(multi-session days, notes/deload/pain reports), boulder climb logging with
+loud grade feedback, history, CSV export **and import** (round-trip an archive
+into an empty account), PWA, and the analytics dashboard (deload-aware volume
+trend — now a client-side uPlot chart, plateau, overtraining warning, Spearman
+%BW-vs-grade correlation with an n≥8 floor), plus the Focus session screens
+(one-set-at-a-time hand cards, warmup card ladder, atomic set commit, edit
+mode, throwaway rest countdown) — 304 tests at the HTTP seam plus a thin
+`pytest-playwright` browser-smoke layer (6 specs) and ruff/mypy/pip-audit
+gates. **The app now runs as a self-contained local Android app** (embedded
+CPython/FastAPI on `127.0.0.1` behind a WebView, on-device SQLite, first-run
+migrations — #93–#99); matplotlib/pandas were dropped (#89) and password
+hashing moved to stdlib PBKDF2 (ADR-0009), leaving `pydantic-core` as the only
+native wheel. The Fly/Docker/web deploy still works but is now
+**legacy/optional** (see the 2026-08-13 pivot below and ADR-0006). Remaining
+open work: Asymmetry Analytics (#45–#48), the Wave 4 retention PRD (#59, needs
+its own grill), and the deferred injury guardian (#28). (#20 offline WorkSet
+sync was closed as not-planned once the on-device server landed — offline is
+now native, no sync layer needed.) Work test-first (see the `tdd` skill) and
+keep migrations in lockstep with model changes.
 
 ## Environment & running
 
@@ -313,65 +321,39 @@ decision: GripTrack stays a personal instrument (owner + invited friends),
 open-sourcing is the candidate growth path, the public-launch track is
 dropped. Waves in order; GitHub issues are the source of truth for status.
 
-**2026-08-13 re-plan — the Android pivot.** The owner has soured on web
-hosting and wants GripTrack running entirely on their own phone, no online
-server (PRD #93). This layers three new tracks on top of the waves below and
-becomes the priority spine; Wave 3 (Asymmetry) and Wave 4 (retention) still
-stand but run parallel/after. The linchpin is **runtime slimming (#87)** —
-independently useful *and* the gate for the Android feasibility spike. The
-dependency spine:
+**Android pivot — shipped (completed 2026-08-19).** The 2026-08-13 re-plan
+moved GripTrack off web hosting to run entirely on the owner's Android phone,
+no online server (PRD #93). All three tracks landed:
 
-- **Runtime slimming (#87, PRD):** `#88` migrate the TrainingVolume chart to
-  client-side uPlot, then `#89` drop matplotlib + pandas and update the charts
-  docs. Lighter deploy today, and it shrinks the native-wheel surface to
-  `bcrypt` + `pydantic-core` — the prerequisite for #97 below.
-- **Android app (#93, PRD):** thin Chaquopy shell embedding the *unchanged*
-  FastAPI backend on `127.0.0.1` behind a WebView; on-device SQLite, migrations
-  run on first launch (reproduces `docker-entrypoint.sh`). Slices: `#94` plain
-  uvicorn (drop `[standard]`) and `#95` skip service-worker registration (both
-  zero-dep, start anytime); `#96` on-device launch/bootstrap helper (blocked by
-  #94); `#97` Chaquopy skeleton + native-dep feasibility (blocked by #87 —
-  **go/no-go gate**: if `bcrypt`/`pydantic-core` won't build under Chaquopy on
-  arm64, revisit the whole approach before shell work); `#98` embed backend +
-  boot server + WebView reaches login (blocked by #95/#96/#97); `#99` first-run
-  + persistence + lifecycle + airplane-mode verification + manual smoke
-  checklist (blocked by #98).
+- **Runtime slimming (#87):** TrainingVolume chart moved to client-side uPlot
+  (#88); matplotlib + pandas dropped and charts docs updated (#89). Password
+  hashing later moved `bcrypt` → stdlib PBKDF2 (ADR-0009), so the only native
+  wheel left is `pydantic-core`.
+- **Android app (#93):** thin Chaquopy shell embedding the *unchanged* FastAPI
+  backend on `127.0.0.1` behind a WebView; on-device SQLite, migrations run on
+  first launch (reproduces `docker-entrypoint.sh`). Slices #94 (plain uvicorn,
+  drop `[standard]`), #95 (skip service-worker registration), #96 (launch/
+  bootstrap helper), #97 (Chaquopy skeleton + native-dep feasibility — the
+  go/no-go gate, passed), #98 (embed backend + boot + WebView reaches login),
+  #99 (first-run + persistence + lifecycle + airplane-mode verification +
+  manual smoke checklist).
 - **CSV import — data-portability bridge (#100, ADR-0008):** round-trips the
-  Export archive back into an *empty* account (no merge), so the phone can be
-  seeded from the Fly export before the device cutover. Slices: `#101` extend
-  the export format (manifest + `GripType.csv` + `PlateInventoryItem.csv`);
-  `#102` restore-into-empty happy path (blocked by #101); then `#103` hardening
-  /security and `#104` profile-page UI (both blocked by #102). Mechanically
-  independent of the tracks above — sequence it to land before the cutover.
+  Export archive back into an *empty* account (no merge). Slices #101 (export-
+  format extension: manifest + `GripType.csv` + `PlateInventoryItem.csv`), #102
+  (restore-into-empty happy path), #103 (hardening/security), #104 (profile-
+  page import UI).
+- **Cleanups shipped:** #86 (grip-type validation parity on `POST
+  /session/workset`); #91 (test-suite hardening — export/auth-sweep/void/error-
+  branch coverage, PR #119).
 
-**Hosting reframing:** once #99 proves the phone app, the Fly deploy and the
-owner-gated Litestream/Oracle backup work below become **legacy/optional**, not
-active roadmap. Retiring the web/Docker/Fly deployment is a later decision (out
-of scope for #93); it keeps working meanwhile.
+**Hosting reframing:** with the phone app proven, the Fly/Docker/web deploy and
+the owner-gated Litestream/Oracle backup work below are now **legacy/optional**,
+not active roadmap. Retiring the web deployment is a later decision (out of
+scope for #93); it keeps working meanwhile.
 
-The dependency spine
-
-#87 Slim runtime ──────────────┐
-  #88 chart→uPlot → #89 drop mpl/pandas ─→ #97 Chaquopy feasibility ─┐
-                                                                      ├─→ #98 embed+boot → #99 first-run/offline
-  #94 plain uvicorn → #96 launch helper ──────────────────────────────┤
-  #95 SW-skip ────────────────────────────────────────────────────────┘
-
-#100 CSV import:  #101 export-format ext → #102 restore happy-path → { #103 hardening | #104 UI }
-
-Phased plan
-
-Phase A — Slim the runtime (#87). #88 (chart → client-side uPlot) then #89 (drop matplotlib/pandas, update docs). Valuable on its own (lighter deploy today) and it's the prerequisite for the Android feasibility spike — it shrinks the native-wheel surface to bcrypt + pydantic-core. This is the real gating front; start it first.
-
-Phase B — Android app (#93). #94 and #95 have no dependencies — start them in parallel with Phase A to de-risk. #94 → #96. #97 (Chaquopy feasibility) runs the moment Phase A lands and is a go/no-go gate: if bcrypt/pydantic-core won't build under Chaquopy on arm64, stop and revisit the approach before #98. Then #98 (needs #95 + #96 + #97) → #99 (offline/persistence verification).
-
-Phase C — Data-portability bridge (#100). Mechanically independent of A/B, but sequence it to land before the device cutover so you can seed the phone from your Fly export. #101 → #102 → {#103 hardening, #104 UI} (the last two parallelize).
-
-Parallel / anytime (no dependency on A/B/C — slot into spare capacity):
-- Wave 3 Asymmetry Analytics (#45 → #46 → #47 → #48)
-- Quick cleanups: #86 (grip-type validation bug), #91 (land the test-hardening draft PR #74)
-
-
+Still open — Wave 3 (Asymmetry, #45–#48) and Wave 4 (retention, #59) stand,
+plus the deferred injury guardian (#28); details below. GitHub issues are the
+source of truth for status.
 
 - **Wave 0 — hardening PR (shipped 2026-07-09, #50/PR #62):** SQLite WAL mode + `busy_timeout`; ruff + mypy +
   pip-audit in CI; derive the service worker's `CACHE_VERSION` from a
@@ -427,9 +409,9 @@ Parallel / anytime (no dependency on A/B/C — slot into spare capacity):
   onboarding, chart-render caching → open-sourcing or audience growth;
   cross-combination aggregate load
   (needs read-time unit canonicalization, the ADR-0003 IOU) and pain-data
-  consumption → injury guardian (#28); offline WorkSet sync (#20) → its own
-  design grill, someday; stored canonical grades / conversion matrix → if a
-  grade matrix ever becomes real (Font + V both already parse); per-user
+  consumption → injury guardian (#28); stored canonical grades / conversion
+  matrix → if a grade matrix ever becomes real (Font + V both already parse);
+  per-user
   `TrainingProtocol` overrides and progression-path logic → after Wave 4
   proves the nudge machinery.
 - Finger-injury risk guardian (GitHub issue #28) — build *after* Asymmetry
