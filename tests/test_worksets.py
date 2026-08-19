@@ -1,5 +1,13 @@
 import re
+from datetime import date as date_type
 
+import pytest
+from sqlalchemy.pool import StaticPool
+from sqlmodel import Session, SQLModel, create_engine, select
+
+from backend import training_log
+from backend.db import configure_sqlite_pragmas
+from backend.models import STARTER_GRIP_TYPES, GripType, TrainingProtocol, User, WorkSet
 from tests.helpers import (
     completed_detail,
     current_maxes,
@@ -934,5 +942,151 @@ def test_sequential_hand_delete_and_restore(client):
     assert completed_detail(restored_page, 1) == "40.0 kg × 5 @ 7.0"
     assert completed_detail(restored_page, 2) == "42.5 kg × 5 @ 8.0"
     assert completed_detail(restored_page, 3) == "45.0 kg × 5 @ 9.0"
+
+
+# ---------- backend.training_log primitives (ticket #123) ----------
+
+
+def make_test_db() -> tuple[Session, User, int]:
+    engine = configure_sqlite_pragmas(
+        create_engine(
+            "sqlite://",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+    )
+    SQLModel.metadata.create_all(engine)
+    session = Session(engine)
+    for name in STARTER_GRIP_TYPES:
+        dimension = "block width" if name == "pinch" else "edge depth"
+        session.add(GripType(name=name, dimension_name=dimension))
+    session.add(TrainingProtocol(user_id=None))
+    user = User(email="test@example.com", hashed_password="pw")
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    grip = session.exec(select(GripType).where(GripType.name == "half crimp")).one()
+    assert grip.id is not None
+    return session, user, grip.id
+
+
+def test_parse_hands_payload_valid_two_hands():
+    result = training_log.parse_hands_payload(
+        left_weight=42.5,
+        left_reps=5,
+        left_rpe=8.0,
+        right_weight=40.0,
+        right_reps=5,
+        right_rpe=7.5,
+    )
+    assert result == {
+        "left": (42.5, 5, 8.0),
+        "right": (40.0, 5, 7.5),
+    }
+
+
+def test_parse_hands_payload_single_hand_sequential():
+    result = training_log.parse_hands_payload(
+        left_weight=42.5,
+        left_reps=5,
+        left_rpe=None,
+    )
+    assert result == {"left": (42.5, 5, None)}
+
+
+def test_parse_hands_payload_rejects_missing_reps():
+    with pytest.raises(training_log.ValidationError, match="left hand needs both weight and reps"):
+        training_log.parse_hands_payload(left_weight=42.5, left_reps=None)
+
+
+def test_parse_hands_payload_rejects_out_of_range_values():
+    with pytest.raises(training_log.ValidationError, match="Weight out of range"):
+        training_log.parse_hands_payload(left_weight=-5.0, left_reps=5)
+
+    with pytest.raises(training_log.ValidationError, match="Reps out of range"):
+        training_log.parse_hands_payload(left_weight=40.0, left_reps=0)
+
+    with pytest.raises(training_log.ValidationError, match="RPE must be between 1 and 10 in 0.5 steps"):
+        training_log.parse_hands_payload(left_weight=40.0, left_reps=5, left_rpe=7.3)
+
+
+def test_parse_hands_payload_rejects_empty():
+    with pytest.raises(training_log.ValidationError, match="At least one hand's weight and reps are required"):
+        training_log.parse_hands_payload()
+
+
+def test_commit_focus_set_stages_and_commits_atomically():
+    session, user, grip_type_id = make_test_db()
+    date = date_type(2026, 7, 4)
+    payload = {
+        "left": (42.5, 5, 8.0),
+        "right": (40.0, 5, 7.5),
+    }
+    ts = training_log.commit_focus_set(
+        session, user, grip_type_id, 20, date, 1, None, payload
+    )
+    assert ts is not None
+    assert ts.session_number == 1
+    assert ts.date == date
+
+    worksets = session.exec(
+        select(WorkSet).where(WorkSet.training_session_id == ts.id).order_by(WorkSet.hand)
+    ).all()
+    assert len(worksets) == 2
+    assert worksets[0].hand == "left"
+    assert worksets[0].weight == 42.5
+    assert worksets[0].reps == 5
+    assert worksets[0].rpe == 8.0
+    assert worksets[1].hand == "right"
+    assert worksets[1].weight == 40.0
+    assert worksets[1].reps == 5
+    assert worksets[1].rpe == 7.5
+
+
+def test_commit_focus_set_rejects_unknown_grip_type():
+    session, user, _ = make_test_db()
+    date = date_type(2026, 7, 4)
+    payload = {"left": (42.5, 5, 8.0)}
+    with pytest.raises(training_log.UnknownGripTypeError):
+        training_log.commit_focus_set(
+            session, user, 999999, 20, date, 1, None, payload
+        )
+
+
+def test_restore_focus_set_shifts_higher_sets_and_inserts():
+    session, user, grip_type_id = make_test_db()
+    date = date_type(2026, 7, 4)
+
+    # Commit set 1 and set 2
+    training_log.commit_focus_set(
+        session, user, grip_type_id, 20, date, 1, None, {"left": (40.0, 5, 7.0)}
+    )
+    ts = training_log.commit_focus_set(
+        session, user, grip_type_id, 20, date, 2, None, {"left": (45.0, 5, 9.0)}
+    )
+
+    # Restore a set at position 2 (old set 2 shifts to 3)
+    training_log.restore_focus_set(
+        session, user, grip_type_id, 20, date, 2, None, {"left": (42.5, 5, 8.0)}
+    )
+
+    worksets = session.exec(
+        select(WorkSet).where(WorkSet.training_session_id == ts.id).order_by(WorkSet.set_number)
+    ).all()
+    assert len(worksets) == 3
+    assert worksets[0].set_number == 1 and worksets[0].weight == 40.0
+    assert worksets[1].set_number == 2 and worksets[1].weight == 42.5
+    assert worksets[2].set_number == 3 and worksets[2].weight == 45.0
+
+
+def test_restore_focus_set_rejects_unknown_grip_type():
+    session, user, _ = make_test_db()
+    date = date_type(2026, 7, 4)
+    payload = {"left": (42.5, 5, 8.0)}
+    with pytest.raises(training_log.UnknownGripTypeError):
+        training_log.restore_focus_set(
+            session, user, 999999, 20, date, 1, None, payload
+        )
+
 
 
