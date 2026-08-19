@@ -243,3 +243,135 @@ def test_csv_export_neutralizes_spreadsheet_formula_cells(client):
         climbs = z.read("Climb.csv").decode()
         assert "'=HYPERLINK" in climbs
         assert ",=HYPERLINK" not in climbs
+
+
+def test_csv_export_includes_session_data_isolated_per_user(client):
+    """S1: The session-data half of the export (TrainingSession, WorkSet,
+    PainReport, WarmupStepCheck, SessionMaxEstimate) is scoped via
+    training_session_id.in_(ts_ids). This test proves that when two users
+    train on the same date, export contains only the exporting user's rows."""
+    import io
+    import zipfile
+
+    from tests.helpers import grip_type_id, log_max_test, save_work_set
+
+    # User A trains on 2026-07-04
+    register(client, "user_a@example.com", "test-pw-1234")
+    grip_id = grip_type_id(client, "half crimp")
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "50")
+    save_work_set(client, "left", 1, "45", "5", date="2026-07-04")
+    client.post(
+        "/session/pain-report",
+        data={
+            "date": "2026-07-04",
+            "hand": "left",
+            "severity": "2",
+            "note": "User A tweak",
+        },
+        headers={"HX-Request": "true"},
+    )
+    client.post(
+        "/session/check",
+        data={
+            "grip_type_id": grip_id,
+            "edge_mm": 20,
+            "date": "2026-07-04",
+            "hand": "left",
+            "step_index": 0,
+        },
+        headers={"HX-Request": "true"},
+    )
+    client.post(
+        "/session/estimate",
+        data={
+            "grip_type_id": grip_id,
+            "edge_mm": 20,
+            "date": "2026-07-04",
+            "hand": "left",
+            "weight": "42.5",
+        },
+        follow_redirects=True,
+    )
+    client.post(
+        "/session/update",
+        data={"date": "2026-07-04", "notes": "User A notes", "is_deload": "on"},
+        headers={"HX-Request": "true"},
+    )
+
+    # User B trains on the same date: 2026-07-04
+    register_second_user(client, "user_b@example.com", "test-pw-1234")
+    grip_id_b = grip_type_id(client, "half crimp")
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "35")
+    save_work_set(client, "left", 1, "30", "5", date="2026-07-04")
+    client.post(
+        "/session/pain-report",
+        data={
+            "date": "2026-07-04",
+            "hand": "right",
+            "severity": "1",
+            "note": "User B tweak",
+        },
+        headers={"HX-Request": "true"},
+    )
+    client.post(
+        "/session/check",
+        data={
+            "grip_type_id": grip_id_b,
+            "edge_mm": 20,
+            "date": "2026-07-04",
+            "hand": "right",
+            "step_index": 1,
+        },
+        headers={"HX-Request": "true"},
+    )
+    client.post(
+        "/session/estimate",
+        data={
+            "grip_type_id": grip_id_b,
+            "edge_mm": 20,
+            "date": "2026-07-04",
+            "hand": "left",
+            "weight": "25.0",
+        },
+        follow_redirects=True,
+    )
+    client.post(
+        "/session/update",
+        data={"date": "2026-07-04", "notes": "User B notes"},
+        headers={"HX-Request": "true"},
+    )
+
+    # Export User B data
+    response = client.get("/profile/export")
+    assert response.status_code == 200
+
+    with zipfile.ZipFile(io.BytesIO(response.content)) as z:
+        sessions = z.read("TrainingSession.csv").decode()
+        assert "User B notes" in sessions
+        assert "User A notes" not in sessions
+        # header + 1 session row
+        assert len(sessions.splitlines()) == 2
+
+        worksets = z.read("WorkSet.csv").decode()
+        assert "30" in worksets  # User B weight
+        assert "45" not in worksets  # User A weight
+        assert len(worksets.splitlines()) == 2
+
+        pain = z.read("PainReport.csv").decode()
+        assert "User B tweak" in pain
+        assert "User A tweak" not in pain
+        assert len(pain.splitlines()) == 2
+
+        warmup = z.read("WarmupStepCheck.csv").decode()
+        assert "right" in warmup
+        assert len(warmup.splitlines()) == 2
+
+        estimates = z.read("SessionMaxEstimate.csv").decode()
+        assert "25" in estimates
+        assert "42.5" not in estimates
+        assert len(estimates.splitlines()) == 2
+
+
+def test_unauthenticated_export_is_rejected(client):
+    response = client.get("/profile/export", follow_redirects=False)
+    assert response.status_code == 401
