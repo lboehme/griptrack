@@ -99,6 +99,10 @@ class TrainingProtocol(SQLModel, table=True):
     ramp_percentages: str = "50,65,80,90"
     base_work_set_reps: int = 5
     default_work_sets: int = 3
+    default_rest_seconds: int = Field(
+        default=180, sa_column_kwargs={"server_default": "180"}
+    )
+
 
 
 class TrainingSession(SQLModel, table=True):
