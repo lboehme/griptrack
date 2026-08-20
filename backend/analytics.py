@@ -592,7 +592,7 @@ def session_start_nudge(
 
 
 
-def autoregulation_trigger(
+def _combo_session_worksets(
     session: Session,
     user: User,
     hand: str,
@@ -601,14 +601,8 @@ def autoregulation_trigger(
     as_of: date_type | None = None,
     before_session_id: int | None = None,
     current_session_number: int | None = None,
-) -> tuple[str, list[WorkSet]]:
-    """Autoregulation trigger (ADR-0011, ADR-0012):
-    Looks at the last AUTOREG_TRIGGER_SESSIONS (2) non-deload sessions for (hand, grip, edge).
-    - If every working set in both hit target reps at RPE <= 7.0 -> "ready"
-    - If any working set had RPE >= 9.0 or below target reps -> "hold"
-    - If any working set had no RPE or < 2 sessions -> "ineligible"
-    Returns (trigger_state, most_recent_session_worksets).
-    """
+) -> list[list[WorkSet]]:
+    """Chronologically ordered (newest first) lists of WorkSets per non-deload TrainingSession."""
     query = (
         select(TrainingSession, WorkSet)
         .join(WorkSet, WorkSet.training_session_id == TrainingSession.id)  # type: ignore[arg-type]
@@ -634,38 +628,77 @@ def autoregulation_trigger(
                 continue
         session_sets.setdefault((ts.date, ts.session_number, ts.id or 0), []).append(ws)
 
-    sorted_session_keys = sorted(session_sets.keys(), reverse=True)
-    if len(sorted_session_keys) < AUTOREG_TRIGGER_SESSIONS:
+    sorted_keys = sorted(session_sets.keys(), reverse=True)
+    return [session_sets[k] for k in sorted_keys]
+
+
+def autoregulation_trigger(
+    session: Session,
+    user: User,
+    hand: str,
+    grip_type_id: int,
+    edge_mm: int,
+    as_of: date_type | None = None,
+    before_session_id: int | None = None,
+    current_session_number: int | None = None,
+) -> tuple[str, list[WorkSet]]:
+    """Autoregulation trigger (ADR-0011, ADR-0012):
+    Looks at the last AUTOREG_TRIGGER_SESSIONS (2) non-deload sessions for (hand, grip, edge).
+    - If every working set in both hit target reps at RPE <= 7.0 -> "ready"
+    - If any working set had RPE >= 9.0 or below target reps -> "hold"
+    - If any working set had no RPE or < 2 sessions -> "ineligible"
+    Returns (trigger_state, most_recent_session_worksets).
+    """
+    all_sessions = _combo_session_worksets(
+        session, user, hand, grip_type_id, edge_mm, as_of, before_session_id, current_session_number
+    )
+    if len(all_sessions) < AUTOREG_TRIGGER_SESSIONS:
         return ("ineligible", [])
 
-    recent_keys = sorted_session_keys[:AUTOREG_TRIGGER_SESSIONS]
-    recent_sessions_worksets = [session_sets[k] for k in recent_keys]
+    recent_sessions = all_sessions[:AUTOREG_TRIGGER_SESSIONS]
+    s_latest = recent_sessions[0]
+    s_prev = recent_sessions[1]
+
+    # Any missing RPE makes the session ineligible
+    for worksets in recent_sessions:
+        if any(ws.rpe is None for ws in worksets):
+            return ("ineligible", s_latest)
 
     progression_settings = training_log.get_progression_settings(
         session, user, grip_type_id, edge_mm
     )
+
+    if progression_settings.path == "double":
+        rep_min = progression_settings.rep_min
+        for worksets in recent_sessions:
+            for ws in worksets:
+                assert ws.rpe is not None
+                if ws.rpe >= AUTOREG_RPE_HOLD_MIN or ws.reps < rep_min:
+                    return ("hold", s_latest)
+                if ws.rpe > AUTOREG_RPE_READY_MAX:
+                    return ("hold", s_latest)
+
+        w_latest = max(ws.weight for ws in s_latest)
+        w_prev = max(ws.weight for ws in s_prev)
+        r_latest = min(ws.reps for ws in s_latest)
+        r_prev = min(ws.reps for ws in s_prev)
+
+        if w_latest != w_prev or r_latest != r_prev:
+            return ("hold", s_latest)
+
+        return ("ready", s_latest)
+
     target_reps = progression_settings.rep_max
-
-    # Any missing RPE makes the session ineligible
-    for worksets in recent_sessions_worksets:
-        if any(ws.rpe is None for ws in worksets):
-            return ("ineligible", recent_sessions_worksets[0])
-
     all_ready = True
-    any_hold = False
-    for worksets in recent_sessions_worksets:
+    for worksets in recent_sessions:
         for ws in worksets:
             assert ws.rpe is not None
             if ws.rpe > AUTOREG_RPE_READY_MAX or ws.reps < target_reps:
                 all_ready = False
-            if ws.rpe >= AUTOREG_RPE_HOLD_MIN or ws.reps < target_reps:
-                any_hold = True
 
     if all_ready:
-        return ("ready", recent_sessions_worksets[0])
-    if any_hold:
-        return ("hold", recent_sessions_worksets[0])
-    return ("hold", recent_sessions_worksets[0])
+        return ("ready", s_latest)
+    return ("hold", s_latest)
 
 
 def autoregulation_suggestion(
@@ -679,7 +712,7 @@ def autoregulation_suggestion(
     current_session_number: int | None = None,
 ) -> dict | None:
     """Autoregulation suggestion (ADR-0011, ADR-0012):
-    When trigger is ready on Weight progression path, suggests adding one loadable increment."""
+    When trigger is ready on Weight, Set, or Double progression path, suggests the next step."""
     state, last_worksets = autoregulation_trigger(
         session, user, hand, grip_type_id, edge_mm, as_of, before_session_id, current_session_number
     )
@@ -711,6 +744,91 @@ def autoregulation_suggestion(
             "increment": delta,
             "message": f"Ready to progress: try {next_weight_str} {unit} (+{delta_str} {unit})",
         }
+
+    if progression_settings.path == "set":
+        current_sets = len(last_worksets)
+        if current_sets < progression_settings.max_sets:
+            return {
+                "hand": hand,
+                "path": "set",
+                "state": "ready",
+                "current_sets": current_sets,
+                "max_sets": progression_settings.max_sets,
+                "message": "Ready to progress: add a set (+1 set)",
+            }
+        return {
+            "hand": hand,
+            "path": "set",
+            "state": "ready",
+            "current_sets": current_sets,
+            "max_sets": progression_settings.max_sets,
+            "message": "Ready to progress: add weight and reset to baseline sets",
+        }
+
+    if progression_settings.path == "double":
+        rep_min = progression_settings.rep_min
+        rep_max = progression_settings.rep_max
+        last_weight = max(ws.weight for ws in last_worksets)
+        last_reps = min(ws.reps for ws in last_worksets)
+
+        if last_reps >= rep_max:
+            is_weight_phase = True
+        elif last_reps <= rep_min:
+            is_weight_phase = False
+        else:
+            all_sessions = _combo_session_worksets(
+                session, user, hand, grip_type_id, edge_mm, as_of, before_session_id, current_session_number
+            )
+            is_weight_phase = False
+            for past_sets in all_sessions[2:]:
+                past_weight = max(ws.weight for ws in past_sets)
+                past_reps = min(ws.reps for ws in past_sets)
+                if past_weight == last_weight:
+                    if past_reps <= rep_min or past_reps < last_reps:
+                        is_weight_phase = False
+                        break
+                elif past_weight < last_weight:
+                    if past_reps >= rep_max:
+                        is_weight_phase = True
+                        break
+                    elif past_reps <= rep_min:
+                        is_weight_phase = False
+                        break
+                    # If rep_min < past_reps < rep_max, keep scanning back towards rep_max baseline
+
+        if is_weight_phase:
+            inventory = plates.inventory_for(session, user)
+            ladder = plates.loadable_ladder(inventory)
+            last_cents = int(round(last_weight * 100))
+            next_rung = next((r for r in ladder if int(round(r * 100)) > last_cents), None)
+            if next_rung is None:
+                return None
+
+            delta = round(next_rung - last_weight, 2)
+            delta_str = f"{int(delta)}" if delta.is_integer() else f"{delta}"
+            next_weight_str = f"{int(next_rung)}" if next_rung.is_integer() else f"{next_rung}"
+            unit = user.unit_pref
+            return {
+                "hand": hand,
+                "path": "double",
+                "phase": "weight",
+                "state": "ready",
+                "current_weight": last_weight,
+                "suggested_weight": next_rung,
+                "increment": delta,
+                "message": f"Ready to progress: try {next_weight_str} {unit} (+{delta_str} {unit})",
+            }
+        else:
+            next_reps = last_reps + 1
+            return {
+                "hand": hand,
+                "path": "double",
+                "phase": "reps",
+                "state": "ready",
+                "current_reps": last_reps,
+                "suggested_reps": next_reps,
+                "message": f"Ready to progress: try {next_reps} reps (+1 rep)",
+            }
 
     return None
 
