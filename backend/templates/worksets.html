@@ -101,13 +101,15 @@
 </div>
 {% endif %}
 
-<!-- Rest countdown (issue #82): a throwaway, client-only enhancement layered
-     on top of the button area above. Hidden without JS -- the form's real
-     "Set done"/"Save" button and behavior are unchanged; this element only
-     ever appears once JS starts a rest after a normal (non-edit) commit. -->
+<!-- Rest countdown (issue #82 / #131): a real client-side rest timer
+     seeded from TrainingProtocol.default_rest_seconds with Screen Wake Lock
+     support so the device doesn't sleep mid-rest. Layered on top of the
+     button area above. Hidden without JS -- the form's real "Set done"/"Save"
+     button and behavior are unchanged; this element only ever appears once
+     JS starts a rest after a normal (non-edit) commit. -->
 <div class="rest-countdown" id="rest-countdown" hidden>
   <span class="rest-countdown-label">Rest</span>
-  <span class="rest-countdown-time" id="rest-countdown-time" aria-live="polite">3:00</span>
+  <span class="rest-countdown-time" id="rest-countdown-time" aria-live="polite">{{ "%d:%02d"|format(default_rest_seconds // 60, default_rest_seconds % 60) }}</span>
   <button type="button" class="btn btn-secondary rest-skip-btn" id="rest-skip-btn">Skip rest</button>
 </div>
 
@@ -230,18 +232,45 @@
   var undoTimer = null;
   var lastDeleted = null;
 
-  // Rest countdown (issue #82): deliberately throwaway and client-only --
-  // a hardcoded 3:00, no persistence, dies on reload. Lives outside the
-  // <form> so it survives even when the last defined set's commit removes
-  // the form (see advanceTo below). REST_SECONDS reads a data attribute
-  // rather than being a bare constant only so the Playwright smoke spec can
-  // shorten it for a natural-expiry assertion -- there is no user-facing
-  // setting, still hardcoded server-side at 180 in the template.
+  // Rest countdown (issue #82 / #131): seeded from TrainingProtocol.default_rest_seconds
+  // with Screen Wake Lock so the device doesn't sleep mid-rest. Lives outside
+  // the <form> so it survives even when the last defined set's commit removes
+  // the form (see advanceTo below).
   var restCountdown = document.getElementById("rest-countdown");
   var restCountdownTime = document.getElementById("rest-countdown-time");
   var restSkipBtn = document.getElementById("rest-skip-btn");
   var REST_SECONDS = (screen && parseInt(screen.dataset.restSeconds, 10)) || 180;
   var restTimerId = null;
+  var wakeLockSentinel = null;
+
+  function acquireWakeLock() {
+    if (!("wakeLock" in navigator) || !navigator.wakeLock || typeof navigator.wakeLock.request !== "function") {
+      return;
+    }
+    try {
+      navigator.wakeLock.request("screen").then(function (sentinel) {
+        wakeLockSentinel = sentinel;
+        sentinel.addEventListener("release", function () {
+          if (wakeLockSentinel === sentinel) {
+            wakeLockSentinel = null;
+          }
+        });
+      }).catch(function () {
+        wakeLockSentinel = null;
+      });
+    } catch (e) {
+      wakeLockSentinel = null;
+    }
+  }
+
+  function releaseWakeLock() {
+    if (wakeLockSentinel) {
+      try {
+        wakeLockSentinel.release().catch(function () {});
+      } catch (e) {}
+      wakeLockSentinel = null;
+    }
+  }
 
   function formatRestTime(totalSeconds) {
     var m = Math.floor(totalSeconds / 60);
@@ -254,6 +283,7 @@
       clearInterval(restTimerId);
       restTimerId = null;
     }
+    releaseWakeLock();
     if (restCountdown) restCountdown.hidden = true;
     if (setDoneBtn) setDoneBtn.hidden = false;
   }
@@ -264,6 +294,7 @@
     if (setDoneBtn) setDoneBtn.hidden = true;
     restCountdownTime.textContent = formatRestTime(seconds);
     restCountdown.hidden = false;
+    acquireWakeLock();
     if (restTimerId !== null) clearInterval(restTimerId);
     restTimerId = setInterval(function () {
       seconds -= 1;
@@ -278,6 +309,14 @@
   if (restSkipBtn) {
     restSkipBtn.addEventListener("click", stopRestCountdown);
   }
+
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible" && restTimerId !== null) {
+      if (!wakeLockSentinel || wakeLockSentinel.released) {
+        acquireWakeLock();
+      }
+    }
+  });
 
   // Edit mode (issue #80): editing/beforeEdit track whether the form
   // currently shows a COMPLETED set's saved values instead of the normal
@@ -540,6 +579,7 @@
 
   function renderPillNormal(setNumber) {
     if (!pill) return;
+    pill.classList.remove("focus-pill-editing");
     pill.dataset.editing = "false";
     pill.dataset.currentSet = setNumber;
     pill.innerHTML =
@@ -549,6 +589,7 @@
 
   function renderPillEditing(setNumber) {
     if (!pill) return;
+    pill.classList.add("focus-pill-editing");
     pill.dataset.editing = "true";
     pill.dataset.currentSet = setNumber;
     pill.textContent = "Editing set " + setNumber;

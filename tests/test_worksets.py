@@ -320,6 +320,22 @@ def test_rest_countdown_markup_is_server_hidden_with_no_persisted_rest_field(cli
     assert 'name="rest' not in response.text
 
 
+def test_rest_countdown_renders_configured_default_rest_seconds(client):
+    register(client, "timeruser@example.com", "test-pw-1234")
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "40")
+    log_max_test(client, "right", "half crimp", 20, "2026-07-01", "40")
+    client.post(
+        "/profile/protocol",
+        data={"base_work_set_reps": "5", "default_rest_seconds": "150"},
+        follow_redirects=True,
+    )
+
+    page = worksets_page(client).text
+    assert 'data-rest-seconds="150"' in page
+    assert re.search(r'id="rest-countdown-time"[^>]*>2:30</span>', page)
+
+
+
 def test_caption_shows_the_users_own_unit(client):
     register(client, unit_pref="lbs")
     log_max_test(client, "left", "half crimp", 20, "2026-07-01", "90")
