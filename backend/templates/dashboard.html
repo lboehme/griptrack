@@ -90,6 +90,16 @@
     {% if combo.plateau %}<span class="pill plateau-flag" data-combo="{{ combo.combo_key }}">plateau</span>{% endif %}
     {% if combo.overtraining %}<span class="pill overtraining-flag" data-combo="{{ combo.combo_key }}">⚠ load spike, short rest</span>{% endif %}
   </h3>
+  <div class="trend-legend">
+    <span class="trend-legend-item">
+      <span class="trend-legend-swatch volume"></span>
+      <span>Volume</span>
+    </span>
+    <span class="trend-legend-item">
+      <span class="trend-legend-swatch intensity"></span>
+      <span>Mean Intensity</span>
+    </span>
+  </div>
   <div class="trend-chart" data-chart-combo="{{ combo.combo_key }}" role="img" aria-label="TrainingVolume trend for {{ combo.hand }} {{ combo.grip_name }} @ {{ combo.edge_mm }} mm"></div>
   <ul class="plain volume-list">
     {% for date, volume in combo.trend %}

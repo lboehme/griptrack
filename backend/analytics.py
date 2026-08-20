@@ -155,6 +155,44 @@ def training_volume_trend(
     return [(date, volume) for (date, _session_number), volume in sorted(volumes.items())]
 
 
+def mean_intensity_trend(
+    session: Session, user: User, hand: str, grip_type_id: int, edge_mm: int
+) -> list[tuple[date_type, float]]:
+    """Mean intensity (mean of weight ÷ compute_current_max(as_of=session.date)
+    across working sets) per TrainingSession for one combo, oldest first.
+    Grouped by (date, session_number). Sessions where CurrentMax is None
+    (untested/estimate-only) are skipped; deloads are excluded."""
+    rows = session.exec(
+        select(
+            TrainingSession.date,
+            TrainingSession.session_number,
+            WorkSet.weight,
+        )
+        .join(WorkSet, WorkSet.training_session_id == TrainingSession.id)
+        .where(TrainingSession.user_id == user.id)
+        .where(WorkSet.hand == hand)
+        .where(WorkSet.grip_type_id == grip_type_id)
+        .where(WorkSet.edge_mm == edge_mm)
+        .where(TrainingSession.is_deload.is_(False))
+        .order_by(TrainingSession.date, TrainingSession.session_number)
+    ).all()
+    session_weights: dict[tuple[date_type, int], list[float]] = {}
+    for date, session_number, weight in rows:
+        key = (date, session_number)
+        session_weights.setdefault(key, []).append(weight)
+
+    trend: list[tuple[date_type, float]] = []
+    for (date, _session_number), weights in sorted(session_weights.items()):
+        current_max = training_log.compute_current_max(
+            session, user, hand, grip_type_id, edge_mm, as_of=date
+        )
+        if current_max is not None and current_max > 0:
+            mean_intensity = sum(w / current_max for w in weights) / len(weights)
+            trend.append((date, mean_intensity))
+
+    return trend
+
+
 def overtraining_warning(trend: list[tuple[date_type, float]]) -> bool:
     """OvertrainingWarning: the latest session is BOTH a volume spike above
     the trailing average AND came after a shorter-than-typical rest —
@@ -320,6 +358,9 @@ def dashboard_view(session: Session, user: User) -> dict:
         )
         if not trend:
             continue
+        intensity_trend = mean_intensity_trend(
+            session, user, combo["hand"], combo["grip_type_id"], combo["edge_mm"]
+        )
         combos.append(
             {
                 **combo,
@@ -329,6 +370,7 @@ def dashboard_view(session: Session, user: User) -> dict:
                 # need the same "hand|grip_name|edge_mm" key).
                 "combo_key": f"{combo['hand']}|{combo['grip_name']}|{combo['edge_mm']}",
                 "trend": trend,
+                "intensity_trend": intensity_trend,
                 "plateau": plateau_flag(trend),
                 "overtraining": overtraining_warning(trend),
             }
@@ -342,6 +384,8 @@ def dashboard_view(session: Session, user: User) -> dict:
             "combo": combo["combo_key"],
             "dates": [d.isoformat() for d, _ in combo["trend"]],
             "volumes": [v for _, v in combo["trend"]],
+            "intensity_dates": [d.isoformat() for d, _ in combo["intensity_trend"]],
+            "intensities": [i for _, i in combo["intensity_trend"]],
         }
         for combo in combos
     ]

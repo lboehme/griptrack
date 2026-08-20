@@ -174,7 +174,7 @@ def test_overtraining_needs_both_volume_spike_and_short_rest(client):
     assert overtraining_flags(client) == {"left|half crimp|20"}
 
 
-def test_dashboard_ships_the_full_ordered_volume_series_per_combo(client):
+def test_dashboard_ships_the_full_ordered_volume_and_intensity_series_per_combo(client):
     register(client)
     log_max_test(client, "left", "half crimp", 20, "2026-06-01", "40")
     save_work_set(client, "left", 1, "40", "5", date="2026-06-03")
@@ -186,6 +186,8 @@ def test_dashboard_ships_the_full_ordered_volume_series_per_combo(client):
             "combo": "left|half crimp|20",
             "dates": ["2026-06-03", "2026-06-10"],
             "volumes": [200.0, 212.5],
+            "intensity_dates": ["2026-06-03", "2026-06-10"],
+            "intensities": [1.0, 1.0],
         }
     ]
 
@@ -911,3 +913,126 @@ def test_asymmetry_warning_per_user_data_isolation_at_http_seam(client):
     # User A logs in again: still has warning flag
     login(client, "userA@example.com", "test-pw-1234")
     assert asymmetry_warning_flags(client) == {"asymmetry|half crimp|20"}
+
+
+def test_mean_intensity_trend_multi_set_mean(client):
+    register(client)
+    log_max_test(client, "left", "half crimp", 20, "2026-06-01", "50")
+    # Session 2026-06-03: 3 sets with weights 40, 42.5, 45.
+    # CurrentMax as of 2026-06-03 is 50.0.
+    # Intensity per set: 40/50 = 0.8, 42.5/50 = 0.85, 45/50 = 0.9.
+    # Mean intensity = (0.8 + 0.85 + 0.9) / 3 = 0.85.
+    save_work_set(client, "left", 1, "40", "5", date="2026-06-03")
+    save_work_set(client, "left", 2, "42.5", "5", date="2026-06-03")
+    save_work_set(client, "left", 3, "45", "5", date="2026-06-03")
+
+    session, user = db_session_and_user(client)
+    trend = analytics.mean_intensity_trend(session, user, "left", 1, 20)
+    assert trend == [(date_type(2026, 6, 3), 0.85)]
+
+    # HTTP seam
+    payload = chart_payload(client)
+    assert payload == [
+        {
+            "combo": "left|half crimp|20",
+            "dates": ["2026-06-03"],
+            "volumes": [637.5],
+            "intensity_dates": ["2026-06-03"],
+            "intensities": [0.85],
+        }
+    ]
+
+
+def test_mean_intensity_trend_as_of_date_current_max_denominator(client):
+    register(client)
+    log_max_test(client, "left", "half crimp", 20, "2026-06-01", "40")
+    # Session 1 on 2026-06-03: 36kg -> CurrentMax as of 2026-06-03 is 40.0 -> intensity = 36/40 = 0.9
+    save_work_set(client, "left", 1, "36", "5", date="2026-06-03")
+
+    # Higher max test on 2026-06-08: 50kg
+    log_max_test(client, "left", "half crimp", 20, "2026-06-08", "50")
+    # Session 2 on 2026-06-10: 40kg -> CurrentMax as of 2026-06-10 is 50.0 -> intensity = 40/50 = 0.8
+    save_work_set(client, "left", 1, "40", "5", date="2026-06-10")
+
+    session, user = db_session_and_user(client)
+    trend = analytics.mean_intensity_trend(session, user, "left", 1, 20)
+    assert trend == [
+        (date_type(2026, 6, 3), 0.9),
+        (date_type(2026, 6, 10), 0.8),
+    ]
+
+    payload = chart_payload(client)
+    assert payload == [
+        {
+            "combo": "left|half crimp|20",
+            "dates": ["2026-06-03", "2026-06-10"],
+            "volumes": [180.0, 200.0],
+            "intensity_dates": ["2026-06-03", "2026-06-10"],
+            "intensities": [0.9, 0.8],
+        }
+    ]
+
+
+def test_mean_intensity_trend_skips_sessions_where_current_max_is_none(client):
+    register(client)
+    # Session 1 on 2026-06-01: trained under estimate/untested -> CurrentMax is None
+    save_work_set(client, "left", 1, "30", "5", date="2026-06-01")
+
+    # Max test logged on 2026-06-05: 40kg
+    log_max_test(client, "left", "half crimp", 20, "2026-06-05", "40")
+
+    # Session 2 on 2026-06-06: 36kg -> CurrentMax is 40.0 -> intensity = 36/40 = 0.9
+    save_work_set(client, "left", 1, "36", "5", date="2026-06-06")
+
+    session, user = db_session_and_user(client)
+    # Volume trend includes both sessions
+    vol_trend = analytics.training_volume_trend(session, user, "left", 1, 20)
+    assert vol_trend == [
+        (date_type(2026, 6, 1), 150.0),
+        (date_type(2026, 6, 6), 180.0),
+    ]
+
+    # Intensity trend skips the first session
+    int_trend = analytics.mean_intensity_trend(session, user, "left", 1, 20)
+    assert int_trend == [
+        (date_type(2026, 6, 6), 0.9),
+    ]
+
+    # HTTP seam
+    payload = chart_payload(client)
+    assert payload == [
+        {
+            "combo": "left|half crimp|20",
+            "dates": ["2026-06-01", "2026-06-06"],
+            "volumes": [150.0, 180.0],
+            "intensity_dates": ["2026-06-06"],
+            "intensities": [0.9],
+        }
+    ]
+
+
+def test_mean_intensity_trend_ignores_deload_sessions(client):
+    register(client)
+    log_max_test(client, "left", "half crimp", 20, "2026-06-01", "40")
+
+    # Session 1: normal
+    save_work_set(client, "left", 1, "40", "5", date="2026-06-03")
+
+    # Session 2: deload
+    save_work_set(client, "left", 1, "20", "5", date="2026-06-07")
+    client.post(
+        "/session/update",
+        data={"date": "2026-06-07", "is_deload": "on"},
+        headers={"HX-Request": "true"},
+    )
+
+    # Session 3: normal
+    save_work_set(client, "left", 1, "40", "5", date="2026-06-10")
+
+    session, user = db_session_and_user(client)
+    trend = analytics.mean_intensity_trend(session, user, "left", 1, 20)
+    assert trend == [
+        (date_type(2026, 6, 3), 1.0),
+        (date_type(2026, 6, 10), 1.0),
+    ]
+
