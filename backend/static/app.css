@@ -681,6 +681,16 @@ input[type="number"]::-webkit-outer-spin-button {
 .hand-badge-right { background: var(--accent-right); }
 
 .hand-label { font-size: .88rem; font-weight: 700; }
+.autoreg-hint {
+  margin-left: auto;
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  padding: .2rem .55rem;
+  border-radius: 999px;
+}
+
 
 .weight-stepper {
   display: flex;

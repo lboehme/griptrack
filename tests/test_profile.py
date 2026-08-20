@@ -475,3 +475,76 @@ def test_worksets_view_reflects_user_protocol_rep_target(client):
     assert 'data-rest-seconds="150"' in worksets.text
 
 
+
+
+def test_default_progression_settings_on_profile_page(client):
+    register(client, "lifter@example.com", "test-pw-1234")
+
+    profile = client.get("/profile")
+
+    assert profile.status_code == 200
+    assert "Progression" in profile.text or "progression" in profile.text
+    assert "weight" in profile.text
+
+
+def test_update_user_default_progression_settings(client):
+    register(client, "lifter@example.com", "test-pw-1234")
+
+    response = client.post(
+        "/profile/progression",
+        data={"path": "double", "rep_min": "5", "rep_max": "10", "max_sets": "8"},
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert "double" in response.text
+
+
+def test_per_combo_progression_settings_override(client):
+    register(client, "lifter@example.com", "test-pw-1234")
+    gid = grip_type_id(client, "half crimp")
+
+    # Set per-combo override for half crimp 20mm
+    response = client.post(
+        "/profile/progression",
+        data={
+            "grip_type_id": gid,
+            "edge_mm": 20,
+            "path": "set",
+            "rep_min": "6",
+            "rep_max": "6",
+            "max_sets": "5",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert "half crimp" in response.text
+    assert "set" in response.text
+
+
+def test_progression_settings_per_user_isolation(client):
+    from tests.helpers import login
+
+    register(client, "founder@example.com", "test-pw-1234")
+    client.post(
+        "/profile/progression",
+        data={"path": "double", "rep_min": "4", "rep_max": "8", "max_sets": "5"},
+        follow_redirects=True,
+    )
+
+    register_second_user(client, "friend@example.com", "test-pw-1234")
+    friend_profile = client.get("/profile")
+    # Friend still has default weight progression
+    assert "double" not in friend_profile.text or "weight" in friend_profile.text
+
+    # Friend configures their own progression
+    client.post(
+        "/profile/progression",
+        data={"path": "set", "rep_min": "3", "rep_max": "3", "max_sets": "4"},
+        follow_redirects=True,
+    )
+
+    # Founder profile is untouched
+    client.post("/logout")
+    login(client, "founder@example.com", "test-pw-1234")
+    founder_profile = client.get("/profile")
+    assert "double" in founder_profile.text

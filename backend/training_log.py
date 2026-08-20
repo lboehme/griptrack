@@ -10,6 +10,7 @@ from backend.models import (
     GripType,
     MaxWeightTest,
     PainReport,
+    ProgressionSettings,
     SessionMaxEstimate,
     TrainingProtocol,
     TrainingSession,
@@ -254,6 +255,16 @@ def worksets_view(
     nudge = analytics.session_start_nudge(
         session, user, grip_type_id, edge_mm, date, hands
     )
+    autoreg_suggestions = analytics.autoregulation_suggestions(
+        session,
+        user,
+        grip_type_id,
+        edge_mm,
+        date,
+        hands,
+        training_session=training_session,
+        session_number=session_number,
+    )
     return {
         "grip": session.get(GripType, grip_type_id),
         "edge_mm": edge_mm,
@@ -284,6 +295,7 @@ def worksets_view(
         "resume_seed": resume_seed,
         "saved_json": saved_json,
         "nudge": nudge,
+        "autoreg_suggestions": autoreg_suggestions,
     }
 
 
@@ -1065,3 +1077,138 @@ def tested_combinations(session: Session, user: User) -> list[dict]:
         }
         for hand, grip_type_id, edge_mm in combos
     ]
+
+
+def get_progression_settings(
+    session: Session,
+    user: User,
+    grip_type_id: int | None = None,
+    edge_mm: int | None = None,
+) -> ProgressionSettings:
+    """The progression settings for a (user, grip_type, edge_mm), falling
+    back to the user-level default row, else defaults derived from the
+    protocol (ADR-0012)."""
+    if grip_type_id is not None and edge_mm is not None:
+        setting = session.exec(
+            select(ProgressionSettings)
+            .where(ProgressionSettings.user_id == user.id)
+            .where(ProgressionSettings.grip_type_id == grip_type_id)
+            .where(ProgressionSettings.edge_mm == edge_mm)
+        ).first()
+        if setting is not None:
+            return setting
+
+    user_default = session.exec(
+        select(ProgressionSettings)
+        .where(ProgressionSettings.user_id == user.id)
+        .where(ProgressionSettings.grip_type_id.is_(None))
+        .where(ProgressionSettings.edge_mm.is_(None))
+    ).first()
+    if user_default is not None:
+        return user_default
+
+    protocol = get_protocol(session, user)
+    return ProgressionSettings(
+        user_id=user.id,
+        grip_type_id=None,
+        edge_mm=None,
+        path="weight",
+        rep_min=protocol.base_work_set_reps,
+        rep_max=protocol.base_work_set_reps,
+        max_sets=6,
+    )
+
+
+def list_progression_settings(
+    session: Session, user: User
+) -> list[ProgressionSettings]:
+    """All ProgressionSettings rows for this user."""
+    return list(
+        session.exec(
+            select(ProgressionSettings)
+            .where(ProgressionSettings.user_id == user.id)
+            .order_by(ProgressionSettings.grip_type_id, ProgressionSettings.edge_mm)  # type: ignore[arg-type]
+        ).all()
+    )
+
+
+def save_progression_settings(
+    session: Session,
+    user: User,
+    path: str,
+    rep_min: int,
+    rep_max: int,
+    max_sets: int,
+    grip_type_id: int | None = None,
+    edge_mm: int | None = None,
+) -> ProgressionSettings:
+    """Upsert progression settings for user default or specific combo."""
+    if grip_type_id is not None and edge_mm is not None:
+        setting = session.exec(
+            select(ProgressionSettings)
+            .where(ProgressionSettings.user_id == user.id)
+            .where(ProgressionSettings.grip_type_id == grip_type_id)
+            .where(ProgressionSettings.edge_mm == edge_mm)
+        ).first()
+        if setting is None:
+            setting = ProgressionSettings(
+                user_id=user.id,
+                grip_type_id=grip_type_id,
+                edge_mm=edge_mm,
+                path=path,
+                rep_min=rep_min,
+                rep_max=rep_max,
+                max_sets=max_sets,
+            )
+        else:
+            setting.path = path
+            setting.rep_min = rep_min
+            setting.rep_max = rep_max
+            setting.max_sets = max_sets
+    else:
+        setting = session.exec(
+            select(ProgressionSettings)
+            .where(ProgressionSettings.user_id == user.id)
+            .where(ProgressionSettings.grip_type_id.is_(None))
+            .where(ProgressionSettings.edge_mm.is_(None))
+        ).first()
+        if setting is None:
+            setting = ProgressionSettings(
+                user_id=user.id,
+                grip_type_id=None,
+                edge_mm=None,
+                path=path,
+                rep_min=rep_min,
+                rep_max=rep_max,
+                max_sets=max_sets,
+            )
+        else:
+            setting.path = path
+            setting.rep_min = rep_min
+            setting.rep_max = rep_max
+            setting.max_sets = max_sets
+
+    session.add(setting)
+    session.commit()
+    session.refresh(setting)
+    return setting
+
+
+def delete_progression_settings(
+    session: Session,
+    user: User,
+    grip_type_id: int,
+    edge_mm: int,
+) -> bool:
+    """Remove a per-combo progression override."""
+    setting = session.exec(
+        select(ProgressionSettings)
+        .where(ProgressionSettings.user_id == user.id)
+        .where(ProgressionSettings.grip_type_id == grip_type_id)
+        .where(ProgressionSettings.edge_mm == edge_mm)
+    ).first()
+    if setting is not None:
+        session.delete(setting)
+        session.commit()
+        return True
+    return False

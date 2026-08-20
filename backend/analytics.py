@@ -26,6 +26,11 @@ ASYM_DRIFT_PP = 5.0
 ASYM_BACKSTOP_PCT = 15.0
 RETEST_MIN_WEEKS = 8
 ESTIMATE_NUDGE_COUNT = 3
+# Autoregulation thresholds (issue #129, ADR-0011, ADR-0012).
+AUTOREG_TRIGGER_SESSIONS = 2
+AUTOREG_RPE_READY_MAX = 7.0
+AUTOREG_RPE_HOLD_MIN = 9.0
+
 
 
 # Standard Font -> V-scale conversion (approximate, as all such tables are).
@@ -585,3 +590,158 @@ def session_start_nudge(
     return None
 
 
+
+
+def autoregulation_trigger(
+    session: Session,
+    user: User,
+    hand: str,
+    grip_type_id: int,
+    edge_mm: int,
+    as_of: date_type | None = None,
+    before_session_id: int | None = None,
+    current_session_number: int | None = None,
+) -> tuple[str, list[WorkSet]]:
+    """Autoregulation trigger (ADR-0011, ADR-0012):
+    Looks at the last AUTOREG_TRIGGER_SESSIONS (2) non-deload sessions for (hand, grip, edge).
+    - If every working set in both hit target reps at RPE <= 7.0 -> "ready"
+    - If any working set had RPE >= 9.0 or below target reps -> "hold"
+    - If any working set had no RPE or < 2 sessions -> "ineligible"
+    Returns (trigger_state, most_recent_session_worksets).
+    """
+    query = (
+        select(TrainingSession, WorkSet)
+        .join(WorkSet, WorkSet.training_session_id == TrainingSession.id)  # type: ignore[arg-type]
+        .where(TrainingSession.user_id == user.id)
+        .where(WorkSet.hand == hand)
+        .where(WorkSet.grip_type_id == grip_type_id)
+        .where(WorkSet.edge_mm == edge_mm)
+        .where(TrainingSession.is_deload.is_(False))
+        .order_by(WorkSet.set_number.asc())
+    )
+    if before_session_id is not None:
+        query = query.where(TrainingSession.id != before_session_id)
+    if as_of is not None:
+        query = query.where(TrainingSession.date <= as_of)
+
+    rows = session.exec(query).all()
+    session_sets: dict[tuple[date_type, int, int], list[WorkSet]] = {}
+    for ts, ws in rows:
+        if before_session_id is not None and ts.id == before_session_id:
+            continue
+        if as_of is not None and ts.date == as_of and current_session_number is not None:
+            if ts.session_number >= current_session_number:
+                continue
+        session_sets.setdefault((ts.date, ts.session_number, ts.id or 0), []).append(ws)
+
+    sorted_session_keys = sorted(session_sets.keys(), reverse=True)
+    if len(sorted_session_keys) < AUTOREG_TRIGGER_SESSIONS:
+        return ("ineligible", [])
+
+    recent_keys = sorted_session_keys[:AUTOREG_TRIGGER_SESSIONS]
+    recent_sessions_worksets = [session_sets[k] for k in recent_keys]
+
+    progression_settings = training_log.get_progression_settings(
+        session, user, grip_type_id, edge_mm
+    )
+    target_reps = progression_settings.rep_max
+
+    # Any missing RPE makes the session ineligible
+    for worksets in recent_sessions_worksets:
+        if any(ws.rpe is None for ws in worksets):
+            return ("ineligible", recent_sessions_worksets[0])
+
+    all_ready = True
+    any_hold = False
+    for worksets in recent_sessions_worksets:
+        for ws in worksets:
+            assert ws.rpe is not None
+            if ws.rpe > AUTOREG_RPE_READY_MAX or ws.reps < target_reps:
+                all_ready = False
+            if ws.rpe >= AUTOREG_RPE_HOLD_MIN or ws.reps < target_reps:
+                any_hold = True
+
+    if all_ready:
+        return ("ready", recent_sessions_worksets[0])
+    if any_hold:
+        return ("hold", recent_sessions_worksets[0])
+    return ("hold", recent_sessions_worksets[0])
+
+
+def autoregulation_suggestion(
+    session: Session,
+    user: User,
+    hand: str,
+    grip_type_id: int,
+    edge_mm: int,
+    as_of: date_type | None = None,
+    before_session_id: int | None = None,
+    current_session_number: int | None = None,
+) -> dict | None:
+    """Autoregulation suggestion (ADR-0011, ADR-0012):
+    When trigger is ready on Weight progression path, suggests adding one loadable increment."""
+    state, last_worksets = autoregulation_trigger(
+        session, user, hand, grip_type_id, edge_mm, as_of, before_session_id, current_session_number
+    )
+    if state != "ready" or not last_worksets:
+        return None
+
+    progression_settings = training_log.get_progression_settings(
+        session, user, grip_type_id, edge_mm
+    )
+    if progression_settings.path == "weight":
+        last_weight = max(ws.weight for ws in last_worksets)
+        inventory = plates.inventory_for(session, user)
+        ladder = plates.loadable_ladder(inventory)
+        last_cents = int(round(last_weight * 100))
+        next_rung = next((r for r in ladder if int(round(r * 100)) > last_cents), None)
+        if next_rung is None:
+            return None
+
+        delta = round(next_rung - last_weight, 2)
+        delta_str = f"{int(delta)}" if delta.is_integer() else f"{delta}"
+        next_weight_str = f"{int(next_rung)}" if next_rung.is_integer() else f"{next_rung}"
+        unit = user.unit_pref
+        return {
+            "hand": hand,
+            "path": "weight",
+            "state": "ready",
+            "current_weight": last_weight,
+            "suggested_weight": next_rung,
+            "increment": delta,
+            "message": f"Ready to progress: try {next_weight_str} {unit} (+{delta_str} {unit})",
+        }
+
+    return None
+
+
+def autoregulation_suggestions(
+    session: Session,
+    user: User,
+    grip_type_id: int,
+    edge_mm: int,
+    date: date_type,
+    hands: list[str],
+    training_session: TrainingSession | None = None,
+    session_number: int | None = None,
+) -> dict[str, dict | None]:
+    """Evaluate autoregulation suggestions for all in-play hands."""
+    before_session_id = training_session.id if training_session is not None else None
+    current_sn = (
+        training_session.session_number
+        if training_session is not None
+        else session_number
+    )
+    return {
+        h: autoregulation_suggestion(
+            session,
+            user,
+            h,
+            grip_type_id,
+            edge_mm,
+            as_of=date,
+            before_session_id=before_session_id,
+            current_session_number=current_sn,
+        )
+        for h in hands
+    }
