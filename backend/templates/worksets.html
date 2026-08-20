@@ -46,6 +46,9 @@
     <div class="hand-card-header">
       <span class="hand-badge hand-badge-{{ hand }}">{{ hand[0]|upper }}</span>
       <span class="hand-label">{{ hand|capitalize }} hand</span>
+      {% if autoreg_suggestions and autoreg_suggestions.get(hand) %}
+      <span class="autoreg-hint" data-role="autoreg-hint" data-hand="{{ hand }}">{{ autoreg_suggestions[hand].message }}</span>
+      {% endif %}
     </div>
     <div class="weight-stepper">
       <button type="button" class="stepper-btn stepper-minus" data-field="weight" data-hand="{{ hand }}" aria-label="Decrease {{ hand }} weight">−</button>

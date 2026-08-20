@@ -37,3 +37,11 @@ MAX_IMPORT_UPLOAD_BYTES = 20 * 1024 * 1024   # 20 MB compressed archive
 MAX_IMPORT_MEMBER_BYTES = 50 * 1024 * 1024   # per-CSV decompressed cap
 MAX_IMPORT_MEMBERS = 32                      # manifest + the fixed archive member set, with headroom
 MAX_IMPORT_ROWS_PER_MEMBER = 50_000
+
+# Progression settings (rep range, set cap, #129, ADR-0012)
+MIN_REP_MIN = 1
+MAX_REP_MIN = 30
+MIN_REP_MAX = 1
+MAX_REP_MAX = 30
+MIN_MAX_SETS = 1
+MAX_MAX_SETS = 30

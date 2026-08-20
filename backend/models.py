@@ -223,3 +223,26 @@ class Invite(SQLModel, table=True):
     used_by_user_id: int | None = Field(default=None, foreign_key="users.id")
     created_at: datetime = Field(default_factory=utcnow)
     used_at: datetime | None = None
+
+
+VALID_PROGRESSION_PATHS = ("weight", "set", "double")
+
+
+class ProgressionSettings(SQLModel, table=True):
+    """Per-combo and user-default progression settings (ADR-0012).
+    NULL grip_type_id and edge_mm = the user-level default row."""
+
+    __tablename__ = "progression_settings"
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True)
+    grip_type_id: int | None = Field(
+        default=None, foreign_key="grip_types.id", nullable=True
+    )
+    edge_mm: int | None = Field(default=None, nullable=True)
+    # "weight", "set", "double" (ADR-0012: ProgressionPath)
+    path: str = Field(default="weight")
+    rep_min: int = Field(default=5)
+    rep_max: int = Field(default=5)
+    max_sets: int = Field(default=6)
+    created_at: datetime = Field(default_factory=utcnow)
