@@ -106,6 +106,11 @@ def warmup_view(
         if not all((h, step["index"]) in checks for h in planned_hands):
             current_step = step["index"] + 1
             break
+    from backend import analytics
+
+    nudge = analytics.session_start_nudge(
+        session, user, grip_type_id, edge_mm, date, hands
+    )
     return {
         "grip": session.get(GripType, grip_type_id),
         "edge_mm": edge_mm,
@@ -121,6 +126,7 @@ def warmup_view(
         "current_step": current_step,
         "training_session": training_session,
         "checks": checks,
+        "nudge": nudge,
     }
 
 
@@ -243,6 +249,11 @@ def worksets_view(
             "weight": ws.weight, "reps": ws.reps, "rpe": ws.rpe,
         }
     inventory = plates.inventory_for(session, user)
+    from backend import analytics
+
+    nudge = analytics.session_start_nudge(
+        session, user, grip_type_id, edge_mm, date, hands
+    )
     return {
         "grip": session.get(GripType, grip_type_id),
         "edge_mm": edge_mm,
@@ -272,6 +283,7 @@ def worksets_view(
         "display_set_number": display_set_number,
         "resume_seed": resume_seed,
         "saved_json": saved_json,
+        "nudge": nudge,
     }
 
 
