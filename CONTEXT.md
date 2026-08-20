@@ -215,12 +215,58 @@ on natural limb dominance (ADR-0010). Narrowing gaps never warn.
 _Avoid_: Injury warning, imbalance alarm
 
 **TrainingProtocol**:
-The ramp percentages (50/65/80/90% of CurrentMax) and base work-set rep
-count (5) applied to every TrainingSession. Fixed and shared by all users
-for now, but modeled as its own config concept (a single global default
-row) rather than hardcoded constants, so per-user overrides can be added
-later without a schema rework.
+The ramp percentages (50/65/80/90% of CurrentMax), base work-set rep count
+(the rep target, default 5), and default rest duration applied to a user's
+TrainingSessions. Modeled as its own config concept (a global default row,
+optionally overridden per user) rather than hardcoded constants. Since Wave 4
+the rep target and `default_rest_seconds` are editable per user from the
+"Configure training sessions" settings card (a per-user row); the ramp
+percentages stay global for now. See ADR-0005 and ADR-0011.
 _Avoid_: Settings, config (bare)
+
+**Autoregulation suggestion**:
+A transparent, per-hand Tier-1 nudge on the work-set card. When the last two
+non-deload sessions for a (hand, grip, edge) both hit the user's target at
+RPE ≤ 7 on every working set, it suggests the next step. *What* that step is —
+add a set, add weight, or add a rep — is set by the combo's ProgressionPath; the
+RPE gate is only the trigger (see ADR-0011 for the trigger, ADR-0012 for the
+path). RPE ≥ 9 or a below-target set withholds the suggestion ("hold") — it never
+suggests a lower weight and never pre-fills the stepper. A working set with no RPE
+makes the session ineligible. Deterministic and rule-based, not AI.
+_Avoid_: Coaching, AI suggestion, auto-progression
+
+**ProgressionPath**:
+The per-combo scheme deciding what the Autoregulation suggestion advances when the
+RPE trigger says you're ready. One of: **Set progression** (fixed weight/reps, add
+a set up to a cap), **Weight progression** (fixed sets/reps, add a loadable
+increment — the default), or **Double progression** (over a user-set rep range,
+default 5–10: build reps to the top, then build weight until reps fall to the
+minimum, then reset to a heavier baseline). Chosen per (hand, grip, edge) in the
+"Configure training sessions" settings card with a user-level default; never
+overridden mid-session, never auto-switched. Config is stored; the current phase
+is derived from WorkSet history. See ADR-0012.
+_Avoid_: Program, plan, periodization (bare)
+
+**Retest nudge**:
+A session-start banner suggesting a fresh guided MaxWeightTest when CurrentMax has
+drifted ≥ one loadable increment above the last MaxWeightTest *and* ≥ 8 weeks have
+passed since that test. The 8-week floor keeps a retest measuring real training
+progress, not day-to-day noise. Suggests only — never auto-adjusts CurrentMax.
+See ADR-0011.
+_Avoid_: Retest reminder (implies scheduled/time-only)
+
+**Estimate nudge**:
+A session-start banner suggesting a guided MaxWeightTest for a combo that has no
+MaxWeightTest yet but has accumulated a SessionMaxEstimate across 3 distinct
+sessions. See ADR-0011.
+
+**Mean-intensity**:
+Per session, the simple mean of each working set's `weight ÷ CurrentMax` (CurrentMax
+evaluated as of the session date) for a (hand, grip, edge). Plotted as a second
+series on a secondary axis of the per-combo trend chart, beside TrainingVolume, so
+intensity progress at trimmed volume doesn't read as a plateau. Sessions with no
+CurrentMax (untested/estimate-only) are skipped. See ADR-0011.
+_Avoid_: Intensity (bare — ambiguous with RPE)
 
 **BodyWeightLog**:
 A dated bodyweight entry. The most recent entry is the user's "current"
