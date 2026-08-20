@@ -455,6 +455,36 @@ def dashboard_view(session: Session, user: User) -> dict:
     }
 
 
+def _next_rung_above(ladder: list[float], weight: float) -> float | None:
+    """First loadable rung strictly heavier than `weight`, compared at
+    cent precision to dodge float drift. None when nothing loads higher."""
+    weight_cents = int(round(weight * 100))
+    return next((r for r in ladder if int(round(r * 100)) > weight_cents), None)
+
+
+def _format_weight(weight: float) -> str:
+    """Trim a whole-number weight to no decimal point ('20' not '20.0')."""
+    return f"{int(weight)}" if weight.is_integer() else f"{weight}"
+
+
+def _weight_step_fields(
+    user: User, current_weight: float, next_rung: float
+) -> dict:
+    """Shared payload for a '+one loadable increment' suggestion (Weight path
+    and the Double weight-phase render the same fields)."""
+    delta = round(next_rung - current_weight, 2)
+    unit = user.unit_pref
+    return {
+        "current_weight": current_weight,
+        "suggested_weight": next_rung,
+        "increment": delta,
+        "message": (
+            f"Ready to progress: try {_format_weight(next_rung)} {unit} "
+            f"(+{_format_weight(delta)} {unit})"
+        ),
+    }
+
+
 def retest_nudge(
     session: Session,
     user: User,
@@ -485,16 +515,11 @@ def retest_nudge(
 
     inventory = plates.inventory_for(session, user)
     ladder = plates.loadable_ladder(inventory)
-    test_cents = int(round(test.weight * 100))
-    next_rung = next(
-        (r for r in ladder if int(round(r * 100)) > test_cents), None
-    )
+    next_rung = _next_rung_above(ladder, test.weight)
     if next_rung is None:
         return False
 
-    curr_cents = int(round(current_max * 100))
-    next_cents = int(round(next_rung * 100))
-    return curr_cents >= next_cents
+    return int(round(current_max * 100)) >= int(round(next_rung * 100))
 
 
 def estimate_nudge(
@@ -657,7 +682,6 @@ def autoregulation_trigger(
 
     recent_sessions = all_sessions[:AUTOREG_TRIGGER_SESSIONS]
     s_latest = recent_sessions[0]
-    s_prev = recent_sessions[1]
 
     # Any missing RPE makes the session ineligible
     for worksets in recent_sessions:
@@ -669,22 +693,20 @@ def autoregulation_trigger(
     )
 
     if progression_settings.path == "double":
+        # Shared trigger (ADR-0011): both recent non-deload sessions must have
+        # every working set within the range (reps >= rep_min) at RPE <= 7.
+        # No stabilization gate — a ready window nudges up each time; the
+        # suggestion function derives which phase (rep-build vs weight-build)
+        # from history.
         rep_min = progression_settings.rep_min
         for worksets in recent_sessions:
             for ws in worksets:
-                assert ws.rpe is not None
+                if ws.rpe is None:  # unreachable: ineligibility returned above
+                    continue
                 if ws.rpe >= AUTOREG_RPE_HOLD_MIN or ws.reps < rep_min:
                     return ("hold", s_latest)
                 if ws.rpe > AUTOREG_RPE_READY_MAX:
                     return ("hold", s_latest)
-
-        w_latest = max(ws.weight for ws in s_latest)
-        w_prev = max(ws.weight for ws in s_prev)
-        r_latest = min(ws.reps for ws in s_latest)
-        r_prev = min(ws.reps for ws in s_prev)
-
-        if w_latest != w_prev or r_latest != r_prev:
-            return ("hold", s_latest)
 
         return ("ready", s_latest)
 
@@ -692,7 +714,8 @@ def autoregulation_trigger(
     all_ready = True
     for worksets in recent_sessions:
         for ws in worksets:
-            assert ws.rpe is not None
+            if ws.rpe is None:  # unreachable: ineligibility returned above
+                continue
             if ws.rpe > AUTOREG_RPE_READY_MAX or ws.reps < target_reps:
                 all_ready = False
 
@@ -726,23 +749,15 @@ def autoregulation_suggestion(
         last_weight = max(ws.weight for ws in last_worksets)
         inventory = plates.inventory_for(session, user)
         ladder = plates.loadable_ladder(inventory)
-        last_cents = int(round(last_weight * 100))
-        next_rung = next((r for r in ladder if int(round(r * 100)) > last_cents), None)
+        next_rung = _next_rung_above(ladder, last_weight)
         if next_rung is None:
             return None
 
-        delta = round(next_rung - last_weight, 2)
-        delta_str = f"{int(delta)}" if delta.is_integer() else f"{delta}"
-        next_weight_str = f"{int(next_rung)}" if next_rung.is_integer() else f"{next_rung}"
-        unit = user.unit_pref
         return {
             "hand": hand,
             "path": "weight",
             "state": "ready",
-            "current_weight": last_weight,
-            "suggested_weight": next_rung,
-            "increment": delta,
-            "message": f"Ready to progress: try {next_weight_str} {unit} (+{delta_str} {unit})",
+            **_weight_step_fields(user, last_weight, next_rung),
         }
 
     if progression_settings.path == "set":
@@ -799,24 +814,16 @@ def autoregulation_suggestion(
         if is_weight_phase:
             inventory = plates.inventory_for(session, user)
             ladder = plates.loadable_ladder(inventory)
-            last_cents = int(round(last_weight * 100))
-            next_rung = next((r for r in ladder if int(round(r * 100)) > last_cents), None)
+            next_rung = _next_rung_above(ladder, last_weight)
             if next_rung is None:
                 return None
 
-            delta = round(next_rung - last_weight, 2)
-            delta_str = f"{int(delta)}" if delta.is_integer() else f"{delta}"
-            next_weight_str = f"{int(next_rung)}" if next_rung.is_integer() else f"{next_rung}"
-            unit = user.unit_pref
             return {
                 "hand": hand,
                 "path": "double",
                 "phase": "weight",
                 "state": "ready",
-                "current_weight": last_weight,
-                "suggested_weight": next_rung,
-                "increment": delta,
-                "message": f"Ready to progress: try {next_weight_str} {unit} (+{delta_str} {unit})",
+                **_weight_step_fields(user, last_weight, next_rung),
             }
         else:
             next_reps = last_reps + 1

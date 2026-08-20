@@ -174,6 +174,7 @@ def export_data(
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
+    """Export the current user's data as a versioned ZIP archive (ADR-0008)."""
     archive_bytes = archive.create_archive(session, user)
     return Response(
         content=archive_bytes,
@@ -189,6 +190,10 @@ async def import_data(
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
+    """Restore an Export archive into the current user's **empty** account
+    (ADR-0008, #102). `backend.archive` owns validation, atomicity, and the
+    empty-account precondition; this handler just marshals the multipart
+    upload into bytes and the outcome into a response."""
     if confirm != "yes":
         return HTMLResponse(
             "Import requires explicit confirmation.", status_code=400

@@ -383,6 +383,38 @@ def test_double_progression_rep_build_increments(client):
     assert "7" in hint2
 
 
+def test_double_progression_advances_when_recent_sessions_differ(client):
+    """Ready trigger fires on two non-deload sessions all at RPE <= 7 within
+    range, even when they aren't identical — no stabilization gate. A user who
+    self-bumped reps between the two sessions still gets the next nudge rather
+    than being held for a confirmation session (#132, ADR-0011)."""
+    register(client)
+    gid = grip_type_id(client, "half crimp")
+    log_max_test(client, "left", "half crimp", 20, "2026-06-01", "40.0")
+
+    client.post(
+        "/profile/progression",
+        data={"grip_type_id": gid, "edge_mm": 20, "path": "double", "rep_min": 5, "rep_max": 10, "max_sets": 6},
+    )
+
+    # Two ready sessions that DIFFER: 40kg x 5, then a self-bumped 40kg x 6,
+    # both @ RPE 7.0. The old stabilization gate would hold here (reps differ);
+    # the spec trigger advances.
+    for s in range(1, 4):
+        save_work_set(client, "left", s, "40.0", "5", rpe="7.0", date="2026-07-01")
+    for s in range(1, 4):
+        save_work_set(client, "left", s, "40.0", "6", rpe="7.0", date="2026-07-03")
+
+    page = worksets_page(client, date="2026-07-05")
+    assert page.status_code == 200
+    hint = autoreg_hint_text(page.text, "left")
+    assert hint is not None
+    assert "+1 rep" in hint
+    assert "7" in hint
+    # Still a passive hint — steppers untouched.
+    assert current_set_weight_input(page.text, "left") == "40.0"
+
+
 def test_double_progression_ceiling_transitions_to_weight_build(client):
     """When double progression reaches rep_max ceiling across 2 sessions, transitions to weight increment."""
     register(client)
