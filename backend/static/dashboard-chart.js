@@ -18,6 +18,7 @@ document.addEventListener("DOMContentLoaded", () => {
       surface: "#ffffff",
       mark: "#e8532c",
       loadMark: "#2563eb",
+      intensityMark: "#2563eb",
       ink: "#68727f",
       grid: "#eef0f3",
       text: "#14181f",
@@ -28,6 +29,7 @@ document.addEventListener("DOMContentLoaded", () => {
       surface: "#14171e",
       mark: "#ef5a30",
       loadMark: "#60a5fa",
+      intensityMark: "#60a5fa",
       ink: "#93a4b4",
       grid: "#262c37",
       text: "#eceef1",
@@ -50,26 +52,75 @@ document.addEventListener("DOMContentLoaded", () => {
   // Selective direct label: the endpoint only, drawn as a small bold value
   // above the last point -- the one bit uPlot's built-in series/legend
   // doesn't give for free, so it's a draw hook rather than a plugin.
-  function endpointLabelPlugin(volumes) {
+  function trendEndpointLabelPlugin() {
     return {
       hooks: {
         draw: [
           (u) => {
-            if (!volumes.length) return;
-            const lastIndex = volumes.length - 1;
-            const xPos = u.valToPos(u.data[0][lastIndex], "x", true);
-            const yPos = u.valToPos(volumes[lastIndex], "y", true);
             const ctx = u.ctx;
+            const endpoints = [];
+            for (let sIdx = 1; sIdx < u.series.length; sIdx++) {
+              const sData = u.data[sIdx];
+              if (!sData || !sData.length) continue;
+              let lastIdx = -1;
+              for (let i = sData.length - 1; i >= 0; i--) {
+                if (sData[i] != null) {
+                  lastIdx = i;
+                  break;
+                }
+              }
+              if (lastIdx !== -1) {
+                const val = sData[lastIdx];
+                const scaleKey = u.series[sIdx].scale || "y";
+                const xPos = u.valToPos(u.data[0][lastIdx], "x", true);
+                const yPos = u.valToPos(val, scaleKey, true);
+                const label =
+                  scaleKey === "intensity"
+                    ? `${Math.round(val * 100)}%`
+                    : val % 1 === 0
+                      ? String(val)
+                      : val.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+                endpoints.push({
+                  xPos,
+                  yPos,
+                  label,
+                  color: u.series[sIdx].stroke || palette.text,
+                });
+              }
+            }
+
+            if (!endpoints.length) return;
+
             ctx.save();
-            ctx.fillStyle = palette.text;
             ctx.font = "bold 11px system-ui, sans-serif";
             ctx.textAlign = "center";
-            ctx.textBaseline = "bottom";
-            const label =
-              volumes[lastIndex] % 1 === 0
-                ? String(volumes[lastIndex])
-                : volumes[lastIndex].toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
-            ctx.fillText(label, xPos, yPos - 14);
+
+            if (endpoints.length === 2) {
+              const [ep1, ep2] = endpoints;
+              const closeX = Math.abs(ep1.xPos - ep2.xPos) < 30;
+              const closeY = Math.abs(ep1.yPos - ep2.yPos) < 18;
+              if (closeX && closeY) {
+                const [topEp, botEp] = ep1.yPos <= ep2.yPos ? [ep1, ep2] : [ep2, ep1];
+
+                ctx.fillStyle = topEp.color;
+                ctx.textBaseline = "bottom";
+                ctx.fillText(topEp.label, topEp.xPos, topEp.yPos - 12);
+
+                ctx.fillStyle = botEp.color;
+                ctx.textBaseline = "top";
+                ctx.fillText(botEp.label, botEp.xPos, botEp.yPos + 12);
+
+                ctx.restore();
+                return;
+              }
+            }
+
+            endpoints.forEach((ep) => {
+              ctx.fillStyle = ep.color;
+              ctx.textBaseline = "bottom";
+              ctx.fillText(ep.label, ep.xPos, ep.yPos - 12);
+            });
+
             ctx.restore();
           },
         ],
@@ -195,7 +246,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const charts = [];
 
-  // 1. TrainingVolume trend charts
+  // 1. TrainingVolume and Mean Intensity trend charts
   const dataEl = document.getElementById("volume-trend-data");
   if (dataEl) {
     let combos;
@@ -212,59 +263,144 @@ document.addEventListener("DOMContentLoaded", () => {
 
       combos.forEach((combo) => {
         const target = targetsByCombo.get(combo.combo);
-        if (!target || !combo.dates.length) return;
+        if (!target) return;
 
+        const volDates = combo.dates || [];
+        const volValues = combo.volumes || [];
+        const intensityDates = combo.intensity_dates || [];
+        const intensityValues = combo.intensities || [];
+
+        if (!volDates.length && !intensityDates.length) return;
+
+        const volMap = new Map();
         let lastVolTs = -Infinity;
-        const xs = combo.dates.map((d) => {
+        volDates.forEach((d, i) => {
           let ts = toUnixSeconds(d);
           if (ts <= lastVolTs) {
             ts = lastVolTs + 3600;
           }
           lastVolTs = ts;
-          return ts;
+          volMap.set(ts, volValues[i]);
         });
-        const ys = combo.volumes;
+
+        const intensityMap = new Map();
+        let lastIntensityTs = -Infinity;
+        intensityDates.forEach((d, i) => {
+          let ts = toUnixSeconds(d);
+          if (ts <= lastIntensityTs) {
+            ts = lastIntensityTs + 3600;
+          }
+          lastIntensityTs = ts;
+          intensityMap.set(ts, intensityValues[i]);
+        });
+
+        const allTimestamps = Array.from(
+          new Set([...volMap.keys(), ...intensityMap.keys()])
+        ).sort((a, b) => a - b);
+
+        const seriesOpts = [
+          {},
+          {
+            scale: "y",
+            label: "Volume",
+            stroke: palette.mark,
+            width: 2,
+            points: {
+              show: true,
+              size: 8,
+              stroke: palette.surface,
+              width: 2,
+              fill: palette.mark,
+            },
+            fill: AREA_FILL,
+            spanGaps: true,
+          },
+        ];
+        const chartData = [
+          allTimestamps,
+          allTimestamps.map((t) => (volMap.has(t) ? volMap.get(t) : null)),
+        ];
+
+        const hasIntensity = intensityDates.length > 0;
+        if (hasIntensity) {
+          seriesOpts.push({
+            scale: "intensity",
+            label: "Mean Intensity",
+            stroke: palette.intensityMark,
+            width: 2,
+            dash: [5, 4],
+            points: {
+              show: true,
+              size: 7,
+              stroke: palette.surface,
+              width: 2,
+              fill: palette.intensityMark,
+            },
+            spanGaps: true,
+          });
+          chartData.push(
+            allTimestamps.map((t) =>
+              intensityMap.has(t) ? intensityMap.get(t) : null
+            )
+          );
+        }
+
+        const scalesOpts = {
+          x: { time: true },
+          y: { auto: true },
+        };
+        if (hasIntensity) {
+          scalesOpts.intensity = {
+            auto: true,
+            range: (u, dataMin, dataMax) => [
+              0,
+              Math.max(1.0, dataMax != null ? dataMax + 0.05 : 1.0),
+            ],
+          };
+        }
+
+        const axesOpts = [
+          {
+            stroke: palette.ink,
+            grid: { show: false },
+            ticks: { show: false },
+            font: "10px system-ui, sans-serif",
+          },
+          {
+            scale: "y",
+            side: 3,
+            stroke: palette.ink,
+            grid: { show: true, stroke: palette.grid, width: 1 },
+            ticks: { show: false },
+            font: "10px system-ui, sans-serif",
+          },
+        ];
+        if (hasIntensity) {
+          axesOpts.push({
+            scale: "intensity",
+            side: 1,
+            stroke: palette.ink,
+            grid: { show: false },
+            ticks: { show: false },
+            font: "10px system-ui, sans-serif",
+            values: (u, vals) =>
+              vals.map((v) => (v != null ? `${Math.round(v * 100)}%` : "")),
+          });
+        }
 
         const opts = {
           width: target.clientWidth || 320,
           height: 220,
           padding: [24, 12, 8, 8],
-          scales: { x: { time: true } },
+          scales: scalesOpts,
           cursor: { show: false },
           legend: { show: false },
-          series: [
-            {},
-            {
-              stroke: palette.mark,
-              width: 2,
-              points: {
-                show: true,
-                size: 8,
-                stroke: palette.surface,
-                width: 2,
-                fill: palette.mark,
-              },
-              fill: AREA_FILL,
-            },
-          ],
-          axes: [
-            {
-              stroke: palette.ink,
-              grid: { show: false },
-              ticks: { show: false },
-              font: "10px system-ui, sans-serif",
-            },
-            {
-              stroke: palette.ink,
-              grid: { show: true, stroke: palette.grid, width: 1 },
-              ticks: { show: false },
-              font: "10px system-ui, sans-serif",
-            },
-          ],
-          plugins: [endpointLabelPlugin(ys)],
+          series: seriesOpts,
+          axes: axesOpts,
+          plugins: [trendEndpointLabelPlugin()],
         };
 
-        const chart = new uPlot(opts, [xs, ys], target);
+        const chart = new uPlot(opts, chartData, target);
         chart.root.style.background = palette.surface;
         chart.root.style.borderRadius = "10px";
         charts.push({ chart, target });

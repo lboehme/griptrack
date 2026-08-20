@@ -1099,7 +1099,8 @@ li.climb .meta { color: var(--muted); font-size: .87rem; margin-top: .15rem; }
   font-size: .92rem;
 }
 
-.asymmetry-legend {
+.asymmetry-legend,
+.trend-legend {
   display: flex;
   flex-wrap: wrap;
   gap: 1.25rem;
@@ -1107,30 +1108,35 @@ li.climb .meta { color: var(--muted); font-size: .87rem; margin-top: .15rem; }
   font-size: .875rem;
 }
 
-.asymmetry-legend-item {
+.asymmetry-legend-item,
+.trend-legend-item {
   display: inline-flex;
   align-items: center;
   gap: .45rem;
 }
 
-.asymmetry-legend-swatch {
+.asymmetry-legend-swatch,
+.trend-legend-swatch {
   display: inline-block;
   width: 16px;
   height: 3px;
   border-radius: 2px;
 }
 
-.asymmetry-legend-swatch.strength {
+.asymmetry-legend-swatch.strength,
+.trend-legend-swatch.volume {
   background: var(--accent);
 }
 
-.asymmetry-legend-swatch.load {
+.asymmetry-legend-swatch.load,
+.trend-legend-swatch.intensity {
   background: transparent;
   border-top: 2.5px dashed #2563eb;
 }
 
 @media (prefers-color-scheme: dark) {
-  .asymmetry-legend-swatch.load {
+  .asymmetry-legend-swatch.load,
+  .trend-legend-swatch.intensity {
     border-top-color: #60a5fa;
   }
 }
