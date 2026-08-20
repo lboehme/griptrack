@@ -255,6 +255,7 @@ def worksets_view(
         "saved": saved,
         "current_max": current_max,
         "default_reps": protocol.base_work_set_reps,
+        "default_rest_seconds": protocol.default_rest_seconds,
         "more_sets": row_count + 1,
         # Extra empty rows (from "add another set") can be dismissed again.
         "removable_to": row_count - 1 if row_count > needed_rows else None,

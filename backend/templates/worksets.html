@@ -3,7 +3,7 @@
 {% block content %}
 <div class="notice past-session-banner" data-session-date="{{ date }}" hidden>You're viewing a past session — edits change your history.</div>
 
-<div id="focus-screen" data-unit="{{ user.unit_pref }}" data-rest-seconds="180">
+<div id="focus-screen" data-unit="{{ user.unit_pref }}" data-rest-seconds="{{ default_rest_seconds }}">
 
 <section class="focus-header">
   <div class="focus-header-row">

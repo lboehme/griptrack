@@ -2,12 +2,19 @@ from datetime import date as date_type
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from backend import archive, auth, training_log
 from backend.db import get_session
-from backend.limits import MAX_NAME_LENGTH, MAX_WEIGHT
-from backend.models import BodyWeightLog, User
+from backend.limits import (
+    MAX_NAME_LENGTH,
+    MAX_REP_TARGET,
+    MAX_REST_SECONDS,
+    MAX_WEIGHT,
+    MIN_REP_TARGET,
+    MIN_REST_SECONDS,
+)
+from backend.models import BodyWeightLog, TrainingProtocol, User
 from backend.templating import templates
 
 router = APIRouter()
@@ -24,6 +31,7 @@ def profile(
         "profile.html",
         {
             "user": user,
+            "protocol": training_log.get_protocol(session, user),
             "current_bodyweight": training_log.bodyweight_at(session, user),
             "today": date_type.today().isoformat(),
         },
@@ -66,6 +74,31 @@ def update_profile(
     session.add(user)
     session.commit()
     return RedirectResponse("/profile", status_code=303)
+
+
+@router.post("/profile/protocol")
+def update_protocol(
+    base_work_set_reps: int = Form(ge=MIN_REP_TARGET, le=MAX_REP_TARGET),
+    default_rest_seconds: int = Form(ge=MIN_REST_SECONDS, le=MAX_REST_SECONDS),
+    user: User = Depends(auth.current_user),
+    session: Session = Depends(get_session),
+):
+    protocol = session.exec(
+        select(TrainingProtocol).where(TrainingProtocol.user_id == user.id)
+    ).first()
+    if protocol is None:
+        protocol = TrainingProtocol(
+            user_id=user.id,
+            base_work_set_reps=base_work_set_reps,
+            default_rest_seconds=default_rest_seconds,
+        )
+    else:
+        protocol.base_work_set_reps = base_work_set_reps
+        protocol.default_rest_seconds = default_rest_seconds
+    session.add(protocol)
+    session.commit()
+    return RedirectResponse("/profile", status_code=303)
+
 
 
 @router.get("/profile/export")

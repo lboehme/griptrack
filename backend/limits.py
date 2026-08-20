@@ -15,10 +15,19 @@ MAX_SET_NUMBER = 100
 MAX_EDGE_MM = 1000
 MAX_PLATE_WEIGHT = 1000
 MAX_PLATE_COUNT = 100
-# A day realistically holds a handful of sessions (AM/PM, or a rare third);
-# 20 is generous headroom while still bounding the session_number route
-# params against absurd values.
 MAX_SESSION_NUMBER = 20
+
+# Training protocol settings (rep target and rest duration, #127)
+MIN_REP_TARGET = 1
+MAX_REP_TARGET = 30
+MIN_BASE_WORK_SET_REPS = MIN_REP_TARGET
+MAX_BASE_WORK_SET_REPS = MAX_REP_TARGET
+
+MIN_REST_SECONDS = 15
+MAX_REST_SECONDS = 1800
+MIN_DEFAULT_REST_SECONDS = MIN_REST_SECONDS
+MAX_DEFAULT_REST_SECONDS = MAX_REST_SECONDS
+
 
 # Import (backend.archive, #102, #120) is an untrusted-file ingress point:
 # a personal instrument's own export archive is tiny, so these bounds are
