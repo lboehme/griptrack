@@ -1081,7 +1081,8 @@ li.climb .meta { color: var(--muted); font-size: .87rem; margin-top: .15rem; }
 
 /* ---------- dashboard ---------- */
 
-.trend-chart {
+.trend-chart,
+.asymmetry-chart {
   display: block;
   width: 100%;
   min-height: 220px;
@@ -1090,11 +1091,62 @@ li.climb .meta { color: var(--muted); font-size: .87rem; margin-top: .15rem; }
   margin: .3rem 0 .5rem;
 }
 
-.volume-list li {
+.volume-list li,
+.asymmetry-list li {
   display: flex;
   justify-content: space-between;
   padding: .3rem 0;
   font-size: .92rem;
+}
+
+.asymmetry-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  margin: .2rem 0 .8rem;
+  font-size: .875rem;
+}
+
+.asymmetry-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+}
+
+.asymmetry-legend-swatch {
+  display: inline-block;
+  width: 16px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.asymmetry-legend-swatch.strength {
+  background: var(--accent);
+}
+
+.asymmetry-legend-swatch.load {
+  background: transparent;
+  border-top: 2.5px dashed #2563eb;
+}
+
+@media (prefers-color-scheme: dark) {
+  .asymmetry-legend-swatch.load {
+    border-top-color: #60a5fa;
+  }
+}
+
+.asymmetry-series-label {
+  margin: .5rem 0 .2rem;
+  font-size: .82rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.asymmetry-pair:not(:last-child) {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.2rem;
+  border-bottom: 1px solid var(--border);
 }
 
 .pill.plateau-flag {
@@ -1104,7 +1156,9 @@ li.climb .meta { color: var(--muted); font-size: .87rem; margin-top: .15rem; }
   margin-left: .4rem;
 }
 
-.pill.overtraining-flag {
+.pill.overtraining-flag,
+.pill.asymmetry-warning-flag,
+.pill.asymmetry-flag {
   color: #a05a00;
   background: color-mix(in srgb, #e8a13c 18%, transparent);
   border-color: transparent;
@@ -1129,7 +1183,9 @@ li.climb .meta { color: var(--muted); font-size: .87rem; margin-top: .15rem; }
 }
 
 @media (prefers-color-scheme: dark) {
-  .pill.overtraining-flag { color: #f3b95f; }
+  .pill.overtraining-flag,
+  .pill.asymmetry-warning-flag,
+  .pill.asymmetry-flag { color: #f3b95f; }
   .pill.grade-unparsed { color: #f3b95f; }
   .grade-warning { color: #f3b95f; }
 }

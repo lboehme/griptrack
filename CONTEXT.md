@@ -197,6 +197,23 @@ interval before it was shorter than the user's typical recent rest —
 requires both signals together, not either alone. A heuristic warning, not
 a diagnosed state; exact thresholds are tunable.
 
+**AsymmetryGap**:
+The signed percentage difference between left and right hand performance for a
+given (grip_type, edge_mm) combination: `(left - right) / max(left, right) * 100.0`.
+Computed for both strength (CurrentMax from MaxWeightTests or WorkSets) and
+training load (TrainingVolume per TrainingSession). Positive values indicate
+left-hand dominance; negative values indicate right-hand dominance.
+_Avoid_: Bilateral difference, asymmetry ratio
+
+**AsymmetryWarning**:
+A dashboard flag on a bilateral (grip_type, edge_mm) pair when training load
+asymmetry drifts significantly from the user's personal baseline (`recent - baseline >= 5.0`
+percentage points) or reaches an elevated absolute threshold (`recent >= 15.0%`).
+Requires at least 6 non-deload bilateral sessions (3 recent + minimum 3 baseline) so
+thin data remains silent. Detects meaningful widening of imbalances without false-alarming
+on natural limb dominance (ADR-0010). Narrowing gaps never warn.
+_Avoid_: Injury warning, imbalance alarm
+
 **TrainingProtocol**:
 The ramp percentages (50/65/80/90% of CurrentMax) and base work-set rep
 count (5) applied to every TrainingSession. Fixed and shared by all users
