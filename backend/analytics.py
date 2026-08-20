@@ -4,16 +4,17 @@ from datetime import date as date_type
 
 from sqlmodel import Session, select
 
-from backend import training_log
+from backend import plates, training_log
 from backend.models import (
     Climb,
     MaxWeightTest,
+    SessionMaxEstimate,
     TrainingSession,
     User,
     WorkSet,
 )
 
-# Heuristic tuning (see CONTEXT.md: Plateau / OvertrainingWarning / AsymmetryWarning).
+# Heuristic tuning (see CONTEXT.md: Plateau / OvertrainingWarning / AsymmetryWarning / Nudges).
 # Deliberately simple: revisit once real data exists.
 PLATEAU_RECENT_SESSIONS = 4
 OVERTRAINING_TRAILING_SESSIONS = 4
@@ -23,6 +24,8 @@ ASYM_BASELINE_SESSIONS = 6
 ASYM_MIN_BASELINE_SESSIONS = 3
 ASYM_DRIFT_PP = 5.0
 ASYM_BACKSTOP_PCT = 15.0
+RETEST_MIN_WEEKS = 8
+ESTIMATE_NUDGE_COUNT = 3
 
 
 # Standard Font -> V-scale conversion (approximate, as all such tables are).
@@ -401,4 +404,140 @@ def dashboard_view(session: Session, user: User) -> dict:
         "asymmetry_pairs": asymmetry_pairs,
         "asymmetry_chart_data": asymmetry_chart_data,
     }
+
+
+def retest_nudge(
+    session: Session,
+    user: User,
+    hand: str,
+    grip_type_id: int,
+    edge_mm: int,
+    as_of: date_type | None = None,
+) -> bool:
+    """Retest nudge (ADR-0011): fires when compute_current_max exceeds the last
+    MaxWeightTest.weight by >= one loadable increment (via plates.loadable_ladder)
+    AND it has been >= RETEST_MIN_WEEKS (56 days) since that test's date.
+    Suggests a guided MaxWeightTest; never auto-adjusts CurrentMax."""
+    test = training_log.latest_max_test(
+        session, user, hand, grip_type_id, edge_mm, as_of=as_of
+    )
+    if test is None:
+        return False
+
+    ref_date = as_of if as_of is not None else date_type.today()
+    if (ref_date - test.date).days < RETEST_MIN_WEEKS * 7:
+        return False
+
+    current_max = training_log.compute_current_max(
+        session, user, hand, grip_type_id, edge_mm, as_of=as_of
+    )
+    if current_max is None or current_max <= test.weight:
+        return False
+
+    inventory = plates.inventory_for(session, user)
+    ladder = plates.loadable_ladder(inventory)
+    test_cents = int(round(test.weight * 100))
+    next_rung = next(
+        (r for r in ladder if int(round(r * 100)) > test_cents), None
+    )
+    if next_rung is None:
+        return False
+
+    curr_cents = int(round(current_max * 100))
+    next_cents = int(round(next_rung * 100))
+    return curr_cents >= next_cents
+
+
+def estimate_nudge(
+    session: Session,
+    user: User,
+    hand: str,
+    grip_type_id: int,
+    edge_mm: int,
+    as_of: date_type | None = None,
+) -> bool:
+    """Estimate nudge (ADR-0011): fires when a combo has NO MaxWeightTest but has
+    accumulated a SessionMaxEstimate across >= ESTIMATE_NUDGE_COUNT (3) distinct
+    sessions. Silent once a real test exists."""
+    test = training_log.latest_max_test(
+        session, user, hand, grip_type_id, edge_mm, as_of=as_of
+    )
+    if test is not None:
+        return False
+
+    query = (
+        select(SessionMaxEstimate.training_session_id)
+        .join(TrainingSession, SessionMaxEstimate.training_session_id == TrainingSession.id)  # type: ignore[arg-type]
+        .where(TrainingSession.user_id == user.id)
+        .where(SessionMaxEstimate.hand == hand)
+        .where(SessionMaxEstimate.grip_type_id == grip_type_id)
+        .where(SessionMaxEstimate.edge_mm == edge_mm)
+        .distinct()
+    )
+    if as_of is not None:
+        query = query.where(TrainingSession.date <= as_of)
+    session_ids = session.exec(query).all()
+    return len(session_ids) >= ESTIMATE_NUDGE_COUNT
+
+
+def session_start_nudge(
+    session: Session,
+    user: User,
+    grip_type_id: int,
+    edge_mm: int,
+    date: date_type,
+    hands: list[str] | None = None,
+) -> dict | None:
+    """Session-start banner (ADR-0011): at most ONE banner rendered at session
+    start for the combo about to be trained (retest wins if both qualify).
+    Dismissible with one tap, never a modal, ephemeral (no dismissal-state table)."""
+    if hands is None:
+        hands = training_log.hands_for(user, None)
+
+    retest_hands = [
+        h
+        for h in hands
+        if retest_nudge(session, user, h, grip_type_id, edge_mm, as_of=date)
+    ]
+    if retest_hands:
+        if len(retest_hands) == 1:
+            msg = (
+                f"Current max on your {retest_hands[0]} hand exceeds your last test "
+                f"({RETEST_MIN_WEEKS}+ weeks ago). Time for a fresh guided test?"
+            )
+        else:
+            msg = (
+                f"Current max exceeds your last test ({RETEST_MIN_WEEKS}+ weeks ago). "
+                "Time for a fresh guided test?"
+            )
+        return {
+            "type": "retest",
+            "hands": retest_hands,
+            "message": msg,
+        }
+
+    estimate_hands = [
+        h
+        for h in hands
+        if estimate_nudge(session, user, h, grip_type_id, edge_mm, as_of=date)
+    ]
+    if estimate_hands:
+        if len(estimate_hands) == 1:
+            msg = (
+                f"You've estimated your {estimate_hands[0]} hand across {ESTIMATE_NUDGE_COUNT} "
+                "sessions. Run a guided max test for a calibrated baseline?"
+            )
+        else:
+            msg = (
+                f"You've estimated this combination across {ESTIMATE_NUDGE_COUNT} "
+                "sessions. Run a guided max test for a calibrated baseline?"
+            )
+        return {
+            "type": "estimate",
+            "hands": estimate_hands,
+            "message": msg,
+        }
+
+    return None
+
 

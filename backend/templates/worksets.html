@@ -3,6 +3,16 @@
 {% block content %}
 <div class="notice past-session-banner" data-session-date="{{ date }}" hidden>You're viewing a past session — edits change your history.</div>
 
+{% if nudge %}
+<div class="notice nudge-banner nudge-{{ nudge.type }}" data-nudge="{{ nudge.type }}">
+  <div class="nudge-content">
+    <span>{{ nudge.message }}</span>
+    <a class="nudge-link btn btn-secondary" href="/max-tests/guided?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}{% if nudge.hands|length == 1 %}&amp;hand={{ nudge.hands[0] }}{% endif %}">Run guided max test</a>
+  </div>
+  <button type="button" class="nudge-dismiss-btn" aria-label="Dismiss" onclick="this.closest('.nudge-banner').remove()">✕</button>
+</div>
+{% endif %}
+
 <div id="focus-screen" data-unit="{{ user.unit_pref }}" data-rest-seconds="180">
 
 <section class="focus-header">
