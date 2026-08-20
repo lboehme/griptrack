@@ -573,3 +573,150 @@ def test_auth_name_limit_is_enforced(client):
     resp = register(client, name="A" * (MAX_NAME_LENGTH + 1))
     assert resp.status_code == 422
 
+
+def test_training_protocol_bounds_are_enforced(client):
+    from backend.limits import (
+        MAX_REP_TARGET,
+        MAX_REST_SECONDS,
+        MIN_REP_TARGET,
+        MIN_REST_SECONDS,
+    )
+
+    register(client)
+
+    # Rep target out of bounds
+    below_reps = client.post(
+        "/profile/protocol",
+        data={"base_work_set_reps": MIN_REP_TARGET - 1, "default_rest_seconds": 180},
+        follow_redirects=False,
+    )
+    assert below_reps.status_code == 422
+
+    above_reps = client.post(
+        "/profile/protocol",
+        data={"base_work_set_reps": MAX_REP_TARGET + 1, "default_rest_seconds": 180},
+        follow_redirects=False,
+    )
+    assert above_reps.status_code == 422
+
+    # Rest seconds out of bounds
+    below_rest = client.post(
+        "/profile/protocol",
+        data={"base_work_set_reps": 5, "default_rest_seconds": MIN_REST_SECONDS - 1},
+        follow_redirects=False,
+    )
+    assert below_rest.status_code == 422
+
+    above_rest = client.post(
+        "/profile/protocol",
+        data={"base_work_set_reps": 5, "default_rest_seconds": MAX_REST_SECONDS + 1},
+        follow_redirects=False,
+    )
+    assert above_rest.status_code == 422
+
+    # In bounds limits pass
+    min_pass = client.post(
+        "/profile/protocol",
+        data={"base_work_set_reps": MIN_REP_TARGET, "default_rest_seconds": MIN_REST_SECONDS},
+        follow_redirects=False,
+    )
+    assert min_pass.status_code == 303
+
+    max_pass = client.post(
+        "/profile/protocol",
+        data={"base_work_set_reps": MAX_REP_TARGET, "default_rest_seconds": MAX_REST_SECONDS},
+        follow_redirects=False,
+    )
+    assert max_pass.status_code == 303
+
+
+
+
+def test_progression_settings_bounds_are_enforced(client):
+    from backend.limits import (
+        MAX_MAX_SETS,
+        MAX_REP_MAX,
+        MAX_REP_MIN,
+        MIN_MAX_SETS,
+        MIN_REP_MAX,
+        MIN_REP_MIN,
+    )
+
+    register(client)
+
+    # rep_min out of bounds
+    resp = client.post(
+        "/profile/progression",
+        data={"path": "weight", "rep_min": MIN_REP_MIN - 1, "rep_max": 5, "max_sets": 6},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 422
+
+    resp = client.post(
+        "/profile/progression",
+        data={"path": "weight", "rep_min": MAX_REP_MIN + 1, "rep_max": 5, "max_sets": 6},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 422
+
+    # rep_max out of bounds
+    resp = client.post(
+        "/profile/progression",
+        data={"path": "weight", "rep_min": 5, "rep_max": MIN_REP_MAX - 1, "max_sets": 6},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 422
+
+    resp = client.post(
+        "/profile/progression",
+        data={"path": "weight", "rep_min": 5, "rep_max": MAX_REP_MAX + 1, "max_sets": 6},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 422
+
+    # max_sets out of bounds
+    resp = client.post(
+        "/profile/progression",
+        data={"path": "weight", "rep_min": 5, "rep_max": 5, "max_sets": MIN_MAX_SETS - 1},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 422
+
+    resp = client.post(
+        "/profile/progression",
+        data={"path": "weight", "rep_min": 5, "rep_max": 5, "max_sets": MAX_MAX_SETS + 1},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 422
+
+    # rep_min > rep_max rejected
+    resp = client.post(
+        "/profile/progression",
+        data={"path": "weight", "rep_min": 8, "rep_max": 5, "max_sets": 6},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 400
+
+    # invalid path rejected
+    resp = client.post(
+        "/profile/progression",
+        data={"path": "invalid_path", "rep_min": 5, "rep_max": 5, "max_sets": 6},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 400
+
+    # unknown grip_type_id rejected with 404
+    resp = client.post(
+        "/profile/progression",
+        data={"grip_type_id": 99999, "edge_mm": 20, "path": "weight", "rep_min": 5, "rep_max": 5, "max_sets": 6},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 404
+
+    # valid bounds pass
+    resp = client.post(
+        "/profile/progression",
+        data={"path": "weight", "rep_min": MIN_REP_MIN, "rep_max": MAX_REP_MAX, "max_sets": MAX_MAX_SETS},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303

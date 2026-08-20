@@ -71,7 +71,7 @@ def log_max_test(client, hand, grip, edge_mm, date, weight):
 
 def save_work_set(
     client, hand, set_number, weight, reps,
-    date="2026-07-04", rpe=None, grip="half crimp", edge_mm=20,
+    date="2026-07-04", rpe=None, grip="half crimp", edge_mm=20, session_number=None,
 ):
     data = {
         "grip_type_id": grip_type_id(client, grip),
@@ -84,6 +84,8 @@ def save_work_set(
     }
     if rpe is not None:
         data["rpe"] = rpe
+    if session_number is not None:
+        data["session_number"] = session_number
     return client.post("/session/workset", data=data, follow_redirects=True)
 
 

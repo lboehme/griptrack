@@ -681,6 +681,16 @@ input[type="number"]::-webkit-outer-spin-button {
 .hand-badge-right { background: var(--accent-right); }
 
 .hand-label { font-size: .88rem; font-weight: 700; }
+.autoreg-hint {
+  margin-left: auto;
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  padding: .2rem .55rem;
+  border-radius: 999px;
+}
+
 
 .weight-stepper {
   display: flex;
@@ -1099,7 +1109,8 @@ li.climb .meta { color: var(--muted); font-size: .87rem; margin-top: .15rem; }
   font-size: .92rem;
 }
 
-.asymmetry-legend {
+.asymmetry-legend,
+.trend-legend {
   display: flex;
   flex-wrap: wrap;
   gap: 1.25rem;
@@ -1107,30 +1118,35 @@ li.climb .meta { color: var(--muted); font-size: .87rem; margin-top: .15rem; }
   font-size: .875rem;
 }
 
-.asymmetry-legend-item {
+.asymmetry-legend-item,
+.trend-legend-item {
   display: inline-flex;
   align-items: center;
   gap: .45rem;
 }
 
-.asymmetry-legend-swatch {
+.asymmetry-legend-swatch,
+.trend-legend-swatch {
   display: inline-block;
   width: 16px;
   height: 3px;
   border-radius: 2px;
 }
 
-.asymmetry-legend-swatch.strength {
+.asymmetry-legend-swatch.strength,
+.trend-legend-swatch.volume {
   background: var(--accent);
 }
 
-.asymmetry-legend-swatch.load {
+.asymmetry-legend-swatch.load,
+.trend-legend-swatch.intensity {
   background: transparent;
   border-top: 2.5px dashed #2563eb;
 }
 
 @media (prefers-color-scheme: dark) {
-  .asymmetry-legend-swatch.load {
+  .asymmetry-legend-swatch.load,
+  .trend-legend-swatch.intensity {
     border-top-color: #60a5fa;
   }
 }
@@ -1228,6 +1244,62 @@ code.invite-code {
   background: var(--surface-2);
   border: 1.5px dashed color-mix(in srgb, var(--accent) 45%, var(--border));
   border-radius: 12px;
+}
+
+/* ---------- session-start nudge banners (issue #130) ---------- */
+
+.nudge-banner {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-bottom: 1rem;
+}
+
+.nudge-content {
+  display: flex;
+  flex-direction: column;
+  gap: .4rem;
+  flex: 1 1 auto;
+}
+
+.nudge-content .nudge-link {
+  display: inline-flex;
+  width: auto;
+  min-height: 2.2rem;
+  padding: .25rem .85rem;
+  font-size: .85rem;
+  align-self: flex-start;
+  margin-top: .2rem;
+}
+
+.nudge-dismiss-btn {
+  flex: none;
+  width: 2.75rem; /* >=44px touch target (CLAUDE.md) */
+  height: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0;
+  display: grid;
+  place-content: center;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  box-shadow: none;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.nudge-dismiss-btn:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.nudge-dismiss-btn:active {
+  transform: scale(.92);
 }
 
 .muted { color: var(--muted); }

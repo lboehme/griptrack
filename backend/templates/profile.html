@@ -49,6 +49,117 @@
 </div>
 
 <div class="card">
+<h3>Configure training sessions</h3>
+<form method="post" action="/profile/protocol">
+  <div class="form-row">
+    <label>Work-set rep target
+      <input type="number" name="base_work_set_reps" value="{{ protocol.base_work_set_reps }}" min="1" max="30" required>
+    </label>
+    <label>Default rest (seconds)
+      <input type="number" name="default_rest_seconds" value="{{ protocol.default_rest_seconds }}" min="15" max="1800" required>
+    </label>
+  </div>
+  <button type="submit">Save session defaults</button>
+</form>
+
+<h4 style="margin-top:1.5rem;margin-bottom:.5rem">Default progression path</h4>
+<p class="muted" style="margin-top:0;font-size:.88rem">Controls what the autoregulation suggestion advances when you hit your target easily (ADR-0012).</p>
+<form method="post" action="/profile/progression">
+  <div class="form-row">
+    <label>Progression path
+      <select name="path">
+        <option value="weight" {% if default_progression.path == "weight" %}selected{% endif %}>Weight — add loadable increment (default)</option>
+        <option value="set" {% if default_progression.path == "set" %}selected{% endif %}>Set — add a set up to cap</option>
+        <option value="double" {% if default_progression.path == "double" %}selected{% endif %}>Double — build reps across range, then weight</option>
+      </select>
+    </label>
+    <label>Rep min
+      <input type="number" name="rep_min" value="{{ default_progression.rep_min }}" min="1" max="30" required>
+    </label>
+    <label>Rep max
+      <input type="number" name="rep_max" value="{{ default_progression.rep_max }}" min="1" max="30" required>
+    </label>
+    <label>Max sets
+      <input type="number" name="max_sets" value="{{ default_progression.max_sets }}" min="1" max="30" required>
+    </label>
+  </div>
+  <button type="submit">Save default progression</button>
+</form>
+
+<h4 style="margin-top:1.5rem;margin-bottom:.5rem">Per-combination progression overrides</h4>
+{% if combo_progressions %}
+<table class="combo-progressions-table" style="width:100%;margin-bottom:1rem;font-size:.9rem">
+  <thead>
+    <tr>
+      <th>Combination</th>
+      <th>Path</th>
+      <th>Rep range</th>
+      <th>Max sets</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for cp in combo_progressions %}
+    <tr>
+      <td><strong>{{ grip_names.get(cp.grip_type_id, "Unknown") }}</strong> · {{ cp.edge_mm }} mm {{ grip_dimension_names.get(cp.grip_type_id, "edge depth") }}</td>
+      <td>{{ cp.path }}</td>
+      <td>{{ cp.rep_min }}–{{ cp.rep_max }}</td>
+      <td>{{ cp.max_sets }}</td>
+      <td>
+        <form method="post" action="/profile/progression/delete" style="display:inline">
+          <input type="hidden" name="grip_type_id" value="{{ cp.grip_type_id }}">
+          <input type="hidden" name="edge_mm" value="{{ cp.edge_mm }}">
+          <button type="submit" class="btn btn-secondary" style="padding:.2rem .5rem;font-size:.8rem">Remove override</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted" style="font-size:.88rem">No combination overrides configured. All combinations use your default progression.</p>
+{% endif %}
+
+<details style="margin-top:.5rem">
+  <summary style="cursor:pointer;font-weight:600;font-size:.88rem">＋ Add combination override</summary>
+  <form method="post" action="/profile/progression" style="margin-top:.75rem">
+    <div class="form-row">
+      <label>Grip type
+        <select name="grip_type_id" required>
+          {% for g in grip_types %}
+          <option value="{{ g.id }}">{{ g.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Dimension (mm)
+        <input type="number" name="edge_mm" min="1" max="1000" placeholder="e.g. 20" required>
+      </label>
+    </div>
+    <div class="form-row">
+      <label>Progression path
+        <select name="path">
+          <option value="weight">Weight — add loadable increment</option>
+          <option value="set">Set — add a set up to cap</option>
+          <option value="double">Double — build reps across range, then weight</option>
+        </select>
+      </label>
+      <label>Rep min
+        <input type="number" name="rep_min" value="5" min="1" max="30" required>
+      </label>
+      <label>Rep max
+        <input type="number" name="rep_max" value="5" min="1" max="30" required>
+      </label>
+      <label>Max sets
+        <input type="number" name="max_sets" value="6" min="1" max="30" required>
+      </label>
+    </div>
+    <button type="submit">Save combination override</button>
+  </form>
+</details>
+
+</div>
+
+<div class="card">
 <h3>Equipment</h3>
 <a class="btn btn-secondary" href="/plates">Manage plate inventory →</a>
 </div>

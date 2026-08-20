@@ -377,3 +377,174 @@ def test_csv_export_includes_session_data_isolated_per_user(client):
 def test_unauthenticated_export_is_rejected(client):
     response = client.get("/profile/export", follow_redirects=False)
     assert response.status_code == 401
+
+
+def test_training_protocol_defaults_on_profile_page(client):
+    register(client, "lifter@example.com", "test-pw-1234")
+
+    profile = client.get("/profile")
+
+    assert profile.status_code == 200
+    assert "Configure training sessions" in profile.text
+    assert 'name="base_work_set_reps"' in profile.text
+    assert 'value="5"' in profile.text
+    assert 'name="default_rest_seconds"' in profile.text
+    assert 'value="180"' in profile.text
+
+
+def test_training_protocol_upsert(client):
+    register(client, "lifter@example.com", "test-pw-1234")
+
+    # Initial upsert creates user protocol row
+    response = client.post(
+        "/profile/protocol",
+        data={"base_work_set_reps": "6", "default_rest_seconds": "120"},
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert 'value="6"' in response.text
+    assert 'value="120"' in response.text
+
+    # Updating updates the existing row
+    response2 = client.post(
+        "/profile/protocol",
+        data={"base_work_set_reps": "7", "default_rest_seconds": "90"},
+        follow_redirects=True,
+    )
+    assert response2.status_code == 200
+    assert 'value="7"' in response2.text
+    assert 'value="90"' in response2.text
+
+
+def test_training_protocol_per_user_isolation(client):
+    from tests.helpers import login
+
+    register(client, "founder@example.com", "test-pw-1234")
+    client.post(
+        "/profile/protocol",
+        data={"base_work_set_reps": "8", "default_rest_seconds": "240"},
+        follow_redirects=True,
+    )
+
+    register_second_user(client, "friend@example.com", "test-pw-1234")
+
+    # Friend still sees the global defaults
+    friend_profile = client.get("/profile")
+    assert 'value="5"' in friend_profile.text
+    assert 'value="180"' in friend_profile.text
+
+    # Friend configures their own protocol
+    client.post(
+        "/profile/protocol",
+        data={"base_work_set_reps": "4", "default_rest_seconds": "60"},
+        follow_redirects=True,
+    )
+    friend_profile2 = client.get("/profile")
+    assert 'value="4"' in friend_profile2.text
+    assert 'value="60"' in friend_profile2.text
+
+    # Founder's protocol is untouched
+    client.post("/logout")
+    login(client, "founder@example.com", "test-pw-1234")
+    founder_profile = client.get("/profile")
+    assert 'value="8"' in founder_profile.text
+    assert 'value="240"' in founder_profile.text
+
+
+def test_worksets_view_reflects_user_protocol_rep_target(client):
+    from tests.helpers import current_set_field, get_session_page
+
+    register(client, "lifter@example.com", "test-pw-1234")
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "40")
+    log_max_test(client, "right", "half crimp", 20, "2026-07-01", "40")
+    client.post(
+        "/profile/protocol",
+        data={"base_work_set_reps": "8", "default_rest_seconds": "150"},
+        follow_redirects=True,
+    )
+
+    gid = grip_type_id(client, "half crimp")
+    worksets = get_session_page(
+        client,
+        "/session/worksets",
+        params={"grip_type_id": gid, "edge_mm": 20, "date": "2026-07-04"},
+    )
+    assert worksets.status_code == 200
+    assert current_set_field(worksets.text, "left", "reps") == "8"
+    assert current_set_field(worksets.text, "right", "reps") == "8"
+    assert 'data-rest-seconds="150"' in worksets.text
+
+
+
+
+def test_default_progression_settings_on_profile_page(client):
+    register(client, "lifter@example.com", "test-pw-1234")
+
+    profile = client.get("/profile")
+
+    assert profile.status_code == 200
+    assert "Progression" in profile.text or "progression" in profile.text
+    assert "weight" in profile.text
+
+
+def test_update_user_default_progression_settings(client):
+    register(client, "lifter@example.com", "test-pw-1234")
+
+    response = client.post(
+        "/profile/progression",
+        data={"path": "double", "rep_min": "5", "rep_max": "10", "max_sets": "8"},
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert "double" in response.text
+
+
+def test_per_combo_progression_settings_override(client):
+    register(client, "lifter@example.com", "test-pw-1234")
+    gid = grip_type_id(client, "half crimp")
+
+    # Set per-combo override for half crimp 20mm
+    response = client.post(
+        "/profile/progression",
+        data={
+            "grip_type_id": gid,
+            "edge_mm": 20,
+            "path": "set",
+            "rep_min": "6",
+            "rep_max": "6",
+            "max_sets": "5",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert "half crimp" in response.text
+    assert "set" in response.text
+
+
+def test_progression_settings_per_user_isolation(client):
+    from tests.helpers import login
+
+    register(client, "founder@example.com", "test-pw-1234")
+    client.post(
+        "/profile/progression",
+        data={"path": "double", "rep_min": "4", "rep_max": "8", "max_sets": "5"},
+        follow_redirects=True,
+    )
+
+    register_second_user(client, "friend@example.com", "test-pw-1234")
+    friend_profile = client.get("/profile")
+    # Friend still has default weight progression
+    assert "double" not in friend_profile.text or "weight" in friend_profile.text
+
+    # Friend configures their own progression
+    client.post(
+        "/profile/progression",
+        data={"path": "set", "rep_min": "3", "rep_max": "3", "max_sets": "4"},
+        follow_redirects=True,
+    )
+
+    # Founder profile is untouched
+    client.post("/logout")
+    login(client, "founder@example.com", "test-pw-1234")
+    founder_profile = client.get("/profile")
+    assert "double" in founder_profile.text
