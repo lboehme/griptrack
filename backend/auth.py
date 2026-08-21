@@ -100,16 +100,31 @@ class LoginRateLimiter:
         self._failures.setdefault(key, []).append(time.monotonic())
 
 
-def current_user(
+def optional_user(
     request: Request, session: Session = Depends(get_session)
-) -> User:
+) -> User | None:
+    """The logged-in User for this request, or None when unauthenticated or
+    the session was revoked (session_version bumped by a password reset).
+
+    The single place raw session-cookie internals are read, so cookie
+    handling stays inside backend.auth and routers stay shallow adapters —
+    both current_user (the gate) and the anonymous home page resolve their
+    user through here. Guards the None case explicitly: session.get(User,
+    None) is a fully-NULL primary-key lookup SQLAlchemy warns "may raise an
+    error in a future release", and every unauthenticated request reaches
+    this line.
+    """
     user_id = request.session.get("user_id")
-    # Guard the None case explicitly: session.get(User, None) is a fully-NULL
-    # primary-key lookup, which SQLAlchemy warns "may raise an error in a
-    # future release" — and this is the gate every unauthenticated request
-    # passes through.
-    user = session.get(User, user_id) if user_id is not None else None
+    if user_id is None:
+        return None
+    user = session.get(User, user_id)
     if user is None or request.session.get("session_version") != user.session_version:
+        return None
+    return user
+
+
+def current_user(user: User | None = Depends(optional_user)) -> User:
+    if user is None:
         raise HTTPException(status_code=401, detail="Not logged in")
     return user
 
