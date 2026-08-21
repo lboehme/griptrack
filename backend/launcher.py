@@ -1,6 +1,7 @@
 """On-device launch/bootstrap helper (#96).
 
-This is the in-process analog of `docker-entrypoint.sh` for the Android
+This is the in-process analog of the container entrypoint the legacy web
+deploy used to ship (`docker-entrypoint.sh`, since removed) for the Android
 build (#93/#97/#98): given an app-private directory, it sets the DB path,
 runs Alembic migrations to head, provisions a persistent session secret,
 and serves the *unchanged* `backend.main` app on a fixed loopback
@@ -11,8 +12,8 @@ pure-Python entry point the Chaquopy shell will call at app start.
 Deviation from the container entrypoint on purpose: no pre-migration
 backup step. That safety net exists for a real deploy where a bad
 migration could corrupt the one production volume; on a fresh on-device
-DB there's nothing yet to protect, and `docker-entrypoint.sh` itself skips
-the backup in exactly that case (empty/no current revision).
+DB there's nothing yet to protect, and the old container entrypoint itself
+skipped the backup in exactly that case (empty/no current revision).
 """
 
 from __future__ import annotations
@@ -121,7 +122,7 @@ def run_migrations(database_url: str, *, project_root: Path = PROJECT_ROOT) -> N
 def bootstrap(app_dir: Path | str, *, project_root: Path = PROJECT_ROOT) -> str:
     """Run the full on-device bootstrap sequence against app_dir.
 
-    Mirrors docker-entrypoint.sh: resolve + set the DB path, migrate to
+    Mirrors the old container entrypoint: resolve + set the DB path, migrate to
     head, provision the persistent session secret. Also guarantees
     non-production cookie mode and no bootstrap-token gate, regardless of
     whatever the ambient environment happened to have set — the on-device
@@ -163,8 +164,8 @@ def build_app(app_dir: Path | str, *, project_root: Path = PROJECT_ROOT) -> Fast
 def _uvicorn_config(app: FastAPI, host: str, port: int) -> UvicornConfig:
     import uvicorn
 
-    # loop="asyncio", http="h11": the same plain-runner posture #94 pins
-    # explicitly in docker-entrypoint.sh, now that requirements.txt no
+    # loop="asyncio", http="h11": the same plain-runner posture #94 pinned
+    # for the (now-removed) container entrypoint, now that requirements.txt no
     # longer installs uvicorn[standard] (uvloop/httptools) — smallest
     # native-wheel surface for the eventual Chaquopy build.
     return uvicorn.Config(app, host=host, port=port, loop="asyncio", http="h11")

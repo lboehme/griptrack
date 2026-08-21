@@ -1,7 +1,8 @@
 """On-device launch/bootstrap helper (#96).
 
-backend.launcher is the in-process analog of docker-entrypoint.sh for the
-eventual Android/Chaquopy build (#93): given an app-private directory, set
+backend.launcher is the in-process analog of the container entrypoint the
+removed web deploy used to ship, for the Android/Chaquopy build (#93): given
+an app-private directory, set
 the DB path, migrate to head, provision a persistent session secret, and
 serve the app on a fixed loopback host:port. These tests pin the
 logic-bearing pieces as plain functions and exercise the assembled app at

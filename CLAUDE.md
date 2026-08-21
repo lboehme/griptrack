@@ -67,8 +67,8 @@ gates. **The app now runs as a self-contained local Android app** (embedded
 CPython/FastAPI on `127.0.0.1` behind a WebView, on-device SQLite, first-run
 migrations — #93–#99); matplotlib/pandas were dropped (#89) and password
 hashing moved to stdlib PBKDF2 (ADR-0009), leaving `pydantic-core` as the only
-native wheel. The Fly/Docker/web deploy still works but is now
-**legacy/optional** (see the 2026-08-13 pivot below and ADR-0006). Remaining
+native wheel. The Fly/Docker/web deploy was **removed** (2026-08-21) — the app
+is Android on-device only now (see the 2026-08-13 pivot below and ADR-0006). Remaining
 open work: Asymmetry Analytics (#45–#48), the Wave 4 retention PRD (#59, needs
 its own grill), and the deferred injury guardian (#28). (#20 offline WorkSet
 sync was closed as not-planned once the on-device server landed — offline is
@@ -96,16 +96,19 @@ migration gates, runnable locally), `scripts/new-migration "msg"` (autogenerate
 a revision against a temp DB at head — never hand-write revision files),
 `scripts/lint` (ruff + mypy + pip-audit; mypy has a pyproject override list
 for modules that build SQLModel query expressions — extend the list, don't
-re-broaden the disabled codes), and `scripts/deploy` (fly deploy + health
-check + migration-log verification). CI calls the same `scripts/test` /
+re-broaden the disabled codes). CI calls the same `scripts/test` /
 `scripts/lint` / `scripts/check-migrations`, so local and CI behavior can't
 drift. All tests sit at the HTTP seam.
 
 ## Deployment & security
 
-Deployment is containerized and host-agnostic — see `docs/deployment.md` for
-the full guide and `Dockerfile` / `docker-entrypoint.sh` / `.env.example`.
-Config is via env vars: `GRIPTRACK_ENV=production` (enables Secure cookies +
+The app runs entirely on-device (Android, `backend/launcher.py` embeds the
+FastAPI backend on `127.0.0.1`; see the Android pivot below and ADR-0006). The
+legacy Fly/Docker/web deploy — its `Dockerfile`, `docker-entrypoint.sh`,
+`fly.toml`, the `deploy/` Litestream/Oracle configs, and the deployment docs —
+was removed on 2026-08-21 now that the phone app is the sole target. The
+production-oriented env vars still exist in code and remain the seam any future
+server deploy would use: `GRIPTRACK_ENV=production` (enables Secure cookies +
 fail-fast on a missing secret), `GRIPTRACK_SESSION_SECRET` (required in prod),
 `GRIPTRACK_DATABASE_URL` (point at a persistent volume), and
 `GRIPTRACK_BOOTSTRAP_TOKEN` (gates the first-admin registration).
@@ -176,7 +179,7 @@ unit-tested in isolation for now.
   htmx can't reach. No build step, no React/Vue. Logging a
   `TrainingSession` is **not** a page-per-step wizard — it's two
   consolidated pages, both built to be used one-handed between hangs (the
-  "Focus" design, `design_handoff_griptrack_focus/`):
+  "Focus" design, `docs/design_handoff_griptrack_focus/`):
   - **warmup/ramp** — a card ladder, all ramp steps visible at once, each
     card showing the plate-rounded weight with L/R tick targets.
   - **work sets** — one set at a time: a Left and a Right hand card, each
@@ -308,7 +311,8 @@ tested before starting the next.
    published methodology per the original plan's positioning notes, not
    reproducing it), `OvertrainingWarning` heuristic, a dashboard page with
    server-rendered charts; tests against fixture data.
-7. Deployed to fly.io
+7. Deployed to fly.io (later removed 2026-08-21 — the app is now Android
+   on-device only; see the Android pivot below)
 
 
 Above roadmap is complete, further roadmap here:
@@ -346,10 +350,12 @@ no online server (PRD #93). All three tracks landed:
   /session/workset`); #91 (test-suite hardening — export/auth-sweep/void/error-
   branch coverage, PR #119).
 
-**Hosting reframing:** with the phone app proven, the Fly/Docker/web deploy and
-the owner-gated Litestream/Oracle backup work below are now **legacy/optional**,
-not active roadmap. Retiring the web deployment is a later decision (out of
-scope for #93); it keeps working meanwhile.
+**Hosting — removed (2026-08-21):** with the phone app proven, the Fly/Docker/web
+deploy and the owner-gated Litestream/Oracle backup work were **deleted** — their
+config (`fly.toml`, `Dockerfile`, `docker-entrypoint.sh`, `deploy/`, the
+`scripts/deploy`/`scripts/oracle-deploy` helpers) and deployment docs are gone.
+The app is Android on-device only. The production env-var seam still lives in
+code should a server deploy ever be revived.
 
 Still open — Wave 3 (Asymmetry, #45–#48) and Wave 4 (retention, #59) stand,
 plus the deferred injury guardian (#28); details below. GitHub issues are the
@@ -375,7 +381,7 @@ source of truth for status.
   rate-limit `/register`; Spearman + n≥8 floor for the strength–grade
   correlation; CSV export.
 - **Focus redesign — session-logging screens (shipped 2026-07-30, #76 /
-  slices #77–#83).** Grilled 2026-07-23 from `design_handoff_griptrack_focus/`
+  slices #77–#83).** Grilled 2026-07-23 from `docs/design_handoff_griptrack_focus/`
   (Claude design-tool handoff, concept `1c`). Replaced the work-sets table with
   one-set-at-a-time hand cards and steppers, and the warmup table with a
   card ladder. Layout/interaction only — the existing orange token system
@@ -397,14 +403,12 @@ source of truth for status.
   wake lock, audio/notification strategy) — replacing the Focus
   redesign's deliberately throwaway client-only countdown. RPE stepper
   input ships earlier, with the Focus redesign.
-- **Owner-gated, parallel** (much of this is now *legacy/optional* under the
-  2026-08-13 Android pivot above — it only matters while the Fly deploy is the
-  primary target): Oracle switch when the account unblocks —
-  Litestream enable + restore drill is step one (if the ticket is still
-  stuck after ~a week, revisit decoupling backups to R2/B2); PWA phone test
-  with an accessibility mini-pass (chart ARIA titles, non-color-only
-  warning states, contrast, 44px targets); error-tracking decision
-  post-Oracle (Sentry vs self-hosted vs structured logs).
+- **Dropped with the hosting removal (2026-08-21):** the Oracle switch,
+  Litestream backup enable + restore drill, and the post-Oracle error-tracking
+  decision — all tied to the deleted web deploy, no longer relevant to the
+  on-device app. Still worth doing independently of hosting: an accessibility
+  mini-pass (chart ARIA titles, non-color-only warning states, contrast, 44px
+  targets).
 - **Deferred with named triggers:** CSP nonces, admin audit table, first-run
   onboarding, chart-render caching → open-sourcing or audience growth;
   cross-combination aggregate load

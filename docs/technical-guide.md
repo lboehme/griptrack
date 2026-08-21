@@ -18,9 +18,9 @@ recorded decisions in `docs/adr/`; agent-facing conventions in `CLAUDE.md`.*
 | Client JS | htmx 2 (vendored) + small inline handlers | Vanilla JS only where htmx can't reach |
 | Charts | uPlot (vendored, client-side) | matplotlib/pandas dropped in #87–#89 |
 | Auth | `bcrypt` package directly + Starlette `SessionMiddleware` | Not passlib (unmaintained, incompatible with bcrypt ≥ 4.1) |
-| Packaging | Docker (`Dockerfile` + `docker-entrypoint.sh`) | Host-agnostic |
-| Backup | Litestream (baked into image, env-gated) | Continuous S3-compatible replication + boot-time restore |
-| Hosting | Fly.io (production), Oracle Free Tier path merged but untested | Canonical URL `https://griptrack.duckdns.org` (DuckDNS → host; PWA installs are origin-bound so host switches must be DNS-only) |
+| Packaging | Android app (Chaquopy shell embeds the backend; `backend/launcher.py`) | On-device only; the Fly/Docker/web deploy was removed 2026-08-21 |
+| Backup | On-device (app-private SQLite) | No off-box replication; the Litestream/Oracle path was removed with the web deploy |
+| Hosting | None — runs on `127.0.0.1` behind a WebView on the phone | The former Fly.io/Oracle hosting was removed 2026-08-21 |
 | Tests | pytest + FastAPI `TestClient`, 131 tests | All at the HTTP seam |
 
 Pinned runtime deps live in `requirements.txt`, test/dev extras in
@@ -226,21 +226,19 @@ so far (issue #20, needs design first).
   `scripts/new-migration "msg"` (autogenerates against a temp DB at
   head); `scripts/check-migrations` runs the two CI migration gates
   locally. Migrations must stay in lockstep with model changes.
-- **Container boot** (`docker-entrypoint.sh`): `alembic upgrade head`,
-  then uvicorn with `--proxy-headers` (trust platform TLS termination for
-  Secure cookies and real client IPs).
+- **On-device boot** (`backend/launcher.py`): the Android shell calls the
+  in-process bootstrap — resolve the app-private DB path, `alembic upgrade
+  head`, provision a persistent session secret — then serves the unchanged
+  `backend.main` app on a fixed loopback host:port. This replaced the
+  container entrypoint the removed web deploy used to ship.
 - **Config is env-only**: `GRIPTRACK_ENV`, `GRIPTRACK_SESSION_SECRET`
-  (hard startup failure if missing in production),
-  `GRIPTRACK_DATABASE_URL`, `GRIPTRACK_BOOTSTRAP_TOKEN`, plus five
-  Litestream values (bucket/endpoint/region/key/secret — setting the
-  bucket switches replication on; currently inert, values not yet set).
-- **Deploy**: `scripts/deploy` = fly deploy + health check + migration-log
-  verification. An Oracle Always-Free path (`deploy/oracle/` with Docker
-  Compose + Caddy, `scripts/oracle-deploy`) is merged but has never run
-  against a real VM (account signup blocked). Migration plan when it
-  clears: enable Litestream on Fly → provision VM → first boot
-  auto-restores from the bucket → flip DuckDNS → scale Fly to zero;
-  never two writers on one bucket path.
+  (hard startup failure if missing in production), `GRIPTRACK_DATABASE_URL`,
+  and `GRIPTRACK_BOOTSTRAP_TOKEN`. These remain the seam a future server
+  deploy would use; the on-device launcher sets them itself.
+- **Deploy**: none — the app runs on-device. The Fly/Docker/web deploy and
+  the Oracle/Litestream backup path (`fly.toml`, `Dockerfile`,
+  `docker-entrypoint.sh`, `deploy/`, `scripts/deploy`,
+  `scripts/oracle-deploy`) were removed 2026-08-21.
 
 ## Testing & CI
 

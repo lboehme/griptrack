@@ -136,7 +136,6 @@ flowchart LR
     AU --> DB[("SQLite (WAL)")]
     TL --> DB
     AN --> DB
-    DB -. continuous replication .-> LS["Litestream → S3-compatible bucket"]
 ```
 
 The organizing idea is a few deep modules behind small interfaces, with
@@ -154,7 +153,7 @@ function, render a template. Some choices that raise eyebrows, and why:
   shrank the dependency footprint by dropping matplotlib/pandas (#87–#89).
 - **SQLite, WAL mode, one file.** A handful of users, one process, one
   volume — a database server would be operational overhead with no
-  benefit. Continuous off-box backup comes from Litestream instead.
+  benefit. The app runs on-device, so the DB lives in app-private storage.
 - **Weights stored in the user's own unit (kg *or* lbs), not normalized.**
   Plates are physical objects denominated in one unit; canonical-kg
   storage would hand lbs users suggestions their plates can't load.
@@ -193,10 +192,11 @@ scripts/lint               # ruff + mypy + pip-audit
 scripts/check-migrations   # migration gates
 ```
 
-For real deployment (Docker, env vars, HTTPS, backups) see
-[`docs/deployment.md`](docs/deployment.md) — the short version is one
-container, one persistent volume for the SQLite file, and five env vars
-if you want Litestream replication.
+GripTrack ships as a self-contained **Android app** that embeds this same
+FastAPI backend on `127.0.0.1` behind a WebView, with on-device SQLite and
+first-run migrations — see [`android/`](android/) and the Android pivot in
+[`CLAUDE.md`](CLAUDE.md). The former Fly/Docker/web deploy was removed on
+2026-08-21; the commands above are for local development.
 
 ## Status
 
