@@ -15,3 +15,12 @@ venv/
 
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 graft/
+
+# Local graft + Gemini-CLI tooling — per-machine dev-environment integration,
+# not project source (helper scripts contain a machine-specific path; graft/
+# is regenerated locally).
+.claude/helpers/
+.mcp.json
+.gemini/
+GEMINI.md
+.ignore
