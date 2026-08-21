@@ -103,7 +103,12 @@ class LoginRateLimiter:
 def current_user(
     request: Request, session: Session = Depends(get_session)
 ) -> User:
-    user = session.get(User, request.session.get("user_id"))
+    user_id = request.session.get("user_id")
+    # Guard the None case explicitly: session.get(User, None) is a fully-NULL
+    # primary-key lookup, which SQLAlchemy warns "may raise an error in a
+    # future release" — and this is the gate every unauthenticated request
+    # passes through.
+    user = session.get(User, user_id) if user_id is not None else None
     if user is None or request.session.get("session_version") != user.session_version:
         raise HTTPException(status_code=401, detail="Not logged in")
     return user

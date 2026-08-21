@@ -720,3 +720,71 @@ def test_progression_settings_bounds_are_enforced(client):
         follow_redirects=False,
     )
     assert resp.status_code == 303
+
+
+def test_bogus_hand_is_rejected_on_session_routes(client):
+    """The session-logging routes that persist a hand must reject anything
+    other than left/right, matching /max-tests and the guided routine.
+    Otherwise a crafted POST (authenticated, own account) plants a
+    bogus-hand WorkSet/estimate/warmup-check row that then surfaces as a
+    phantom combo on the dashboard and in history."""
+    register(client)
+    grip_id = grip_type_id(client, "half crimp")
+    common = {"grip_type_id": grip_id, "edge_mm": 20, "date": "2026-07-04"}
+
+    workset = client.post(
+        "/session/workset",
+        data={**common, "hand": "banana", "set_number": 1, "weight": "40", "reps": "5"},
+        follow_redirects=False,
+    )
+    assert workset.status_code == 400
+
+    estimate = client.post(
+        "/session/estimate",
+        data={**common, "hand": "banana", "weight": "40"},
+        follow_redirects=False,
+    )
+    assert estimate.status_code == 400
+
+    check = client.post(
+        "/session/check",
+        data={**common, "hand": "banana", "step_index": 0},
+        follow_redirects=False,
+    )
+    assert check.status_code == 400
+
+    delete = client.post(
+        "/session/workset/delete",
+        data={**common, "hand": "banana", "set_number": 1},
+        follow_redirects=False,
+    )
+    assert delete.status_code == 400
+
+    # A well-formed left-hand set on the same combo still works.
+    ok = client.post(
+        "/session/workset",
+        data={**common, "hand": "left", "set_number": 1, "weight": "40", "reps": "5"},
+        follow_redirects=False,
+    )
+    assert ok.status_code == 303
+
+    # No phantom-hand row leaked into history.
+    assert "banana" not in client.get("/history").text
+
+
+def test_anonymous_requests_do_not_emit_null_pk_warning(client):
+    """Neither the home route nor auth.current_user may call
+    session.get(User, None) for an unauthenticated request: SQLAlchemy warns
+    that a fully-NULL primary-key lookup "may raise an error in a future
+    release", which would turn the anonymous home render and every
+    unauthenticated 401 into a 500."""
+    import warnings
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        assert client.get("/").status_code == 200  # anonymous home -> home route
+        gated = client.get("/profile", follow_redirects=False)  # -> current_user
+        assert gated.status_code == 401
+
+    null_pk = [w for w in caught if "NULL primary key" in str(w.message)]
+    assert not null_pk, f"unexpected NULL-PK warning(s): {[str(w.message) for w in null_pk]}"

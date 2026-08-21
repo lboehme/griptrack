@@ -153,6 +153,8 @@ def save_work_set(
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
+    if hand not in ("left", "right"):
+        return HTMLResponse("Hand must be left or right.", status_code=400)
     if rpe is not None and not (1.0 <= rpe <= 10.0 and (rpe * 2) == int(rpe * 2)):
         return HTMLResponse(
             "RPE must be between 1 and 10 in 0.5 steps.", status_code=400
@@ -294,6 +296,8 @@ def delete_work_set(
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
+    if hand not in ("left", "right"):
+        return HTMLResponse("Hand must be left or right.", status_code=400)
     training_session = training_log.find_session(session, user, date, session_number)
     if training_session is not None:
         training_log.delete_work_set(
@@ -316,6 +320,8 @@ def save_session_estimate(
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
+    if hand not in ("left", "right"):
+        return HTMLResponse("Hand must be left or right.", status_code=400)
     training_session = training_log.start_or_get_session(
         session, user, date, session_number
     )
@@ -339,6 +345,8 @@ def check_warmup_step(
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
+    if hand not in ("left", "right"):
+        return HTMLResponse("Hand must be left or right.", status_code=400)
     training_session = training_log.start_or_get_session(
         session, user, date, session_number
     )
