@@ -13,6 +13,10 @@ def utcnow() -> datetime:
 # validation) and backend.archive (manifest validation, ADR-0008).
 VALID_UNITS = ("kg", "lbs")
 
+# The two hands a WorkSet / MaxWeightTest / estimate / warmup-check is scoped
+# to. PainReport is deliberately broader ("both" is allowed there).
+VALID_HANDS = ("left", "right")
+
 
 class User(SQLModel, table=True):
     __tablename__ = "users"
