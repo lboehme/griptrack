@@ -32,8 +32,170 @@ behaves like a **website that was put in a frame**:
 There are also **seven small, verified rendering and copy bugs** (§1). Most are
 one-line fixes.
 
+The report has two parts. **Direction** (next section) is the big-picture
+redesign: what GripTrack could become as an app. **§1–§6** are concrete
+findings on the current UI. Many of them are absorbed by the redesign, but they
+are worth fixing now because the redesign is a longer road.
+
 Priority key: **P1** = hurts the core between-hangs flow or is plainly broken ·
 **P2** = noticeable friction or looks unfinished · **P3** = polish.
+
+---
+
+## Direction: the bigger redesign
+
+§1–§6 fix what's there. This part is about what GripTrack could become. These
+are directions to grill and prototype, not tickets.
+
+### D0. The core shift: organise around the training loop, not the database
+
+Today the app's structure copies its data model. There's a page per table:
+Sessions, Max tests, Climbs, Trends, Profile, Plates. You think in three
+questions:
+
+1. **What do I do today?**
+2. **Do it.** Warm up, pull, rest, repeat.
+3. **Am I getting stronger, and does it show in my climbing?**
+
+Rebuild the navigation around those:
+
+| Tab | What it is | What it replaces |
+|---|---|---|
+| **Today** | A small coach: today's plan, recovery status, one big Start button | Home's menu of tiles |
+| **Progress** | The story of your strength and climbing | Trends, History and Max tests merged |
+| **Log** (or a floating ＋) | Quick capture: a climb, bodyweight, a pain note | The Climbs page, the Profile bodyweight card |
+| **Settings** | Rarely touched: units, plates, protocol, data | Profile's pile of forms |
+
+Max tests stop being their own section and become a kind of session ("Test
+day") inside the same flow. They're rare, so they don't deserve a place in the
+main navigation.
+
+### D1. Today as a coach
+
+The app already knows almost everything needed to tell you what to do: last
+session, `CurrentMax`, loadable plates, protocol, autoregulation suggestion, days
+since you last trained, recent pain reports. Home should say it outright:
+
+> **Half crimp · 20 mm**, last trained 3 days ago
+> Today: 4 × 5 @ **34 kg L / 35.25 kg R** (+1.25 kg, last session felt easy)
+> [ **Start** ]
+> ⚠ You logged a left-hand tweak on Tuesday. Go light?
+
+That's one screen, one decision and one tap. The Wave 4 nudges (retest due,
+plateau, deload) all belong here instead of scattered banners.
+
+### D2. The session as one continuous "player"
+
+Warmup and work sets are currently separate pages with navigation buttons
+between them. Strong workout apps (Strong, Hevy, Garmin workouts) treat a
+session as **one screen that moves forward**: warmup rung → rung → work set →
+rest → set → … → **summary**. Three things follow:
+
+- **No navigation during a session.** No tab bar, no header, just the current
+  step, what comes next, and a way out.
+- **The session keeps going when you leave the app.** An ongoing Android
+  notification shows "Rest 1:42 · Set 3 of 4 next · 34 kg". It's visible on the
+  lock screen and vibrates when rest is over. This does more than anything else
+  to make GripTrack feel like a real app (it builds on the native bridge in §2.2).
+- **A summary screen at the end.** This is the payoff the app is missing: volume
+  vs last time, a PR badge if there is one, and a one-tap "how did it feel"
+  (😣 😐 💪) plus an optional note. It replaces the "How did it feel?" section
+  tucked under the sets, which you'd mostly never open.
+
+### D3. Design for the gym, not the desk
+
+The real conditions are chalky fingers, pumped forearms, the phone on a bench at
+arm's length, and glances between hangs:
+
+- **Controls at the bottom, readouts at the top.** Everything you tap sits in
+  the thumb zone; the top half is for big numbers you read. Today it's the other
+  way round: titles at the top, actions you scroll down to reach.
+- **Readable from a metre away.** Bigger weight numbers, fewer words, strong
+  contrast. Think of a gym clock, not a form.
+- **Hold-to-repeat and swipe.** Swipe a completed set to edit it, long-press a
+  stepper to run the value up.
+- **Dark by default during a session**, whatever the system setting. It's
+  calmer, uses less battery, and reads better under gym lighting.
+
+### D4. A visual identity of its own
+
+The current look is competent but generic: every element is a white rounded
+card with a shadow, and every button has the orange gradient. Almost everything
+sits in a box, so nothing stands out.
+
+- **Fewer containers.** Separate things with type size and spacing, not cards.
+  Keep cards for things you can tap.
+- **Use the gradient once.** Reserve it for the single primary action on a
+  screen (Start, Set done). Everything else goes flat. Profile currently has
+  eight gradient buttons.
+- **A display typeface for numbers.** A condensed or monospaced numeric face,
+  bundled locally like uPlot, for weights and grades. Numbers are the hero of
+  this app, and a distinct numeral style would do most of the branding work.
+- **Borrow from climbing culture.** Gyms colour-code grades. A grade colour
+  scale (6A green → 7A red → 8A black) used in climb chips, the correlation
+  chart and history would make the climbing side feel native instead of like a
+  text list. Subtle chalk-texture or topo-line motifs work in empty states and
+  the splash screen.
+- **Material 3 structure, your own skin.** It's an Android app now, so use the
+  conventions people know: bottom sheets, a top app bar, predictive back,
+  snackbars. Keep the orange and dark palette so it's still yours.
+
+### D5. Progress tells a story before it shows statistics
+
+Trends currently reads like an analyst's notebook: Spearman's ρ, signed gaps,
+"TrainingVolume", raw data tables. Lead with the story and put the maths behind
+it, in three layers:
+
+1. **Headline sentences.** "Left half crimp up 8% in 6 weeks. Right has been
+   flat for 3 weeks. Asymmetry is 5%, inside the normal range."
+2. **One main chart.** Strength as % of bodyweight over time, both hands, with
+   your climbing grades plotted on the same timeline. That single view is the
+   point of the app: finger strength and climbing moving together.
+3. **Details on tap.** Volume, asymmetry, correlation and the raw data live one
+   level down.
+
+Also add **milestones and personal records**: "first time pulling 50% of
+bodyweight on a 20 mm edge", "10 sessions this month". They're cheap to build
+and they're what brings people back.
+
+### D6. Make input nearly free
+
+Any number the app can predict should be filled in already, so that a normal set
+is **one tap**. Small entries (log a climb, log bodyweight, edit a set) should
+be **bottom sheets** over the current screen, not separate pages with forms. A
+climb log becomes: tap ＋ → grade chips around your usual level → style chips →
+done, about three taps. Bodyweight becomes a weekly prompt on Today rather than
+a form in Profile.
+
+### D7. One voice
+
+The tone shifts between playful ("Hey lukas 👊", "Ready to pull?"),
+engineering-speak ("TrainingVolume", "Spearman's ρ") and even internal
+references: the Profile page says "(ADR-0012)" in its copy. Pick one voice, most
+likely a **plain-spoken coach**. It's short, confident and about climbing, and
+the technical terms go into an "About these numbers" sheet.
+
+### D8. The first run as a story
+
+Registration and invites are server-era leftovers (§4). On a phone the first run
+should be three steps: **Units & hands → Your plates (tap the ones you own) →
+Your first max test (guided)**. It ends on Today with a real plan. Empty states
+along the way should teach ("Log 8 sends and I'll show how your strength tracks
+your grade") instead of being blank.
+
+### How to approach it
+
+These are bigger than tickets. They're a redesign, and it deserves the same
+process that produced the Focus screens:
+
+1. **A short grill on the navigation (D0) and the Today coach (D1)**, since
+   everything else hangs off those.
+2. **Mockups before code.** A clickable prototype of Today → session player →
+   summary → Progress, in the current palette, to try on the phone before any
+   template changes.
+3. **Build it in slices:** session player plus lock-screen notification first
+   (the biggest win at the board), then Today, then Progress, then the visual
+   refresh across the app.
 
 ---
 
@@ -385,3 +547,7 @@ screen) for consistency.
 7. **Home and Trends information design** (§5). *needs a grill*
 8. **Touch polish** (§2.6, §6): tap highlight, hold-to-repeat steppers,
    `hx-boost`, date and enum filters. *ready-for-agent*
+
+Slices 2, 5, 6 and 7 overlap with the Direction redesign. If the redesign goes
+ahead, fold them into its grill instead of building them against today's
+navigation. Slices 1, 3, 4 and 8 hold up either way and can ship now.
