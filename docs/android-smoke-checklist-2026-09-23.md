@@ -1,0 +1,64 @@
+# GripTrack Android On-Device Smoke Checklist (#139 / docs/ui-review-2026-09.md §2.1, §2.5, §2.7)
+
+**Test Date**: 2026-09-23  
+**Target Hardware**: Samsung Galaxy S22 Ultra (SM-S908B), Android 16 (arm64-v8a)  
+**App Build**: `app-debug.apk` (`targetSdk = 35`, Chaquopy 17.0.0, CPython 3.13, FastAPI + SQLite)  
+**Scope**: Android shell edge-to-edge handling, keyboard (IME) insets, single splash screen (`core-splashscreen`), and themed status/navigation bars.
+
+---
+
+## 1. Prerequisites & Build Verification
+
+- [x] **Gradle Build**: `./gradlew assembleDebug` builds `app-debug.apk` cleanly with zero errors and zero warnings.
+- [x] **Lint**: `scripts/lint` clean (Ruff, Mypy 26 source files, Pip-audit 0 vulnerabilities).
+- [x] **Tests**: `scripts/test` passed 398/398 tests.
+- [ ] **APK Installation**: `adb install -r app/build/outputs/apk/debug/app-debug.apk` streams and installs successfully.
+
+---
+
+## 2. Single Launch Screen Verification (§2.5)
+
+| # | Step | Expected Result | Device Verification | Status |
+|---|------|-----------------|---------------------|--------|
+| 1 | **Cold Launch Appearance** | System splash screen appears instantly with dark ground (`@color/splash_bg` `#18181B`) and GripTrack adaptive launcher icon. | Cold start shows system splash without flicker. | **PENDING DEVICE** |
+| 2 | **Single Splash Flow (Happy Path)** | System splash remains on screen (`setKeepOnScreenCondition { ServerManager.state != RUNNING }`) until the embedded Python server is ready and healthy. The old secondary spinner container ("Starting GripTrack…") is dropped; the splash smoothly transitions directly into the loaded WebView. | Single branded launch screen; zero dual-splash or intermediate loading text on successful boot. | **PENDING DEVICE** |
+| 3 | **Error / Recovery State** | If the embedded server fails to start (e.g. simulated port collision or corrupted DB), the splash condition releases, revealing `errorContainer` with error title, monospace stack trace, and working "Retry" button. | When error is injected, splash dismisses to show `errorContainer` and allows user retry. | **PENDING DEVICE** |
+
+---
+
+## 3. Edge-to-Edge System Bar Insets (§2.1)
+
+| # | Step | Expected Result | Device Verification | Status |
+|---|------|-----------------|---------------------|--------|
+| 4 | **Edge-to-Edge Window Setup** | `WindowCompat.setDecorFitsSystemWindows(window, false)` is active on Android 15+. Content renders edge-to-edge behind transparent system bars. | Full display utilized edge-to-edge without black letterbox bars. | **PENDING DEVICE** |
+| 5 | **Status Bar Insets (Top)** | WebView content is padded natively via `WindowInsetsCompat.Type.systemBars()`. The sticky header (`.app-header` with "GripTrack." and "Log out") sits comfortably below the system clock, battery, and camera punch hole. | Header text and actions are never clipped or overlapped by the status bar or camera cutout. | **PENDING DEVICE** |
+| 6 | **Gesture / Navigation Bar Insets (Bottom)** | Bottom tab bar (`.tabbar`: Home, Session, Trends, Climbs, Profile) sits safely above the Android gesture navigation pill or 3-button navigation bar. | Tab bar items are fully reachable and not obscured by the gesture navigation bar. | **PENDING DEVICE** |
+| 7 | **No Double Inset Offset** | Native padding on `webView` ensures WebView bounds stay within the safe viewport. Internal CSS `env(safe-area-inset-top)` and `env(safe-area-inset-bottom)` resolve to `0px` in WebView, preventing double spacing. | Header and tab bar margins match web design without extra unintended gap. | **PENDING DEVICE** |
+
+---
+
+## 4. Keyboard (IME) Inset Verification (§2.1)
+
+| # | Step | Expected Result | Device Verification | Status |
+|---|------|-----------------|---------------------|--------|
+| 8 | **Form Input Focus (Climbs / Profile / Max Tests)** | Tap an input or select at the bottom of the screen (e.g. Profile weight, Climbs notes, Max test load). | Keyboard opens (`WindowInsetsCompat.Type.ime()`); WebView bottom padding expands to keyboard height, pushing input and action buttons into view. | **PENDING DEVICE** |
+| 9 | **Keyboard Dismissal** | Dismiss keyboard with Back gesture or by tapping outside input. | Bottom padding smoothly returns to system navigation bar height without layout distortion or lingering gap. | **PENDING DEVICE** |
+
+---
+
+## 5. Themed Status & Navigation Bars (§2.7)
+
+| # | Step | Expected Result | Device Verification | Status |
+|---|------|-----------------|---------------------|--------|
+| 10 | **Removal of Hardcoded Orange Status Bar** | Orange status bar (`#E8532C`) is removed from `themes.xml`. System bars are transparent (`@android:color/transparent`), drawing the app background. | Status and navigation bars render seamless background instead of solid orange block. | **PENDING DEVICE** |
+| 11 | **Light Mode Contrast** | System set to Light mode: `WindowInsetsControllerCompat` sets `isAppearanceLightStatusBars = true` and `isAppearanceLightNavigationBars = true`. | Status bar icons (time, battery, Wi-Fi) and navigation bar buttons/pill render with dark contrast for readability. | **PENDING DEVICE** |
+| 12 | **Dark Mode Contrast** | System set to Dark mode: `WindowInsetsControllerCompat` sets `isAppearanceLightStatusBars = false` and `isAppearanceLightNavigationBars = false`. | Status bar icons and navigation bar buttons/pill render with light/white contrast against the dark background. | **PENDING DEVICE** |
+| 13 | **System Theme Switch (Resume / Recreate)** | Toggle system dark/light theme while app is backgrounded or in split screen. | On resume, `updateSystemBarAppearance()` refreshes icon contrast immediately to match current `Configuration.uiMode`. | **PENDING DEVICE** |
+
+---
+
+## 6. Architecture & Implementation Notes
+
+1. **`androidx.core:core-splashscreen:1.0.1`**: Installed and wired in `MainActivity.onCreate()` before `super.onCreate()`. Starting theme `Theme.GripTrack.Starting` switches to `Theme.GripTrack` after splash.
+2. **Native Inset Handling**: `ViewCompat.setOnApplyWindowInsetsListener` handles combined `systemBars() or ime()` insets on `webView` and `errorContainer`.
+3. **Compatibility**: Supports Android 15+ (enforced edge-to-edge, `targetSdk = 35`) while remaining backward compatible to `minSdk = 26` (Android 8.0).

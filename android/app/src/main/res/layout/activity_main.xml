@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/rootContainer"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/splash_bg">
@@ -11,85 +12,48 @@
         android:visibility="gone" />
 
     <LinearLayout
-        android:id="@+id/splashContainer"
+        android:id="@+id/errorContainer"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:gravity="center"
         android:orientation="vertical"
         android:padding="32dp"
-        android:visibility="visible">
+        android:visibility="gone">
 
         <TextView
-            android:id="@+id/appTitle"
+            android:id="@+id/errorTitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/app_name"
-            android:textColor="@color/brand_primary"
-            android:textSize="32sp"
+            android:text="@string/server_error_title"
+            android:textColor="@color/error_red"
+            android:textSize="18sp"
             android:textStyle="bold" />
 
-        <ProgressBar
-            android:id="@+id/progressBar"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginTop="28dp"
-            android:indeterminate="true"
-            android:indeterminateTint="@color/brand_primary" />
-
-        <TextView
-            android:id="@+id/statusText"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="@string/starting_server"
-            android:textColor="@color/text_secondary"
-            android:textSize="15sp" />
-
-        <LinearLayout
-            android:id="@+id/errorContainer"
+        <ScrollView
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:gravity="center"
-            android:orientation="vertical"
-            android:visibility="gone">
+            android:layout_height="0dp"
+            android:layout_marginTop="16dp"
+            android:layout_weight="1"
+            android:maxHeight="300dp">
 
             <TextView
-                android:id="@+id/errorTitle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/server_error_title"
-                android:textColor="@color/error_red"
-                android:textSize="16sp"
-                android:textStyle="bold" />
-
-            <ScrollView
+                android:id="@+id/errorDetailText"
                 android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_marginTop="12dp"
-                android:layout_weight="1"
-                android:maxHeight="200dp">
-
-                <TextView
-                    android:id="@+id/errorDetailText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:fontFamily="monospace"
-                    android:textColor="@color/text_secondary"
-                    android:textIsSelectable="true"
-                    android:textSize="12sp" />
-            </ScrollView>
-
-            <Button
-                android:id="@+id/retryButton"
-                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:backgroundTint="@color/brand_primary"
-                android:text="@string/retry_button"
-                android:textColor="@color/text_primary" />
-        </LinearLayout>
+                android:fontFamily="monospace"
+                android:textColor="@color/text_secondary"
+                android:textIsSelectable="true"
+                android:textSize="12sp" />
+        </ScrollView>
 
+        <Button
+            android:id="@+id/retryButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:backgroundTint="@color/brand_primary"
+            android:text="@string/retry_button"
+            android:textColor="@color/text_primary" />
     </LinearLayout>
 
 </FrameLayout>
