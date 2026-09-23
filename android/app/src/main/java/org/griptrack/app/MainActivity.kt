@@ -170,7 +170,7 @@ class MainActivity : AppCompatActivity() {
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val url = request?.url?.toString() ?: return false
                 // Keep loopback navigations within the WebView
-                return if (url.startsWith(ServerManager.serverUrl)) {
+                return if (SessionLifecycleHelper.isLoopbackUrl(url)) {
                     false
                 } else {
                     // Let external links open in standard browser if needed
@@ -255,7 +255,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 if (isNavigatingHome) {
-                    finish()
+                    // Ignore additional back presses while navigating home to prevent premature exit
                     return
                 }
 

@@ -386,10 +386,12 @@
   function stepRpe(value, dir) {
     if (value === null) return 7.0;
     if (dir > 0) {
+      if (value < 1) return 1.0;
       var up = Math.round((value + 0.5) * 10) / 10;
       return up > 10 ? 10 : up;
     }
     if (value <= 1) return null;
+    if (value > 10) return 10.0;
     var down = Math.round((value - 0.5) * 10) / 10;
     return down < 1 ? 1 : down;
   }

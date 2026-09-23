@@ -37,29 +37,45 @@ object SessionLifecycleHelper {
     )
 
     /**
+     * Checks if a URL strictly targets the local server (loopback host and expected port).
+     * Prevents lookalike host or userInfo bypasses (e.g. "http://127.0.0.1:8000.evil.com").
+     */
+    fun isLoopbackUrl(url: String?, loopbackHost: String = "127.0.0.1", port: Int = 8000): Boolean {
+        if (url.isNullOrBlank()) return false
+        val uri = try {
+            java.net.URI(url)
+        } catch (_: Exception) {
+            return false
+        }
+        val scheme = uri.scheme?.lowercase() ?: return false
+        if (scheme != "http") return false
+        val host = uri.host?.lowercase() ?: return false
+        if (host != loopbackHost.lowercase() && host != "localhost") return false
+        val uriPort = if (uri.port != -1) uri.port else 80
+        return uriPort == port
+    }
+
+    /**
      * Extracts relative path and query for loopback/same-origin URLs.
      * Returns null for external domains.
      */
     fun extractPathAndQuery(url: String?, loopbackHost: String = "127.0.0.1", port: Int = 8000): String? {
         if (url.isNullOrBlank()) return null
-        val loopbackPrefixes = listOf(
-            "http://$loopbackHost:$port",
-            "http://localhost:$port"
-        )
-        for (prefix in loopbackPrefixes) {
-            if (url.startsWith(prefix)) {
-                val relative = url.removePrefix(prefix)
-                return if (relative.isEmpty() || !relative.startsWith("/")) {
-                    "/$relative"
-                } else {
-                    relative
-                }
-            }
-        }
         if (url.startsWith("/")) {
             return url
         }
-        return null
+        if (!isLoopbackUrl(url, loopbackHost, port)) {
+            return null
+        }
+        val uri = try {
+            java.net.URI(url)
+        } catch (_: Exception) {
+            return null
+        }
+        val rawPath = uri.rawPath ?: "/"
+        val rawQuery = uri.rawQuery
+        val path = if (rawPath.isEmpty()) "/" else rawPath
+        return if (rawQuery != null) "$path?$rawQuery" else path
     }
 
     /**

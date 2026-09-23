@@ -26,8 +26,27 @@ class NavigationLifecycleTest {
         // External URLs should not be treated as same-origin
         assertNull(SessionLifecycleHelper.extractPathAndQuery("https://google.com/search?q=griptrack"))
         assertNull(SessionLifecycleHelper.extractPathAndQuery("http://example.com/foo"))
+        assertNull(SessionLifecycleHelper.extractPathAndQuery("http://127.0.0.1:8000.evil.com/foo"))
+        assertNull(SessionLifecycleHelper.extractPathAndQuery("http://127.0.0.1:8000@evil.com/foo"))
+        assertNull(SessionLifecycleHelper.extractPathAndQuery("javascript:alert(1)"))
         assertNull(SessionLifecycleHelper.extractPathAndQuery(null))
         assertNull(SessionLifecycleHelper.extractPathAndQuery(""))
+    }
+
+    @Test
+    fun testIsLoopbackUrl() {
+        assertTrue(SessionLifecycleHelper.isLoopbackUrl("http://127.0.0.1:8000/"))
+        assertTrue(SessionLifecycleHelper.isLoopbackUrl("http://127.0.0.1:8000"))
+        assertTrue(SessionLifecycleHelper.isLoopbackUrl("http://localhost:8000/session/worksets"))
+
+        // Security bypass attempts must be rejected
+        assertFalse(SessionLifecycleHelper.isLoopbackUrl("http://127.0.0.1:8000.evil.com/"))
+        assertFalse(SessionLifecycleHelper.isLoopbackUrl("http://127.0.0.1:8000@evil.com/"))
+        assertFalse(SessionLifecycleHelper.isLoopbackUrl("http://127.0.0.1:8001/"))
+        assertFalse(SessionLifecycleHelper.isLoopbackUrl("https://127.0.0.1:8000/"))
+        assertFalse(SessionLifecycleHelper.isLoopbackUrl("javascript:alert(1)"))
+        assertFalse(SessionLifecycleHelper.isLoopbackUrl(null))
+        assertFalse(SessionLifecycleHelper.isLoopbackUrl(""))
     }
 
     @Test
