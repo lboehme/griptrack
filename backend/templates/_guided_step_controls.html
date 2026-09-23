@@ -4,12 +4,15 @@
   <input type="number" name="actual" step="0.25" min="0.25" value="{{ suggested }}" required>
 </label>
 {% if needs_rating %}
+{# A row of mutually-exclusive effort choices, not competing primary CTAs
+   (V7: one primary per screen) — all secondary except the one that ends
+   the test, which keeps an accent rim for emphasis. #}
 <div class="rating-buttons">
-  <button type="submit" name="rating" value="effortless" class="rating">Effortless</button>
-  <button type="submit" name="rating" value="fairly_easy" class="rating">Fairly easy</button>
-  <button type="submit" name="rating" value="moderate" class="rating">Moderate</button>
-  <button type="submit" name="rating" value="hard" class="rating">Hard</button>
-  <button type="submit" name="rating" value="enough" class="rating rating-enough">That's enough</button>
+  <button type="submit" name="rating" value="effortless" class="btn-secondary rating">Effortless</button>
+  <button type="submit" name="rating" value="fairly_easy" class="btn-secondary rating">Fairly easy</button>
+  <button type="submit" name="rating" value="moderate" class="btn-secondary rating">Moderate</button>
+  <button type="submit" name="rating" value="hard" class="btn-secondary rating">Hard</button>
+  <button type="submit" name="rating" value="enough" class="btn-secondary rating rating-enough">That's enough</button>
 </div>
 {% else %}
 <button type="submit">Continue</button>

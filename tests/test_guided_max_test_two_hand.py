@@ -123,8 +123,8 @@ def test_advancing_one_hand_leaves_the_others_state_unchanged(client):
     assert weights["left"] == 21.25
     assert weights["right"] == 20.0
     # Left (warmup set 2) now has the rating control; right (still set 1) doesn't.
-    assert 'class="rating"' in hand_block(second, "left")
-    assert 'class="rating"' not in hand_block(second, "right")
+    assert 'name="rating"' in hand_block(second, "left")
+    assert 'name="rating"' not in hand_block(second, "right")
 
 
 def test_rating_one_hand_never_changes_the_others_suggestion(client):

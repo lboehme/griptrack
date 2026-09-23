@@ -112,10 +112,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateSystemBarAppearance(config: Configuration = resources.configuration) {
+        // S0 Look (issue #144): the app is dark-only now (PRD decision 6,
+        // docs/ui-review-2026-09.md) regardless of the device's system
+        // light/dark setting, so the status/nav bar icons always render
+        // light-on-dark -- previously this toggled with `config`'s night
+        // mode, which put dark icons over the app's dark background
+        // whenever the *device* was in light mode.
         val insetsController = WindowInsetsControllerCompat(window, window.decorView)
-        val isDarkMode = (config.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-        insetsController.isAppearanceLightStatusBars = !isDarkMode
-        insetsController.isAppearanceLightNavigationBars = !isDarkMode
+        insetsController.isAppearanceLightStatusBars = false
+        insetsController.isAppearanceLightNavigationBars = false
     }
 
     private fun initViews() {

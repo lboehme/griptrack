@@ -97,7 +97,7 @@ def test_starting_the_routine_renders_warmup_set_one_at_half_the_estimate(client
     assert 'data-set="1"' in response.text
     # 50% of 42.5 = 21.25, exact against the seeded kg plate inventory.
     assert '<span class="suggested-weight">21.25</span>' in response.text
-    assert 'class="rating"' not in response.text
+    assert 'name="rating"' not in response.text
 
 
 def test_start_form_prefills_estimate_from_bodyweight_when_logged(client):
@@ -140,7 +140,7 @@ def test_continuing_from_warmup_set_one_reaches_warmup_set_two_unchanged(client)
     # the first set's actual, only off the original estimate.
     assert '<span class="suggested-weight">21.25</span>' in second.text
     # Warmup set 2 is where the rating control first appears.
-    assert 'class="rating"' in second.text
+    assert 'name="rating"' in second.text
 
 
 def test_each_effort_rating_produces_the_correctly_incremented_kg_suggestion(client):
