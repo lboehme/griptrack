@@ -40,6 +40,12 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 DB_FILENAME = "griptrack.db"
 SESSION_SECRET_FILENAME = "session_secret"
+# The device sign-in credential (ADR-0013, #145): a random token the launcher
+# provisions once alongside the session secret, and the Kotlin shell reads
+# from the same app-private file to exchange for a session cookie at
+# POST /device-login. Never sent anywhere but the loopback server, and never
+# readable by another app (app-private storage).
+DEVICE_TOKEN_FILENAME = "device_token"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8000
 
@@ -75,6 +81,29 @@ def ensure_session_secret(app_dir: Path | str) -> str:
     except OSError:
         pass  # best-effort; irrelevant on Android's already-sandboxed app-private storage
     return secret
+
+
+def ensure_device_token(app_dir: Path | str) -> str:
+    """Return the device sign-in token, generating and persisting it once.
+
+    Mirrors ensure_session_secret exactly: subsequent launches reuse the
+    same value, so a shell build that cached an old token still works, and
+    so `backend.auth.device_login` can compare against a stable secret.
+    """
+    app_path = Path(app_dir)
+    app_path.mkdir(parents=True, exist_ok=True)
+    token_path = app_path / DEVICE_TOKEN_FILENAME
+    if token_path.exists():
+        existing = token_path.read_text().strip()
+        if existing:
+            return existing
+    token = secrets.token_urlsafe(32)
+    token_path.write_text(token)
+    try:
+        token_path.chmod(0o600)
+    except OSError:
+        pass  # best-effort; irrelevant on Android's already-sandboxed app-private storage
+    return token
 
 
 def _sync_backend_db_module() -> None:
@@ -139,6 +168,9 @@ def bootstrap(app_dir: Path | str, *, project_root: Path = PROJECT_ROOT) -> str:
 
     secret = ensure_session_secret(app_path)
     os.environ["GRIPTRACK_SESSION_SECRET"] = secret
+
+    device_token = ensure_device_token(app_path)
+    os.environ["GRIPTRACK_DEVICE_TOKEN"] = device_token
 
     os.environ.pop("GRIPTRACK_ENV", None)
     os.environ.pop("GRIPTRACK_BOOTSTRAP_TOKEN", None)

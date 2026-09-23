@@ -186,7 +186,13 @@ def test_build_app_serves_in_webview_mode_without_sw_or_manifest(tmp_path):
     app = build_app(tmp_path)
 
     with TestClient(app) as client:
-        response = client.get("/login")
+        # No password login in the WebView build (ADR-0013) -- /login
+        # redirects to first run since no device user exists yet.
+        login_response = client.get("/login", follow_redirects=False)
+        assert login_response.status_code == 303
+        assert login_response.headers["location"] == "/welcome"
+
+        response = client.get("/welcome")
 
     assert response.status_code == 200
     assert '<script src="/static/register-sw.js"' not in response.text
@@ -197,18 +203,21 @@ def test_build_app_accepts_string_path(tmp_path):
     app = build_app(str(tmp_path))
 
     with TestClient(app) as client:
-        response = client.get("/login")
+        response = client.get("/welcome")
 
     assert response.status_code == 200
 
 
-def test_build_app_registers_the_first_user_with_no_bootstrap_token(tmp_path):
+def test_build_app_creates_the_device_user_through_first_run(tmp_path):
+    # bootstrap() always sets GRIPTRACK_WEBVIEW_BUILD=1 (the on-device
+    # launch is never the server build, #145/ADR-0013), so /register is
+    # unregistered here -- first run (/welcome) is the only way in.
     app = build_app(tmp_path)
 
     with TestClient(app) as client:
         response = client.post(
-            "/register",
-            data={"email": "owner@example.com", "password": "device-owner-pw"},
+            "/welcome",
+            data={"name": "Owner", "unit_pref": "kg", "hand_order_pref": "alternating"},
             follow_redirects=False,
         )
 
@@ -220,20 +229,30 @@ def test_build_app_registers_the_first_user_with_no_bootstrap_token(tmp_path):
     assert "secure" not in set_cookie.lower()
 
 
-def test_build_app_persists_to_the_app_dir_database(tmp_path):
+def test_register_is_unregistered_in_the_launcher_built_app(tmp_path):
+    app = build_app(tmp_path)
+
+    with TestClient(app) as client:
+        response = client.get("/register")
+
+    assert response.status_code == 404
+
+
+def test_build_app_persists_the_device_user_to_the_app_dir_database(tmp_path):
     app = build_app(tmp_path)
 
     with TestClient(app) as client:
         client.post(
-            "/register",
-            data={"email": "owner@example.com", "password": "device-owner-pw"},
+            "/welcome",
+            data={"name": "Owner", "unit_pref": "kg", "hand_order_pref": "alternating"},
         )
 
     engine = create_engine(database_url_for(tmp_path))
     with Session(engine) as session:
         users = session.exec(select(User)).all()
-    assert [user.email for user in users] == ["owner@example.com"]
-    assert users[0].is_admin  # first registration on an empty DB becomes admin
+    assert len(users) == 1
+    assert users[0].name == "Owner"
+    assert users[0].is_admin  # first-run user becomes admin (ADR-0013)
 
 
 # --- serve() wiring: plain asyncio/h11 runner, real socket ---------------
@@ -271,8 +290,8 @@ def test_serve_wiring_boots_a_reachable_loopback_server(tmp_path):
         assert healthy, "server did not become healthy in time"
 
         response = httpx.post(
-            f"{base_url}/register",
-            data={"email": "owner@example.com", "password": "device-owner-pw"},
+            f"{base_url}/welcome",
+            data={"name": "Owner", "unit_pref": "kg", "hand_order_pref": "alternating"},
             follow_redirects=False,
         )
         assert response.status_code == 303

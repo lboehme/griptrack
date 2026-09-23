@@ -17,6 +17,10 @@ VALID_UNITS = ("kg", "lbs")
 # to. PainReport is deliberately broader ("both" is allowed there).
 VALID_HANDS = ("left", "right")
 
+# User.hand_order_pref -- shared by backend.routers.profile and the WebView
+# build's first-run flow (backend.routers.device_auth, ADR-0013).
+VALID_HAND_ORDER_PREFS = ("alternating", "sequential")
+
 
 class User(SQLModel, table=True):
     __tablename__ = "users"

@@ -92,3 +92,24 @@
    - In-flow pages step back via `webView.goBackOrForward(step)`, automatically skipping over any `/login` or `/register` history entries.
    - Navigating away from auth pages clears WebView history.
 6. **Compatibility**: Supports Android 15+ (enforced edge-to-edge, `targetSdk = 35`) while remaining backward compatible to `minSdk = 26` (Android 8.0).
+
+---
+
+## 9. Device Sign-In & First Run (#145, ADR-0013)
+
+**Scope**: single-user install — no password login, no shared-server registration. `backend/launcher.py` provisions a device token in app-private storage alongside the session secret; the shell exchanges it for the session cookie at `POST /device-login` before the first page load; a three-screen first-run flow (`/welcome`, `/welcome/plates`, `/welcome/test`) replaces `/register` the first time the app ever runs.
+
+| # | Step | Expected Result | Device Verification | Status |
+|---|------|-----------------|---------------------|--------|
+| 22 | **Fresh Install — First Run Appears** | Install the APK for the first time (or clear app data) and launch. | No login/register screen. App boots straight to `/welcome` (name, units, hand order). | **PENDING DEVICE** |
+| 23 | **First Run — All Three Screens** | Complete screen 1 (name + units + hand order), land on screen 2 (seeded plate inventory, with a link to edit it), continue to screen 3 (guided max test or skip). | Each screen renders correctly; "Continue"/"Skip for now" advance without error; the app ends on Home (`/`) signed in. | **PENDING DEVICE** |
+| 24 | **First Run Is Idempotent** | Mid-flow (e.g. on `/welcome/plates`), rotate the device or use the system Back button back to `/welcome`, then resubmit screen 1. | No second device user is created; the app does not error — it either re-shows the current step or returns Home, never a duplicate first-run. | **PENDING DEVICE** |
+| 25 | **Relaunch — Signed In, No Login Screen** | Force-close the app (not force-stop) after finishing first run, then reopen it from the launcher. | Splash → straight to Home (`/`), no login/first-run screen. The `POST /device-login` exchange happens invisibly behind the splash. | **PENDING DEVICE** |
+| 26 | **Force-Stopped Relaunch** | `adb shell am force-stop org.griptrack.app`, then relaunch from the launcher icon. | Same as above: straight to Home (or the restored `/session/...` URL per §2.3), still signed in — the device token file and session cookie both survive a full process kill. | **PENDING DEVICE** |
+| 27 | **Restored Session URL After Device Sign-In** | Mid-session (`/session/worksets`), force-stop within the 3-hour restore window, relaunch. | Device sign-in completes first, then the app lands on the restored `/session/worksets` URL (not Home) — the `next` param on `/device-login` round-trips the saved path. | **PENDING DEVICE** |
+| 28 | **No Token, No Access (Isolation Check)** | Not device-testable directly; covered by `tests/test_device_login.py` at the HTTP seam. A second process on the phone hitting `127.0.0.1:8000` without the app-private device token file cannot obtain a session cookie or read/write data. | `POST /device-login` with a wrong or missing token returns 403 (or redirects to `/welcome` before first run) and never sets a session cookie. | **VERIFIED (HTTP seam)** |
+
+**Notes**:
+- The device token lives at `<app_dir>/device_token` (same directory as `session_secret`, `griptrack.db`) — app-private storage, unreadable to other apps.
+- The WebView shell reads that file and calls `webView.postUrl("$serverUrl/device-login", "token=<urlencoded>&next=<urlencoded>".toByteArray())` in place of the old direct `loadUrl("$serverUrl/")`/`loadUrl("$serverUrl$path")` calls in `MainActivity.loadInitialPage()` — see that method for the restored-session-URL (`next`) wiring, which preserves PR #152's behaviour.
+- The session cookie's `max_age` is 400 days in this build (`GRIPTRACK_WEBVIEW_BUILD=1`); the server build is unchanged (14 days).

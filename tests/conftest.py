@@ -51,3 +51,22 @@ def client():
 def client_factory():
     """For tests that must set env vars before the app is constructed."""
     return build_client
+
+
+# A fixed, known device token for webview_client (ADR-0013, #145) -- tests
+# assert against this value directly rather than reading a real token file,
+# since backend.auth.device_login reads GRIPTRACK_DEVICE_TOKEN live from the
+# environment (same pattern GRIPTRACK_BOOTSTRAP_TOKEN already uses).
+WEBVIEW_DEVICE_TOKEN = "test-device-token-0123456789"
+
+
+@pytest.fixture
+def webview_client(monkeypatch, client_factory):
+    """A TestClient for the WebView build (ADR-0013): GRIPTRACK_WEBVIEW_BUILD
+    and a known GRIPTRACK_DEVICE_TOKEN are set before create_app() runs, so
+    /device-login and /welcome are registered and device sign-in is
+    exercisable against WEBVIEW_DEVICE_TOKEN."""
+    monkeypatch.setenv("GRIPTRACK_WEBVIEW_BUILD", "1")
+    monkeypatch.setenv("GRIPTRACK_DEVICE_TOKEN", WEBVIEW_DEVICE_TOKEN)
+    with client_factory() as test_client:
+        yield test_client

@@ -186,7 +186,7 @@ previous export. This cannot be undone.</p>
 </form>
 </div>
 
-{% if user.is_admin %}
+{% if user.is_admin and not webview_build %}
 <div class="card">
 <h3>Invites <span class="muted" style="font-weight:500">(admin)</span></h3>
 <form method="post" action="/invites">

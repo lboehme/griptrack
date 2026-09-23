@@ -26,8 +26,32 @@ object ServerManager {
     private const val HEALTH_TIMEOUT_MS = 45_000L
     private const val HEALTH_POLL_INTERVAL_MS = 200L
 
+    // Must match backend.launcher.DEVICE_TOKEN_FILENAME (#145, ADR-0013):
+    // the launcher writes this file into the same app_dir passed to
+    // serve() below, and MainActivity reads it back to perform the
+    // device sign-in exchange at POST /device-login.
+    const val DEVICE_TOKEN_FILENAME = "device_token"
+
     val serverUrl: String
         get() = "http://$LOOPBACK_HOST:$DEFAULT_PORT"
+
+    /**
+     * The device sign-in token backend.launcher provisioned into
+     * app-private storage (same app_dir passed to serve() below), or null
+     * if it can't be read yet (server hasn't bootstrapped, or an I/O
+     * error). Read fresh on every call rather than cached, since it's a
+     * tiny local file read and this only happens once per cold start.
+     */
+    fun deviceToken(context: Context): String? {
+        return try {
+            val file = java.io.File(context.applicationContext.filesDir, DEVICE_TOKEN_FILENAME)
+            if (!file.exists()) return null
+            file.readText().trim().takeIf { it.isNotEmpty() }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read device token", e)
+            null
+        }
+    }
 
     enum class State {
         STOPPED,
