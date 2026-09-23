@@ -1,6 +1,7 @@
 package org.griptrack.app
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Color
@@ -28,12 +29,15 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.updatePadding
 
 /**
- * Main Activity embedding the GripTrack WebView shell (#98, #99, PRD #93).
+ * Main Activity embedding the GripTrack WebView shell (#98, #99, PRD #93, #139, #140).
  *
  * Bootstraps the embedded Python FastAPI backend on a background thread,
  * polls /health behind a splash screen, and loads the WebView at the exact
  * 127.0.0.1:<port> bound by the server once healthy. Supports file downloads
  * (export archives) and file uploads (restore archive).
+ *
+ * Preserves mid-session state across Activity recreation and process death (#140, §2.3)
+ * and conforms Back button navigation to Android app conventions (#140, §2.4).
  */
 class MainActivity : AppCompatActivity() {
 
@@ -47,6 +51,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var retryButton: Button
 
     private var hasLoadedInitialUrl = false
+    private var savedStateBundle: Bundle? = null
+    private var currentRelativeUrl: String? = null
+    private var lastUrlSavedTimestamp: Long = 0L
+    private var previousLoadedUrl: String? = null
+    private var clearHistoryOnNextPageFinished = false
+    private var isNavigatingHome = false
     private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
 
     private val fileChooserLauncher = registerForActivityResult(
@@ -60,6 +70,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+        savedStateBundle = savedInstanceState
 
         splashScreen.setKeepOnScreenCondition {
             ServerManager.state != ServerManager.State.RUNNING && ServerManager.state != ServerManager.State.ERROR
@@ -95,9 +106,14 @@ class MainActivity : AppCompatActivity() {
         updateSystemBarAppearance()
     }
 
-    private fun updateSystemBarAppearance() {
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        updateSystemBarAppearance(newConfig)
+    }
+
+    private fun updateSystemBarAppearance(config: Configuration = resources.configuration) {
         val insetsController = WindowInsetsControllerCompat(window, window.decorView)
-        val isDarkMode = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        val isDarkMode = (config.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
         insetsController.isAppearanceLightStatusBars = !isDarkMode
         insetsController.isAppearanceLightNavigationBars = !isDarkMode
     }
@@ -165,6 +181,37 @@ class MainActivity : AppCompatActivity() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 CookieManager.getInstance().flush()
+
+                isNavigatingHome = false
+
+                if (clearHistoryOnNextPageFinished) {
+                    clearHistoryOnNextPageFinished = false
+                    view?.clearHistory()
+                }
+
+                val currentPath = SessionLifecycleHelper.normalizePath(url)
+                val previousPath = SessionLifecycleHelper.normalizePath(previousLoadedUrl)
+                val wasAuth = previousPath == "/login" || previousPath == "/register"
+                val isAuth = currentPath == "/login" || currentPath == "/register"
+
+                // Once signed in / navigated away from auth pages, clear history so Back never returns to auth
+                if (wasAuth && !isAuth) {
+                    view?.clearHistory()
+                }
+                previousLoadedUrl = url
+
+                // Save path and timestamp for same-origin URLs across recreation and process death
+                val relativeUrl = SessionLifecycleHelper.extractPathAndQuery(url)
+                if (relativeUrl != null) {
+                    val now = System.currentTimeMillis()
+                    currentRelativeUrl = relativeUrl
+                    lastUrlSavedTimestamp = now
+                    getSharedPreferences(SessionLifecycleHelper.PREFS_NAME, Context.MODE_PRIVATE)
+                        .edit()
+                        .putString(SessionLifecycleHelper.KEY_SAVED_PATH, relativeUrl)
+                        .putLong(SessionLifecycleHelper.KEY_SAVED_TIME, now)
+                        .apply()
+                }
             }
         }
 
@@ -201,14 +248,59 @@ class MainActivity : AppCompatActivity() {
     private fun setupBackNavigation() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (::webView.isInitialized && webView.visibility == View.VISIBLE && webView.canGoBack()) {
-                    webView.goBack()
-                } else {
+                if (!::webView.isInitialized || webView.visibility != View.VISIBLE) {
                     isEnabled = false
                     onBackPressedDispatcher.onBackPressed()
+                    return
+                }
+
+                if (isNavigatingHome) {
+                    finish()
+                    return
+                }
+
+                val currentUrl = webView.url
+                val currentPath = SessionLifecycleHelper.normalizePath(currentUrl)
+
+                // 1. If current page is home (/), exit activity
+                if (currentPath == SessionLifecycleHelper.HOME_PATH) {
+                    finish()
+                    return
+                }
+
+                // 2. If current page is a tab root other than /, navigate to / and clear history
+                if (SessionLifecycleHelper.TAB_ROOTS.contains(currentPath)) {
+                    navigateToHomeAndClearHistory()
+                    return
+                }
+
+                // 3. Everywhere else: step back through history, skipping auth pages (/login, /register)
+                val history = webView.copyBackForwardList()
+                val currentIndex = history.currentIndex
+                var step = -1
+                while (currentIndex + step >= 0) {
+                    val item = history.getItemAtIndex(currentIndex + step)
+                    val itemPath = SessionLifecycleHelper.normalizePath(item.url)
+                    if (itemPath != "/login" && itemPath != "/register") {
+                        break
+                    }
+                    step--
+                }
+
+                if (currentIndex + step >= 0) {
+                    webView.goBackOrForward(step)
+                } else {
+                    // No valid non-auth history to step back into; return to home
+                    navigateToHomeAndClearHistory()
                 }
             }
         })
+    }
+
+    private fun navigateToHomeAndClearHistory() {
+        isNavigatingHome = true
+        clearHistoryOnNextPageFinished = true
+        webView.loadUrl("${ServerManager.serverUrl}/")
     }
 
     private fun startServer() {
@@ -224,12 +316,41 @@ class MainActivity : AppCompatActivity() {
     private fun onServerReady(url: String) {
         Log.i(TAG, "Server ready, loading WebView at: $url")
         if (!hasLoadedInitialUrl) {
-            webView.loadUrl(url)
+            loadInitialPage(url)
             hasLoadedInitialUrl = true
         }
         errorContainer.visibility = View.GONE
         webView.visibility = View.VISIBLE
         ViewCompat.requestApplyInsets(webView)
+    }
+
+    private fun loadInitialPage(serverUrl: String) {
+        val prefs = getSharedPreferences(SessionLifecycleHelper.PREFS_NAME, Context.MODE_PRIVATE)
+        val savedPath = savedStateBundle?.getString(SessionLifecycleHelper.KEY_SAVED_PATH)
+            ?: prefs.getString(SessionLifecycleHelper.KEY_SAVED_PATH, null)
+        val savedTime = savedStateBundle?.getLong(SessionLifecycleHelper.KEY_SAVED_TIME, 0L)?.takeIf { it > 0L }
+            ?: prefs.getLong(SessionLifecycleHelper.KEY_SAVED_TIME, 0L)
+
+        val shouldRestoreSession = SessionLifecycleHelper.isRestorableSessionPath(savedPath) &&
+            SessionLifecycleHelper.isRecentlySaved(savedTime)
+
+        if (shouldRestoreSession && savedPath != null) {
+            Log.i(TAG, "Restoring active session from $savedPath (saved at $savedTime)")
+            var restored = false
+            val bundle = savedStateBundle
+            if (bundle != null) {
+                restored = (webView.restoreState(bundle) != null)
+            }
+            if (!restored) {
+                val path = if (savedPath.startsWith("/")) savedPath else "/$savedPath"
+                webView.loadUrl("$serverUrl$path")
+            }
+        } else {
+            Log.i(TAG, "Loading root URL (savedPath=$savedPath, savedTime=$savedTime, shouldRestore=$shouldRestoreSession)")
+            clearHistoryOnNextPageFinished = true
+            webView.loadUrl("$serverUrl/")
+        }
+        savedStateBundle = null
     }
 
     private fun onServerError(error: Throwable) {
@@ -240,6 +361,20 @@ class MainActivity : AppCompatActivity() {
         ViewCompat.requestApplyInsets(errorContainer)
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        if (::webView.isInitialized) {
+            webView.saveState(outState)
+        }
+        val prefs = getSharedPreferences(SessionLifecycleHelper.PREFS_NAME, Context.MODE_PRIVATE)
+        val path = currentRelativeUrl ?: prefs.getString(SessionLifecycleHelper.KEY_SAVED_PATH, null)
+        val time = if (lastUrlSavedTimestamp > 0L) lastUrlSavedTimestamp else prefs.getLong(SessionLifecycleHelper.KEY_SAVED_TIME, 0L)
+        if (path != null) {
+            outState.putString(SessionLifecycleHelper.KEY_SAVED_PATH, path)
+            outState.putLong(SessionLifecycleHelper.KEY_SAVED_TIME, time)
+        }
+    }
+
     override fun onPause() {
         super.onPause()
         CookieManager.getInstance().flush()
@@ -247,7 +382,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        if (isFinishing) {
+        if (isFinishing && ::webView.isInitialized) {
             webView.destroy()
         }
     }

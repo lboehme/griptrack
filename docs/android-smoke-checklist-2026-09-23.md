@@ -1,17 +1,18 @@
-# GripTrack Android On-Device Smoke Checklist (#139 / docs/ui-review-2026-09.md §2.1, §2.5, §2.7)
+# GripTrack Android On-Device Smoke Checklist (#139, #140 / docs/ui-review-2026-09.md §2.1, §2.3, §2.4, §2.5, §2.7)
 
 **Test Date**: 2026-09-23  
 **Target Hardware**: Samsung Galaxy S22 Ultra (SM-S908B), Android 16 (arm64-v8a)  
 **App Build**: `app-debug.apk` (`targetSdk = 35`, Chaquopy 17.0.0, CPython 3.13, FastAPI + SQLite)  
-**Scope**: Android shell edge-to-edge handling, keyboard (IME) insets, single splash screen (`core-splashscreen`), and themed status/navigation bars.
+**Scope**: Android shell edge-to-edge handling, keyboard (IME) insets, single splash screen (`core-splashscreen`), themed status/navigation bars, mid-session lifecycle preservation across recreation & process death (§2.3), and app-like Back navigation (§2.4).
 
 ---
 
 ## 1. Prerequisites & Build Verification
 
 - [x] **Gradle Build**: `./gradlew assembleDebug` builds `app-debug.apk` cleanly with zero errors and zero warnings.
+- [x] **Unit Tests**: `./gradlew testDebugUnitTest` passed all Android navigation & lifecycle unit tests.
 - [x] **Lint**: `scripts/lint` clean (Ruff, Mypy 26 source files, Pip-audit 0 vulnerabilities).
-- [x] **Tests**: `scripts/test` passed 398/398 tests.
+- [x] **Backend Tests**: `scripts/test` passed 398/398 tests.
 - [ ] **APK Installation**: `adb install -r app/build/outputs/apk/debug/app-debug.apk` streams and installs successfully.
 
 ---
@@ -57,8 +58,37 @@
 
 ---
 
-## 6. Architecture & Implementation Notes
+## 6. Mid-Session Lifecycle & State Restoration (§2.3)
+
+| # | Step | Expected Result | Device Verification | Status |
+|---|------|-----------------|---------------------|--------|
+| 14 | **Mid-Session Dark Mode Toggle** | While on `/session/warmup` or `/session/worksets` with active timer or unsaved stepper input, toggle system dark mode (via Quick Settings tile or schedule). | Activity is NOT recreated (`uiMode` in `configChanges`). WebView updates colors via CSS `prefers-color-scheme` live; active rest countdown and uncommitted stepper values are completely preserved. | **PENDING DEVICE** |
+| 15 | **Process Kill & Relaunch (< 3 Hours)** | While on `/session/worksets` (e.g. set 2 of 3), switch to memory-heavy app (camera/maps) or force-stop process (`adb shell am kill org.griptrack.app`). Relaunch within 3 hours. | App boots through single splash and restores directly into the active `/session/worksets` URL from saved state instead of dumping user on `/`. | **PENDING DEVICE** |
+| 16 | **Process Kill & Relaunch (> 3 Hours)** | Kill app process while on a session page. Relaunch after more than 3 hours (or simulated timestamp expiry). | Because 3 hours have elapsed, session restoration window has expired; app cleanly opens to Home (`/`). | **PENDING DEVICE** |
+| 17 | **Non-Session Page Resurrection** | Kill process while on `/dashboard`, `/climbs`, `/profile`, or `/session/new`. Relaunch app. | Saved URL is not an active `/session/...` workout page; app launches directly to Home (`/`). | **PENDING DEVICE** |
+
+---
+
+## 7. App Navigation & Back Button Behaviour (§2.4)
+
+| # | Step | Expected Result | Device Verification | Status |
+|---|------|-----------------|---------------------|--------|
+| 18 | **Tab Roots to Home** | Navigate to any tab root (`/dashboard`, `/climbs`, `/profile`, `/session/new`). Press Back button or trigger Back gesture. | App navigates to Home (`/`) and clears forward/backward history rather than stepping back through every visited tab. | **PENDING DEVICE** |
+| 19 | **Home Exit** | From Home (`/`), press Back button or trigger Back gesture. | App finishes activity and exits cleanly to Android launcher/home screen (`finish()`). | **PENDING DEVICE** |
+| 20 | **Mid-Flow Back Navigation** | From `/session/new`, start warmup (`/session/warmup`), then proceed to worksets (`/session/worksets`). Press Back. | Back steps back inside the flow to `/session/warmup`. Pressing Back again from warmup steps back to `/session/new`. | **PENDING DEVICE** |
+| 21 | **Never Return to Auth After Sign-In** | Start from `/login` or `/register`, enter credentials, and log in to `/`. Press Back. | Back stack history is cleared upon navigation away from auth pages; pressing Back exits app instead of stranding user on `/login` or `/register`. | **PENDING DEVICE** |
+
+---
+
+## 8. Architecture & Implementation Notes
 
 1. **`androidx.core:core-splashscreen:1.0.1`**: Installed and wired in `MainActivity.onCreate()` before `super.onCreate()`. Starting theme `Theme.GripTrack.Starting` switches to `Theme.GripTrack` after splash.
 2. **Native Inset Handling**: `ViewCompat.setOnApplyWindowInsetsListener` handles combined `systemBars() or ime()` insets on `webView` and `errorContainer`.
-3. **Compatibility**: Supports Android 15+ (enforced edge-to-edge, `targetSdk = 35`) while remaining backward compatible to `minSdk = 26` (Android 8.0).
+3. **Configuration Changes**: `uiMode` is added to `android:configChanges` in `AndroidManifest.xml` alongside `orientation|screenSize|keyboardHidden|screenLayout`. Dark mode changes are handled live by WebView via CSS `prefers-color-scheme` without Activity recreation.
+4. **Session State Restoration**: `onPageFinished` stores same-origin path + query and `System.currentTimeMillis()` in `SharedPreferences` and `onSaveInstanceState`. On startup, `onServerReady` restores `/session/...` pages saved within a 3-hour window (`SESSION_RESTORE_TIMEOUT_MS`). Setup (`/session/new`), auth, and non-session pages default to Home (`/`).
+5. **App-Like Back Navigation**: `OnBackPressedCallback` intercepts Back gestures:
+   - Root `/` exits app (`finish()`).
+   - Tab roots (`/dashboard`, `/climbs`, `/profile`, `/session/new`) navigate to `/` and clear history.
+   - In-flow pages step back via `webView.goBackOrForward(step)`, automatically skipping over any `/login` or `/register` history entries.
+   - Navigating away from auth pages clears WebView history.
+6. **Compatibility**: Supports Android 15+ (enforced edge-to-edge, `targetSdk = 35`) while remaining backward compatible to `minSdk = 26` (Android 8.0).
