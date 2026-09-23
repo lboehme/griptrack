@@ -21,7 +21,7 @@
       <input type="number" name="weight" step="0.1" min="1" required>
     </label>
   </div>
-  <button type="submit">Log bodyweight</button>
+  <button type="submit" class="btn-secondary">Log bodyweight</button>
 </form>
 </div>
 
@@ -31,7 +31,7 @@
   <label>How the app greets you
     <input type="text" name="name" value="{{ user.name or "" }}" maxlength="60" placeholder="{{ user.email.split("@")[0] }}">
   </label>
-  <button type="submit">Save</button>
+  <button type="submit" class="btn-secondary">Save</button>
 </form>
 </div>
 
@@ -44,7 +44,7 @@
       <option value="sequential" {% if user.hand_order_pref == "sequential" %}selected{% endif %}>sequential — one hand fully, then the other</option>
     </select>
   </label>
-  <button type="submit">Save</button>
+  <button type="submit" class="btn-secondary">Save</button>
 </form>
 </div>
 
@@ -59,7 +59,7 @@
       <input type="number" name="default_rest_seconds" value="{{ protocol.default_rest_seconds }}" min="15" max="1800" required>
     </label>
   </div>
-  <button type="submit">Save session defaults</button>
+  <button type="submit" class="btn-secondary">Save session defaults</button>
 </form>
 
 <h4 style="margin-top:1.5rem;margin-bottom:.5rem">Default progression path</h4>
@@ -83,7 +83,7 @@
       <input type="number" name="max_sets" value="{{ default_progression.max_sets }}" min="1" max="30" required>
     </label>
   </div>
-  <button type="submit">Save default progression</button>
+  <button type="submit" class="btn-secondary">Save default progression</button>
 </form>
 
 <h4 style="margin-top:1.5rem;margin-bottom:.5rem">Per-combination progression overrides</h4>
@@ -153,7 +153,7 @@
         <input type="number" name="max_sets" value="6" min="1" max="30" required>
       </label>
     </div>
-    <button type="submit">Save combination override</button>
+    <button type="submit" class="btn-secondary">Save combination override</button>
   </form>
 </details>
 
@@ -182,7 +182,7 @@ previous export. This cannot be undone.</p>
     <input type="checkbox" name="confirm" value="yes" required>
     I understand this restores the archive into this account.
   </label>
-  <button type="submit">Restore from export</button>
+  <button type="submit" class="btn-secondary">Restore from export</button>
 </form>
 </div>
 
@@ -190,14 +190,14 @@ previous export. This cannot be undone.</p>
 <div class="card">
 <h3>Invites <span class="muted" style="font-weight:500">(admin)</span></h3>
 <form method="post" action="/invites">
-  <button type="submit">Generate invite code</button>
+  <button type="submit" class="btn-secondary">Generate invite code</button>
 </form>
 </div>
 <div class="card">
 <h3>Grip types <span class="muted" style="font-weight:500">(admin)</span></h3>
 <form method="post" action="/grip-types">
   <label>New grip type <input type="text" name="name" required></label>
-  <button type="submit">Add grip type</button>
+  <button type="submit" class="btn-secondary">Add grip type</button>
 </form>
 </div>
 {% endif %}

@@ -6,8 +6,9 @@
 <ul class="plain">
   {% for climb in climbs %}
   {% set unparsed = climb.discipline == "boulder" and parse_boulder_grade(climb.grade) is none %}
+  {% set color = climb.grade|grade_color if climb.discipline == "boulder" else "" %}
   <li class="climb" data-discipline="{{ climb.discipline }}" data-grade="{{ climb.grade }}" data-style="{{ climb.style }}" data-date="{{ climb.date }}">
-    <span class="grade">{{ climb.grade }}</span>
+    <span class="grade"{% if color %} style="color:{{ color }}"{% endif %}>{{ climb.grade }}</span>
     <span class="pill {{ climb.discipline }}">{{ climb.discipline|display_name }}</span>
     <span class="pill">{{ climb.style|display_name }}</span>
     {% if unparsed %}<span class="pill grade-unparsed" data-testid="grade-unparsed" title="Grade not recognized — excluded from the strength/grade correlation">⚠ grade not recognized</span>{% endif %}

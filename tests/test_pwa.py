@@ -10,8 +10,8 @@ def test_manifest_has_required_fields_with_sane_values(client):
     assert manifest["start_url"] == "/"
     assert manifest["scope"] == "/"
     assert manifest["display"] == "standalone"
-    assert manifest["theme_color"] == "#e8532c"
-    assert manifest["background_color"] == "#f3f4f6"
+    assert manifest["theme_color"] == "#14120F"
+    assert manifest["background_color"] == "#14120F"
     assert len(manifest["icons"]) >= 3
     assert any(icon["purpose"] == "maskable" for icon in manifest["icons"])
 

@@ -9,10 +9,10 @@ from fastapi.responses import JSONResponse, Response
 from backend.templating import templates
 
 # Brand values duplicated from base.html's theme-color meta tag and
-# app.css's --bg variable — the manifest format has no way to reference a
-# stylesheet, so these two sources have to be kept in sync by hand.
-THEME_COLOR = "#e8532c"
-BACKGROUND_COLOR = "#f3f4f6"
+# app.css's --bg/--acc tokens — the manifest format has no way to reference
+# a stylesheet, so these two sources have to be kept in sync by hand.
+THEME_COLOR = "#14120F"
+BACKGROUND_COLOR = "#14120F"
 
 router = APIRouter()
 
