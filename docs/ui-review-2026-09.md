@@ -134,8 +134,8 @@ sits in a box, so nothing stands out.
 - **Borrow from climbing culture.** Gyms colour-code grades. A grade colour
   scale (6A green → 7A red → 8A black) used in climb chips, the correlation
   chart and history would make the climbing side feel native instead of like a
-  text list. Subtle chalk-texture or topo-line motifs work in empty states and
-  the splash screen.
+  text list. A topo-line motif carries the climbing feel (the prototype
+  settled on one contour map behind every screen: see Visual language, V4).
 - **Material 3 structure, your own skin.** It's an Android app now, so use the
   conventions people know: bottom sheets, a top app bar, predictive back,
   snackbars. Keep the orange and dark palette so it's still yours.
@@ -196,6 +196,257 @@ process that produced the Focus screens:
 3. **Build it in slices:** session player plus lock-screen notification first
    (the biggest win at the board), then Today, then Progress, then the visual
    refresh across the app.
+
+---
+
+## Visual language (from the prototype)
+
+The Direction above was prototyped as a clickable phone mockup on a claude.ai
+design canvas: https://claude.ai/artifact/KKCFk5Nkpx7zzuYvWUJDs7 (private to the
+owner). This section records its look precisely enough to rebuild it in
+`backend/static/app.css` and the Jinja templates without reopening the
+prototype. The prototype's markup format doesn't carry over, but its CSS
+does: every value below was copied from the final, screenshot-checked version.
+
+| Today | Warmup | Work set | Rest |
+|---|---|---|---|
+| ![](screenshots/ui-review-2026-09/prototype-today.jpg) | ![](screenshots/ui-review-2026-09/prototype-warmup.jpg) | ![](screenshots/ui-review-2026-09/prototype-workset.jpg) | ![](screenshots/ui-review-2026-09/prototype-rest.jpg) |
+| **Summary** | **Progress** | **Log sheet** | **First run: plates** |
+| ![](screenshots/ui-review-2026-09/prototype-summary.jpg) | ![](screenshots/ui-review-2026-09/prototype-progress.jpg) | ![](screenshots/ui-review-2026-09/prototype-logsheet.jpg) | ![](screenshots/ui-review-2026-09/prototype-plates.jpg) |
+
+### V1. Principles
+
+1. **One landscape.** A single topographic contour map sits behind every
+   screen and stays still while content scrolls over it. Nothing else draws
+   its own contour lines.
+2. **Glass over the map.** Surfaces are translucent frosted glass, so the map
+   shows through. The more important the content, the stronger the frosting
+   (V6).
+3. **Numbers are the hero.** Weights, percentages, times and grades use a
+   condensed display face at large sizes. Everything else is quiet.
+4. **Orange means "do this".** The accent fills the one primary action per
+   screen, the left-hand badge, progress and live state. It is not used for
+   decoration.
+5. **Gym mode.** A warm charcoal dark theme, readable at arm's length. Light
+   mode was not designed (see V11).
+
+### V2. Colour tokens
+
+| Token | Value | Use |
+|---|---|---|
+| `--bg` | `#14120F` | App ground (warm charcoal) |
+| `--s1` | `#1D1A16` | Solid surface (bottom sheet) |
+| `--s2` | `#27231E` | Raised fill (round steppers, empty ring track) |
+| `--line` | `#383229` | Hairlines, progress-segment track |
+| `--tx` | `#F4EFE7` | Text ("chalk white"); also the right-hand badge and selected chips |
+| `--mu` | `#A89F92` | Secondary text, overline labels, axis labels |
+| `--acc` | `#FF6A3D` | Accent: primary button, left-hand badge, live state |
+| on-accent | `#1B0D06` | Text and icons on `--acc` (≈ 6.7:1) |
+| `--ok` | `#4CC38A` | Positive deltas, "logged" states |
+| `--warn` | `#F2B24C` | Tweak/pain warnings, plateau |
+| glass rim | `rgba(244,239,231,.13–.20)` | Borders on glass |
+| topo stroke | `rgba(244,239,231,var(--topo))`, `--topo: .2` | The map |
+
+**Hands:** Left = orange badge (`--acc`), Right = chalk badge (`--tx`), both
+with dark text. This also fixes the old light-salmon right badge's contrast
+failure (§6). In charts, Left is a solid orange 2.5 px line and Right a chalk
+dotted line (`stroke-dasharray: 1 5`), so they differ by more than colour.
+
+**Grade colours** (gym-circuit style, used on grade chips, send dots and the
+"best send" dot):
+
+| Grades | Colour |
+|---|---|
+| 6A, 6A+ | `#4CC38A` green |
+| 6B, 6B+ | `#4C8DF6` blue |
+| 6C, 6C+ | `#F2C94C` yellow |
+| 7A, 7A+ | `#EF4E4E` red |
+| 7B and up | `#A77BF3` purple |
+
+### V3. Typography
+
+Two families, both SIL Open Font License: **Barlow Condensed** (500/600/700)
+for display and numbers, **Barlow** (400/500/600/700) for text. The prototype
+loaded them from Google Fonts. The app is offline, so **vendor the `.woff2`
+files under `backend/static/fonts/`** with `@font-face`, like uPlot is vendored.
+
+| Role | Face | Size / weight | Example |
+|---|---|---|---|
+| Screen headline | Condensed 700, line-height .9 | 52–64 px | "Pull day, Lukas." |
+| Hero number | Condensed 700, line-height .85–.9 | 60 px (set weights), 92 px (rest timer), 132 px (warmup %) | 34.5 · 1:42 · 65% |
+| Card number | Condensed 700 | 30–46 px | 1,405 · 7A |
+| Stepper value | Condensed 700 | 22 px | 5 |
+| Primary button | Condensed 700, uppercase, `letter-spacing: .05em` | 24 px | START SESSION |
+| Overline label | Barlow 600, uppercase, `letter-spacing: .16em`, `--mu` | 12 px | TODAY'S PLAN |
+| Body | Barlow 400–500 | 15–16 px, line-height 1.4 | |
+| Emphasis in body | Barlow 600 | 16–19 px | "Half crimp · 20 mm" |
+
+Use `font-variant-numeric: tabular-nums` wherever numbers update in place
+(steppers, timer) so they don't jitter.
+
+### V4. The topo map
+
+- **Asset:** `docs/design/topo-map.svg`, a 390 × 900 contour map (~55 KB, one
+  `<path>`, `stroke="currentColor"`). `docs/design/topo_generator.py`
+  regenerates it identically (seed 21) or makes new landscapes (`--seed N`).
+  It needs numpy and matplotlib, so it's a one-off design tool, not part of
+  the app. Copy the SVG into `backend/static/` when building.
+- **One fixed layer per screen:** the map is the first child of the screen
+  container, absolutely positioned to fill it, and **outside** the scrolling
+  element. Content scrolls over it, which is what makes the glass feel alive.
+  In the real multi-page app, put it once in `base.html` as a
+  `position: fixed` layer behind `<main>`, so the landscape doesn't jump
+  between pages.
+  ```css
+  .topo-map { position: fixed; inset: 0; width: 100%; height: 100%;
+              color: rgba(244,239,231,.2); pointer-events: none; z-index: 0; }
+  /* <svg class="topo-map" viewBox="0 0 390 900"
+          preserveAspectRatio="xMidYMin slice" aria-hidden="true"> */
+  ```
+- **Strength:** stroke opacity `.2` at 1 px. The prototype exposed this as a
+  tweak between 0 and .4. Much above .25 starts to fight the text.
+- **Celebration variant:** the session summary shows the same map in the
+  accent colour (`color: var(--acc)` with the layer at about 45% opacity).
+  It's the one place the map changes colour.
+- **Don't:** give individual cards or headers their own contour art. The
+  first prototype did, and the patterns didn't line up (owner feedback).
+
+### V5. Chrome
+
+- **Bars** (session top bar, Today's Start bar, bottom nav) are frosted, not
+  solid, so the map continues under them:
+  `background: rgba(20,18,15,.55); backdrop-filter: blur(14px) saturate(150%);`
+  with a top hairline of `rgba(244,239,231,.08)`.
+- **Bottom nav:** 72 px tall. Four slots: Today, Progress, a centre **Log**
+  (a 48 × 36 orange pill with a ＋), Settings. Icons are 22 px strokes at
+  2 px. The active tab has chalk text and an orange icon.
+- **Session top bar:** a ✕ round button (pause), an overline title ("WORK SET
+  2 OF 4") over the combo, a step counter ("6/8") on the right, and a row of 8
+  segments below (`4 px`, done = `--acc`, current = `--tx`, rest = `--line`).
+  No tab bar during a session.
+
+### V6. Glass materials
+
+Two levels. Both are a translucent fill plus a light `backdrop-filter`, a
+1 px rim, and a specular edge.
+
+```css
+/* Level 1: default glass (stat tiles, list cards, feel buttons, plates) */
+.glass {
+  background: rgba(40,35,30,.22);
+  border: 1px solid rgba(244,239,231,.14);
+  backdrop-filter: blur(2.5px) saturate(170%) brightness(1.18);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.12),
+              inset 0 -1px 0 rgba(0,0,0,.35),
+              0 10px 30px -12px rgba(0,0,0,.6);
+}
+/* Level 2: strong glass for content that must read first:
+   the Progress chart and story, Today's plan, session weights, warmup tiles */
+.glass.strong {
+  background: rgba(44,38,32,.24);
+  border-color: rgba(244,239,231,.2);
+  backdrop-filter: blur(3.5px) saturate(180%) brightness(1.6);
+}
+/* Specular rim: a masked 1px gradient border, brighter at the top-left */
+.glass::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px;
+  background: linear-gradient(150deg, rgba(255,255,255,.34), transparent 32%,
+                              transparent 70%, rgba(255,255,255,.12));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none;
+}
+/* Selected glass tile (ticked warmup hand, chosen "feel") */
+.glass.on { border-color: var(--acc); background: rgba(255,106,61,.16); } /* .20 on .strong */
+```
+
+Lessons from getting this right (each was a visible failure in an earlier
+version):
+
+- **Heavy blur doesn't work over thin lines.** A 1 px line at 20% opacity
+  blurred by more than ~4 px turns into a flat colour, and the "stronger"
+  cards looked like black boxes. "Stronger" glass therefore means a bit more
+  blur plus **more brightness**, not a big blur radius.
+- **No SVG displacement ("liquid refraction") filter.**
+  `backdrop-filter: url(#filter)` left a visible offset rectangle inside
+  every card. The live feel comes from the map staying still while glass
+  scrolls over it.
+- **Sheets and overlays are solid** (`#1D1A16`). A translucent bottom sheet
+  let the orange Start button and big numbers behind it smear through.
+- Radii: cards 20 px, tiles 20 px, feel buttons 18 px, primary button 18 px,
+  secondary 16 px, chips fully rounded, sheet 28 px top corners.
+
+### V7. Components
+
+| Component | Spec |
+|---|---|
+| **Primary button** | 64 px tall, full width, radius 18, `--acc` fill, on-accent text, Condensed 700 24 px uppercase. One per screen, pinned in the bottom action area. Press: `scale(.97)`. |
+| **Secondary button** | 56 px (64 next to a primary), radius 16, `rgba(32,28,24,.45)` fill, 1.5 px rim `rgba(244,239,231,.16)`, Barlow 600 17 px. |
+| **Chip** | 44 px tall, fully rounded, same fill and rim as secondary. Selected: chalk fill, `--bg` text. Used for segmented choices (range 6W/3M/All, style, hand, units). |
+| **Grade chip** | 48 px, radius 14, Condensed 700 19 px, with an 8 px grade-colour dot before the label. 5-column grid. |
+| **Round stepper** | 44 × 44 circle, `--s2` fill, `--line` rim, "−" / "+" at 22 px. Always paired around a Condensed value. |
+| **Hand badge** | 26 × 26, radius 8, Condensed 700 14 px letter. L orange, R chalk. |
+| **Overline label** | See V3. Sits above every group ("GRADE", "HOW DID IT FEEL?"). |
+| **Feel buttons** | 3 equal glass tiles, 84 px tall, a stroke icon over a label (Rough ↘, Solid —, Strong ↗). Selected: orange rim, text and icon, orange-tinted glass. |
+| **List row** | 56 px min, full-width button, label left, muted value right, chevron. Hairline between rows inside one glass card. |
+| **Plate** | Circular glass tile with the weight in Condensed 700 24 px and an orange count badge (`×2`) top-right; a muted badge when the count is 0. |
+| **Rest ring** | 280 px SVG, 10 px stroke, `--s2` track, `--acc` progress with round caps, transitioned by `stroke-dasharray` over .9 s linear. Time at 92 px in the middle. At 0:00 it becomes "Pull" in orange with a 1.4 s pulse. |
+| **Toast** | Chalk pill (`#F4EFE7` fill, `--bg` text, green ✓), 20 px from the sides, just above the nav or action bar, auto-hides after 2.6 s. |
+| **Bottom sheet** | Solid `#1D1A16`, radius 28 top, 40 × 4 handle, a 3-way segmented tab row, slides up over 280 ms `cubic-bezier(.2,.8,.3,1)` over a `rgba(8,7,6,.66)` scrim. |
+| **Charts** | On strong glass. Gridlines in `--line`, axis text Barlow 600 10 px `--mu`, last point marked with a dot, legend above the chart, grade legend below. |
+
+Icons are inline 24-unit SVG strokes (`stroke-width: 2`, round caps and
+joins, 22 px, or 16 px small). No icon font, no emoji.
+
+### V8. Layout rules
+
+- **Frame:** designed at 390 × 844. Side gutter 20 px. Gaps: 10–12 px between
+  cards, 14–18 px inside cards.
+- **Readouts top, controls bottom.** On session screens the big numbers sit
+  under the top bar, the steppers and the primary button sit in the lower
+  half, and the primary button always ends 28 px from the bottom edge.
+- **Tab screens** (Today, Progress, Settings) scroll inside the area above
+  the 72 px nav. Today's Start button lives in a frosted bar pinned directly
+  above the nav, so it never scrolls away.
+- **Headline block:** overline, then a 52–64 px Condensed headline, then one
+  muted sentence (max ≈ 320 px wide). Every tab screen opens this way.
+- Touch targets are 44 px minimum everywhere (steppers, chips, rows, nav).
+
+### V9. Motion
+
+Kept small and functional: press feedback `scale(.97)`, sheet slide-up 280 ms,
+the rest ring easing between seconds, and the "Pull" pulse at rest-over. Wrap
+all of it in `@media (prefers-reduced-motion: no-preference)` when building.
+
+### V10. Voice samples
+
+Written as the plain-spoken coach from D7. Reuse the patterns, not
+necessarily the exact words:
+
+- Headlines: "Pull day, Lukas." · "Done for today." · "Session done." ·
+  "What's on your rack?" · "One max test, then you're set."
+- Reasons in one line: "+0.5 kg: last session felt easy (RPE 7)" · "Deload:
+  you logged a left-hand niggle".
+- Story sentences: bold claim, muted advice: "**Right has held for 3 weeks.**
+  A deload week or a retest could break it."
+- Buttons are verbs: Start session · Rung done · Set done · Skip rest ·
+  Save & finish · Log 7A flash.
+
+### V11. Porting notes
+
+- **Fonts offline:** vendor Barlow and Barlow Condensed (V3). A Google Fonts
+  link would silently fall back on the phone.
+- **`backdrop-filter` cost:** Android WebView supports it, but many
+  blurred layers inside a scroller can drop frames on older phones. Keep glass
+  to cards and bars, not every chip, and check scrolling on the S22.
+- **Light mode:** not designed. Either commit to dark only (gym mode) or
+  derive a light palette (light sand ground, darker topo lines at about 12%)
+  in a separate pass.
+- **Replaces today's tokens:** V2 supersedes the `:root` block at the top of
+  `app.css`, including the gradient `--accent-grad`. The new system has no
+  gradients apart from the glass rim.
+- **Accessibility:** re-check `--mu` text on strong glass over the brightest
+  map areas (it passed by eye in the screenshots, but measure it). Keep the
+  Left/Right difference non-colour (solid vs dotted, L/R letters).
 
 ---
 
