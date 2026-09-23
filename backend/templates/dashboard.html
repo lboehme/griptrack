@@ -26,7 +26,11 @@
   <p class="muted corr-note">Rank correlation (Spearman's ρ) between your best pull (as % of bodyweight at the time) and boulder grade. Framed against Lattice's published finger-strength research as a reference point — their data covers hangboard hangs, not block pulls.</p>
   {% else %}
   <p class="corr-headline muted">
-    Not enough data yet. Log {{ 8 - correlation.n }} more boulder send(s) with recent strength/bodyweight records to see correlation.
+    {% if correlation.n < 8 %}
+    Log {{ 8 - correlation.n }} more boulder send{{ 's' if (8 - correlation.n) != 1 else '' }} to unlock strength vs. grade correlation.
+    {% else %}
+    Your strength hasn't changed across these sends yet, so there's nothing to correlate. Log a new max test.
+    {% endif %}
   </p>
   {% endif %}
 </div>
