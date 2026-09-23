@@ -23,7 +23,7 @@
 <body>
   <header class="app-header">
     <h1 class="wordmark"><a href="/">GripTrack<span class="dot">.</span></a></h1>
-    {% if user is defined and user %}
+    {% if user is defined and user and not webview_build %}
     <form class="logout-form" method="post" action="/logout">
       <button type="submit">Log out</button>
     </form>

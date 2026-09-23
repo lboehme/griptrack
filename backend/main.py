@@ -8,11 +8,13 @@ from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session, text
 from starlette.middleware.sessions import SessionMiddleware
 
+from backend import auth
 from backend.auth import LoginRateLimiter
 from backend.db import get_session
 from backend.routers import auth as auth_router
 from backend.routers import climbs as climbs_router
 from backend.routers import dashboard as dashboard_router
+from backend.routers import device_auth as device_auth_router
 from backend.routers import guided_max_test as guided_max_test_router
 from backend.routers import history as history_router
 from backend.routers import home as home_router
@@ -51,17 +53,29 @@ def create_app() -> FastAPI:
     # base.html reads this global to skip both the SW registration script
     # and the (equally unnecessary) PWA manifest link. Unset/"0" behaves
     # exactly like today's web/PWA build — nothing changes for it.
-    templates.env.globals["webview_build"] = (
-        os.environ.get("GRIPTRACK_WEBVIEW_BUILD", "0") == "1"
-    )
+    webview_build = os.environ.get("GRIPTRACK_WEBVIEW_BUILD", "0") == "1"
+    templates.env.globals["webview_build"] = webview_build
 
     app = FastAPI(title="GripTrack")
     app.state.login_limiter = LoginRateLimiter()
+    # Stashed on app.state (not just the template global above) so routers
+    # can branch on it too -- see backend.routers.auth's GET /login and
+    # backend.routers.device_auth's WebView-only routes.
+    app.state.webview_build = webview_build
+    # A single-user on-device install has no "remember me" flow -- device
+    # sign-in (ADR-0013) is what re-establishes the session cookie on every
+    # cold start anyway, so the cookie itself can just outlive any real gap
+    # between launches. The server build keeps Starlette's own default
+    # (1209600s / 14 days) verbatim.
+    session_max_age = (
+        auth.DEVICE_SESSION_MAX_AGE_SECONDS if webview_build else 1209600
+    )
     app.add_middleware(
         SessionMiddleware,
         secret_key=secret or "dev-only-secret",
         same_site="lax",
         https_only=production,
+        max_age=session_max_age,
     )
     app.mount("/static", StaticFiles(directory=BACKEND_DIR / "static"), name="static")
 
@@ -88,6 +102,15 @@ def create_app() -> FastAPI:
 
     app.include_router(home_router.router)
     app.include_router(auth_router.router)
+    if webview_build:
+        # First run + device sign-in replace registration (ADR-0013) --
+        # only meaningful, and only registered, on-device.
+        app.include_router(device_auth_router.router)
+    else:
+        # Invite-only registration, invites, admin password reset: a
+        # shared-server concern (ADR-0004) with nothing to protect on a
+        # single-user on-device install, so left unregistered there (404).
+        app.include_router(auth_router.server_only_router)
     app.include_router(profile_router.router)
     app.include_router(plates_router.router)
     app.include_router(max_tests_router.router)

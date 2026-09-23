@@ -8,10 +8,22 @@ from backend.limits import MAX_NAME_LENGTH
 from backend.models import User
 from backend.templating import templates
 
+# Registered unconditionally -- login/logout stay meaningful in both builds
+# (the WebView build's device sign-in still goes through the same session
+# cookie machinery; see backend.routers.device_auth for /device-login).
 router = APIRouter()
 
+# Registered only for the server build (ADR-0013, #145): invite-only
+# registration, invite generation, and admin password reset protect a
+# shared server (ADR-0004). On a single-user on-device install they protect
+# nothing, so main.create_app() only includes this router when
+# GRIPTRACK_WEBVIEW_BUILD is unset -- in the WebView build these paths are
+# simply never registered (404), same as any other undefined route. Nothing
+# is deleted: the self-hosting path (ADR-0006) still needs it.
+server_only_router = APIRouter()
 
-@router.post("/invites")
+
+@server_only_router.post("/invites")
 def create_invite(
     request: Request,
     user: User = Depends(auth.require_admin),
@@ -23,7 +35,7 @@ def create_invite(
     )
 
 
-@router.post("/admin/reset-password")
+@server_only_router.post("/admin/reset-password")
 def admin_reset_password(
     email: str = Form(),
     new_password: str = Form(),
@@ -37,7 +49,12 @@ def admin_reset_password(
 
 
 @router.get("/login")
-def login_page(request: Request):
+def login_page(request: Request, session: Session = Depends(get_session)):
+    if request.app.state.webview_build:
+        # No password login in the WebView build (ADR-0013) -- device
+        # sign-in is the only way in, and first run replaces registration.
+        destination = "/welcome" if not auth.any_user_exists(session) else "/"
+        return RedirectResponse(destination, status_code=303)
     return templates.TemplateResponse(request, "login.html", {})
 
 
@@ -69,12 +86,12 @@ def logout(request: Request):
     return RedirectResponse("/", status_code=303)
 
 
-@router.get("/register")
+@server_only_router.get("/register")
 def register_page(request: Request):
     return templates.TemplateResponse(request, "register.html", {})
 
 
-@router.post("/register")
+@server_only_router.post("/register")
 def register(
     request: Request,
     email: str = Form(),
@@ -90,7 +107,7 @@ def register(
         return HTMLResponse(
             "Too many attempts. Wait a minute and try again.", status_code=429
         )
-        
+
     try:
         user = auth.register_user(
             session, email, password, invite_code, unit_pref, name

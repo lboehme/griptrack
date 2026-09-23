@@ -45,8 +45,10 @@
   <p class="brand">GripTrack<span class="dot" style="color:var(--accent)">.</span></p>
   <div class="card">
     <p style="margin-top:0">Track your block-pull finger strength and climbing, and see them connect.</p>
+    {% if not webview_build %}
     <a class="btn" href="/login">Log in</a>
     <p class="auth-alt">Got an invite? <a href="/register">Create an account</a></p>
+    {% endif %}
   </div>
 </div>
 {% endif %}
