@@ -2,6 +2,8 @@ package org.griptrack.app
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.content.res.Configuration
+import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
@@ -14,11 +16,16 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
-import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.core.view.updatePadding
 
 /**
  * Main Activity embedding the GripTrack WebView shell (#98, #99, PRD #93).
@@ -35,9 +42,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private lateinit var webView: WebView
-    private lateinit var splashContainer: View
-    private lateinit var progressBar: ProgressBar
-    private lateinit var statusText: TextView
     private lateinit var errorContainer: View
     private lateinit var errorDetailText: TextView
     private lateinit var retryButton: Button
@@ -54,10 +58,28 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+
+        splashScreen.setKeepOnScreenCondition {
+            ServerManager.state != ServerManager.State.RUNNING && ServerManager.state != ServerManager.State.ERROR
+        }
+
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            @Suppress("DEPRECATION")
+            window.statusBarColor = Color.TRANSPARENT
+            @Suppress("DEPRECATION")
+            window.navigationBarColor = Color.TRANSPARENT
+        }
+
+        updateSystemBarAppearance()
+
         setContentView(R.layout.activity_main)
 
         initViews()
+        setupEdgeToEdgeInsets()
         setupWebView()
         setupBackNavigation()
 
@@ -68,14 +90,51 @@ class MainActivity : AppCompatActivity() {
         startServer()
     }
 
+    override fun onResume() {
+        super.onResume()
+        updateSystemBarAppearance()
+    }
+
+    private fun updateSystemBarAppearance() {
+        val insetsController = WindowInsetsControllerCompat(window, window.decorView)
+        val isDarkMode = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        insetsController.isAppearanceLightStatusBars = !isDarkMode
+        insetsController.isAppearanceLightNavigationBars = !isDarkMode
+    }
+
     private fun initViews() {
         webView = findViewById(R.id.webView)
-        splashContainer = findViewById(R.id.splashContainer)
-        progressBar = findViewById(R.id.progressBar)
-        statusText = findViewById(R.id.statusText)
         errorContainer = findViewById(R.id.errorContainer)
         errorDetailText = findViewById(R.id.errorDetailText)
         retryButton = findViewById(R.id.retryButton)
+    }
+
+    private fun setupEdgeToEdgeInsets() {
+        ViewCompat.setOnApplyWindowInsetsListener(webView) { view, windowInsets ->
+            val insets = windowInsets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime()
+            )
+            view.updatePadding(
+                left = insets.left,
+                top = insets.top,
+                right = insets.right,
+                bottom = insets.bottom
+            )
+            windowInsets
+        }
+
+        ViewCompat.setOnApplyWindowInsetsListener(errorContainer) { view, windowInsets ->
+            val insets = windowInsets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime()
+            )
+            view.updatePadding(
+                left = insets.left,
+                top = insets.top,
+                right = insets.right,
+                bottom = insets.bottom
+            )
+            windowInsets
+        }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -153,7 +212,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startServer() {
-        showLoadingState()
+        errorContainer.visibility = View.GONE
 
         ServerManager.start(
             context = this,
@@ -162,30 +221,23 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
-    private fun showLoadingState() {
-        progressBar.visibility = View.VISIBLE
-        statusText.visibility = View.VISIBLE
-        statusText.setText(R.string.starting_server)
-        errorContainer.visibility = View.GONE
-        splashContainer.visibility = View.VISIBLE
-    }
-
     private fun onServerReady(url: String) {
         Log.i(TAG, "Server ready, loading WebView at: $url")
         if (!hasLoadedInitialUrl) {
             webView.loadUrl(url)
             hasLoadedInitialUrl = true
         }
-        splashContainer.visibility = View.GONE
+        errorContainer.visibility = View.GONE
         webView.visibility = View.VISIBLE
+        ViewCompat.requestApplyInsets(webView)
     }
 
     private fun onServerError(error: Throwable) {
         Log.e(TAG, "Server error: ${error.message}", error)
-        progressBar.visibility = View.GONE
-        statusText.visibility = View.GONE
+        webView.visibility = View.GONE
         errorContainer.visibility = View.VISIBLE
         errorDetailText.text = error.stackTraceToString()
+        ViewCompat.requestApplyInsets(errorContainer)
     }
 
     override fun onPause() {
