@@ -143,7 +143,7 @@
   {% endfor %}
   </div>
   {% if current_set_number < total_sets %}
-  <div class="up-next-row">Sets {{ current_set_number + 1 }}–{{ total_sets }} up next · same load carries down</div>
+  <div class="up-next-row">{% if current_set_number + 1 == total_sets %}Set {{ current_set_number + 1 }}{% else %}Sets {{ current_set_number + 1 }}–{{ total_sets }}{% endif %} up next · same load carries down</div>
   {% endif %}
 </section>
 
@@ -885,7 +885,8 @@
     if (nextSet >= totalSets) {
       if (upNext) upNext.remove();
     } else if (upNext) {
-      upNext.textContent = "Sets " + (nextSet + 1) + "–" + totalSets + " up next · same load carries down";
+      var nextLabel = (nextSet + 1 === totalSets) ? ("Set " + (nextSet + 1)) : ("Sets " + (nextSet + 1) + "–" + totalSets);
+      upNext.textContent = nextLabel + " up next · same load carries down";
     }
 
     if (nextSet > totalSets) {

@@ -5,6 +5,7 @@
 <p class="page-sub">Your heaviest single pull per hand, grip and edge — the basis for every warmup suggestion.</p>
 {% if combos %}
 <div class="card">
+<div class="table-scroll">
 <table>
   <thead>
     <tr><th>Hand</th><th>Grip</th><th>Dimension</th><th>Current max</th></tr>
@@ -21,6 +22,7 @@
   </tbody>
 </table>
 </div>
+</div>
 {% else %}
 <div class="notice">
   No max tests yet — log one below before your first training session.
@@ -29,6 +31,7 @@
 {% if test_history %}
 <div class="card">
 <h3>Test History</h3>
+<div class="table-scroll">
 <table>
   <thead>
     <tr><th>Date</th><th>Hand</th><th>Grip</th><th>Dimension</th><th>Weight</th><th></th></tr>
@@ -57,6 +60,7 @@
     {% endfor %}
   </tbody>
 </table>
+</div>
 </div>
 {% endif %}
 <div class="card">

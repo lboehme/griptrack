@@ -66,7 +66,7 @@
 <p class="muted" style="margin-top:0;font-size:.88rem">Controls what the autoregulation suggestion advances when you hit your target easily (ADR-0012).</p>
 <form method="post" action="/profile/progression">
   <div class="form-row">
-    <label>Progression path
+    <label class="form-row-full">Progression path
       <select name="path">
         <option value="weight" {% if default_progression.path == "weight" %}selected{% endif %}>Weight — add loadable increment (default)</option>
         <option value="set" {% if default_progression.path == "set" %}selected{% endif %}>Set — add a set up to cap</option>
@@ -136,7 +136,7 @@
       </label>
     </div>
     <div class="form-row">
-      <label>Progression path
+      <label class="form-row-full">Progression path
         <select name="path">
           <option value="weight">Weight — add loadable increment</option>
           <option value="set">Set — add a set up to cap</option>

@@ -83,3 +83,38 @@ def test_correlation_floor_boundary_at_seven_points_shows_no_correlation(client)
     seed_progression(client, count=7)
 
     assert correlation_stat(client) is None
+
+
+def test_flat_strength_across_eight_sends_shows_zero_variance_message(client):
+    """When n >= 8 but strength is constant, Spearman rho is undefined.
+    The dashboard must explain zero-variance rather than saying 'Log -N more'."""
+    register(client)
+    log_bodyweight(client, "2026-06-01", "70")
+    log_max_test(client, "left", "half crimp", 20, "2026-06-01", "35")
+    # 8 climbs with varying grades so grades have variance, but strength is constant
+    for i, grade in enumerate(["V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8"], start=2):
+        log_climb(client, f"2026-06-{i:02d}", grade)
+
+    assert correlation_stat(client) is None
+    page = client.get("/dashboard").text
+    expected = (
+        "Your strength hasn't changed across these sends yet, so there's nothing to correlate. "
+        "Log a new max test."
+    )
+    assert expected in page
+    assert "more boulder send" not in page
+
+
+def test_too_few_boulder_climbs_message_pluralisation(client):
+    """n < 8 shows proper pluralisation for remaining sends."""
+    register(client)
+    log_bodyweight(client, "2026-06-01", "70")
+    log_max_test(client, "left", "half crimp", 20, "2026-06-01", "35")
+
+    # 7 climbs: exactly 1 remaining -> singular
+    for i, grade in enumerate(["V1", "V2", "V3", "V4", "V5", "V6", "V7"], start=2):
+        log_climb(client, f"2026-06-{i:02d}", grade)
+
+    page = client.get("/dashboard").text
+    assert "Log 1 more boulder send to unlock strength vs. grade correlation." in page
+    assert "boulder sends" not in page
