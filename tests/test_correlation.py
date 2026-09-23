@@ -98,8 +98,29 @@ def test_flat_strength_across_eight_sends_shows_zero_variance_message(client):
     assert correlation_stat(client) is None
     page = client.get("/dashboard").text
     expected = (
-        "Your strength hasn't changed across these sends yet, so there's nothing to correlate. "
-        "Log a new max test."
+        "Your strength or boulder grades haven't changed across these sends yet, "
+        "so there's nothing to correlate."
+    )
+    assert expected in page
+    assert "more boulder send" not in page
+
+
+def test_flat_grades_across_eight_sends_shows_zero_variance_message(client):
+    """When n >= 8 and strength varies but grade is constant, Spearman rho is undefined.
+    The dashboard must explain zero-variance rather than saying 'Log -N more'."""
+    register(client)
+    log_bodyweight(client, "2026-06-01", "70")
+    # Log 8 max tests with increasing strength on different dates
+    for i in range(1, 9):
+        log_max_test(client, "left", "half crimp", 20, f"2026-06-{i:02d}", str(30 + i))
+        # Constant grade across all 8 sends
+        log_climb(client, f"2026-06-{i:02d}", "V4")
+
+    assert correlation_stat(client) is None
+    page = client.get("/dashboard").text
+    expected = (
+        "Your strength or boulder grades haven't changed across these sends yet, "
+        "so there's nothing to correlate."
     )
     assert expected in page
     assert "more boulder send" not in page

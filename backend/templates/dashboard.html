@@ -29,7 +29,7 @@
     {% if correlation.n < 8 %}
     Log {{ 8 - correlation.n }} more boulder send{{ 's' if (8 - correlation.n) != 1 else '' }} to unlock strength vs. grade correlation.
     {% else %}
-    Your strength hasn't changed across these sends yet, so there's nothing to correlate. Log a new max test.
+    Your strength or boulder grades haven't changed across these sends yet, so there's nothing to correlate.
     {% endif %}
   </p>
   {% endif %}

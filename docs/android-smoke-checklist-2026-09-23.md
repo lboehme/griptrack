@@ -12,7 +12,7 @@
 - [x] **Gradle Build**: `./gradlew assembleDebug` builds `app-debug.apk` cleanly with zero errors and zero warnings.
 - [x] **Unit Tests**: `./gradlew testDebugUnitTest` passed all Android navigation & lifecycle unit tests.
 - [x] **Lint**: `scripts/lint` clean (Ruff, Mypy 26 source files, Pip-audit 0 vulnerabilities).
-- [x] **Backend Tests**: `scripts/test` passed 398/398 tests.
+- [x] **Backend Tests**: `scripts/test` passed 402/402 tests.
 - [ ] **APK Installation**: `adb install -r app/build/outputs/apk/debug/app-debug.apk` streams and installs successfully.
 
 ---

@@ -139,15 +139,20 @@ class MainActivity : AppCompatActivity() {
             windowInsets
         }
 
+        val errorInitialLeft = errorContainer.paddingLeft
+        val errorInitialTop = errorContainer.paddingTop
+        val errorInitialRight = errorContainer.paddingRight
+        val errorInitialBottom = errorContainer.paddingBottom
+
         ViewCompat.setOnApplyWindowInsetsListener(errorContainer) { view, windowInsets ->
             val insets = windowInsets.getInsets(
                 WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime()
             )
             view.updatePadding(
-                left = insets.left,
-                top = insets.top,
-                right = insets.right,
-                bottom = insets.bottom
+                left = errorInitialLeft + insets.left,
+                top = errorInitialTop + insets.top,
+                right = errorInitialRight + insets.right,
+                bottom = errorInitialBottom + insets.bottom
             )
             windowInsets
         }
