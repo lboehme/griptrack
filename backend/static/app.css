@@ -29,6 +29,7 @@
      rather than a second hue — a deliberate override of the design
      handoff's purple pair (see issue #79). */
   --accent-right: color-mix(in srgb, var(--accent) 65%, white);
+  --accent-right-contrast: #190f0b;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -45,6 +46,7 @@
     --accent-grad: linear-gradient(135deg, #ff9153 0%, #ff6a3d 55%, #f4442e 100%);
     --accent-soft: #33201a;
     --accent-contrast: #190f0b;
+    --accent-right-contrast: #190f0b;
     --accent-glow: 0 10px 30px -8px rgba(255, 106, 61, .5);
     --ok: #3fca86;
     --ok-soft: #14312a;
@@ -122,8 +124,12 @@ body {
 .app-main {
   max-width: 620px;
   margin: 0 auto;
-  padding: 1.1rem 1.1rem calc(var(--tabbar-h) + 1.6rem);
+  padding: 1.1rem clamp(.65rem, 3vw, 1.1rem) calc(var(--tabbar-h) + 1.6rem);
   animation: page-in .28s cubic-bezier(.2, .7, .3, 1) both;
+}
+
+.app-main:has(#focus-screen) {
+  padding-top: .6rem;
 }
 
 @keyframes page-in {
@@ -142,6 +148,38 @@ body {
   color: var(--muted);
   margin: 0 0 1.15rem;
   font-size: .93rem;
+}
+
+/* ---------- touch polish (#141) ---------- */
+
+/* 1. Remove tap highlight flash on interactive controls (PR #137, #141) */
+button,
+.btn,
+a,
+.completed-row,
+.tabbar,
+.tabbar a,
+.tab-bar,
+.tab-item {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 2. Prevent double-tap zoom delay and text selection / callout on controls (#141) */
+.stepper-btn,
+.stepper-btn-sm,
+.ramp-tick,
+.tabbar,
+.tabbar a,
+.tab-bar,
+.tab-item {
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.stepper-btn,
+.stepper-btn-sm {
+  -webkit-touch-callout: none;
 }
 
 /* ---------- bottom tab bar ---------- */
@@ -377,7 +415,9 @@ button, .btn {
   transition: transform .08s ease, box-shadow .15s ease, filter .15s ease;
 }
 
-button:hover, .btn:hover { filter: brightness(1.05); }
+@media (hover: hover) {
+  button:hover, .btn:hover { filter: brightness(1.05); }
+}
 
 button:active, .btn:active {
   transform: scale(.975);
@@ -395,6 +435,10 @@ button:active, .btn:active {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: .85rem;
+}
+
+.form-row-full {
+  grid-column: 1 / -1;
 }
 
 /* ---------- tables ---------- */
@@ -571,7 +615,10 @@ ul.plain { list-style: none; margin: 0; padding: 0; }
 
 /* ---------- work sets (Focus screen, issue #79) ---------- */
 
-.table-scroll { overflow-x: auto; }
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
 
 /* Spin buttons eat width on desktop and clip the decimals ("20" for 20.5). */
 input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
@@ -603,28 +650,29 @@ input[type="number"]::-webkit-outer-spin-button {
 
 /* ---- header spine ---- */
 
-.focus-header { margin-bottom: 1.1rem; }
+.focus-header { margin-bottom: clamp(.4rem, 1.4vh, .75rem); }
 
 .focus-header-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: .8rem;
+  gap: .6rem;
 }
 
 .focus-title {
   margin: 0;
-  font-size: 1.15rem;
+  font-size: clamp(1.05rem, 3.5vw, 1.15rem);
   font-weight: 750;
   letter-spacing: -0.01em;
+  line-height: 1.25;
 }
 
-.focus-subtitle { margin: .2rem 0 0; }
+.focus-subtitle { margin: .15rem 0 0; font-size: .85rem; }
 
 .focus-pill {
   flex: none;
-  padding: .3rem .75rem;
-  font-size: .78rem;
+  padding: .25rem .65rem;
+  font-size: .75rem;
   font-weight: 750;
   color: var(--accent);
   background: var(--accent-soft);
@@ -635,7 +683,7 @@ input[type="number"]::-webkit-outer-spin-button {
 .focus-progress-bar {
   display: flex;
   gap: 5px;
-  margin-top: .75rem;
+  margin-top: clamp(.3rem, 1vh, .5rem);
 }
 
 .progress-segment {
@@ -653,21 +701,21 @@ input[type="number"]::-webkit-outer-spin-button {
 
 /* ---- hand cards ---- */
 
-#set-form { display: flex; flex-direction: column; gap: .75rem; margin: 0 0 .6rem; }
+#set-form { display: flex; flex-direction: column; gap: clamp(.35rem, 1vh, .55rem); margin: 0 0 clamp(.35rem, 1vh, .5rem); }
 
 .hand-card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 1rem 1.15rem 1.1rem;
+  padding: clamp(.5rem, 1.2vh, .75rem) clamp(.65rem, 2.5vw, .95rem) clamp(.5rem, 1.2vh, .75rem);
 }
 
 .hand-card-header { display: flex; align-items: center; gap: .5rem; }
 
 .hand-badge {
-  width: 1.5rem;
-  height: 1.5rem;
+  width: 1.4rem;
+  height: 1.4rem;
   flex: none;
   display: grid;
   place-content: center;
@@ -678,7 +726,10 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 
 .hand-badge-left { background: var(--accent); }
-.hand-badge-right { background: var(--accent-right); }
+.hand-badge-right {
+  background: var(--accent-right);
+  color: var(--accent-right-contrast);
+}
 
 .hand-label { font-size: .88rem; font-weight: 700; }
 .autoreg-hint {
@@ -696,19 +747,19 @@ input[type="number"]::-webkit-outer-spin-button {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 1.1rem;
-  margin-top: .65rem;
+  gap: clamp(.5rem, 2.5vw, .9rem);
+  margin-top: clamp(.2rem, 0.6vh, .35rem);
 }
 
 .stepper-btn {
   flex: none;
-  width: 2.9rem;
-  height: 2.9rem;
+  width: clamp(2.35rem, 7vw, 2.75rem);
+  height: clamp(2.35rem, 7vw, 2.75rem);
   min-height: 0;
   display: inline-grid;
   place-content: center;
   padding: 0;
-  font-size: 1.4rem;
+  font-size: clamp(1.2rem, 3.5vw, 1.35rem);
   font-weight: 650;
   color: var(--accent);
   background: var(--surface);
@@ -719,31 +770,31 @@ input[type="number"]::-webkit-outer-spin-button {
 
 .stepper-btn:active { transform: scale(.93); }
 
-.weight-display { text-align: center; min-width: 6.5rem; }
+.weight-display { text-align: center; min-width: clamp(4.5rem, 16vw, 6rem); }
 
 .weight-value {
   display: block;
-  font-size: 2.5rem;
+  font-size: clamp(1.85rem, 6vw, 2.35rem);
   font-weight: 800;
   letter-spacing: -0.04em;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
 
-.weight-caption { display: block; margin-top: .2rem; font-size: .74rem; color: var(--muted); }
+.weight-caption { display: block; margin-top: .15rem; font-size: .7rem; color: var(--muted); }
 
 .reps-rpe-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: .9rem;
-  margin-top: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(.3rem, 1.8vw, .7rem);
+  margin-top: clamp(.3rem, 0.8vh, .55rem);
 }
 
-.field-group { text-align: center; }
+.field-group { text-align: center; min-width: 0; }
 
 .field-label {
   display: block;
-  font-size: .68rem;
+  font-size: .65rem;
   font-weight: 750;
   letter-spacing: .14em;
   text-transform: uppercase;
@@ -754,19 +805,19 @@ input[type="number"]::-webkit-outer-spin-button {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: .75rem;
-  margin-top: .4rem;
+  gap: clamp(.15rem, 1vw, .45rem);
+  margin-top: clamp(.15rem, 0.4vh, .3rem);
 }
 
 .stepper-btn-sm {
   flex: none;
-  width: 2.75rem;
-  height: 2.75rem;
+  width: clamp(2rem, 5.8vw, 2.45rem);
+  height: clamp(2rem, 5.8vw, 2.45rem);
   min-height: 0;
   display: inline-grid;
   place-content: center;
   padding: 0;
-  font-size: 1.05rem;
+  font-size: clamp(.9rem, 2.6vw, 1rem);
   font-weight: 650;
   color: var(--accent);
   background: var(--surface);
@@ -778,8 +829,8 @@ input[type="number"]::-webkit-outer-spin-button {
 .stepper-btn-sm:active { transform: scale(.9); }
 
 .mini-value {
-  min-width: 2.3rem;
-  font-size: 1.35rem;
+  min-width: clamp(1.4rem, 4.5vw, 1.9rem);
+  font-size: clamp(1.1rem, 3.2vw, 1.25rem);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
@@ -804,11 +855,11 @@ input[type="number"]::-webkit-outer-spin-button {
 .js-enabled.no-ladder .weight-stepper .raw-input-label { display: block; }
 
 .set-done-btn {
-  min-height: 3.5rem;
-  font-size: 1.05rem;
+  min-height: clamp(2.75rem, 6vh, 3.25rem);
+  font-size: 1.02rem;
   font-weight: 800;
   letter-spacing: -0.01em;
-  border-radius: 16px;
+  border-radius: 14px;
 }
 
 /* ---- edit mode (issue #80) ---- */
@@ -955,7 +1006,11 @@ input[type="number"]::-webkit-outer-spin-button {
   cursor: pointer;
 }
 
-.completed-row:hover, .completed-row:focus-visible { border-color: var(--accent); }
+.completed-row:focus-visible { border-color: var(--accent); }
+
+@media (hover: hover) {
+  .completed-row:hover { border-color: var(--accent); }
+}
 
 .completed-row-editing {
   border-color: var(--accent);
@@ -966,14 +1021,15 @@ input[type="number"]::-webkit-outer-spin-button {
   flex: none;
   width: 1.35rem;
   height: 1.35rem;
-  display: grid;
-  place-content: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 999px;
   background: var(--accent);
   color: var(--accent-contrast);
 }
 
-.completed-check svg { width: 62%; height: 62%; }
+.completed-check svg { width: .85rem; height: .85rem; }
 
 .completed-set-label { font-size: .88rem; font-weight: 700; }
 
@@ -1020,8 +1076,11 @@ input[type="number"]::-webkit-outer-spin-button {
 
 .how-it-felt-card details[open] summary::after { transform: rotate(180deg); }
 
-.how-it-felt-card summary:hover,
 .how-it-felt-card summary:focus-visible { color: var(--accent); }
+
+@media (hover: hover) {
+  .how-it-felt-card summary:hover { color: var(--accent); }
+}
 
 .how-it-felt-body {
   padding: 0 1.15rem 1.15rem;
@@ -1293,9 +1352,11 @@ code.invite-code {
   line-height: 1;
 }
 
-.nudge-dismiss-btn:hover {
-  color: var(--text);
-  background: var(--surface-2);
+@media (hover: hover) {
+  .nudge-dismiss-btn:hover {
+    color: var(--text);
+    background: var(--surface-2);
+  }
 }
 
 .nudge-dismiss-btn:active {

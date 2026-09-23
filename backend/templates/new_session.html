@@ -8,7 +8,7 @@
     <label>Grip type
       <select name="grip_type_id" class="grip-select">
         {% for grip in grip_types %}
-        <option value="{{ grip.id }}"{% if grip.id == default_grip_type_id %} selected{% endif %} data-dimension-name="{{ grip.dimension_name }}">{{ grip.name }}</option>
+        <option value="{{ grip.id }}"{% if grip.id == default_grip_type_id %} selected{% endif %} data-dimension-name="{{ grip.dimension_name }}">{{ grip.name|display_name }}</option>
         {% endfor %}
       </select>
     </label>

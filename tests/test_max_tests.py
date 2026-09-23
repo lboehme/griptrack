@@ -49,7 +49,7 @@ def test_starter_grip_types_are_offered(client):
 
     assert page.status_code == 200
     for name in ("half crimp", "full crimp", "open hand", "three finger drag", "pinch"):
-        assert name in page.text
+        assert name in page.text.lower()
 
 
 def test_max_tests_page_offers_a_run_guided_test_action(client):
@@ -78,7 +78,7 @@ def test_admin_can_add_a_grip_type_but_non_admin_cannot(client):
         "/grip-types", data={"name": "mono pocket"}, follow_redirects=True
     )
     assert response.status_code == 200
-    assert "mono pocket" in client.get("/max-tests").text
+    assert "mono pocket" in client.get("/max-tests").text.lower()
 
     register_second_user(client)  # logged in as non-admin friend now
     response = client.post(

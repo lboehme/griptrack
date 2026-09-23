@@ -481,7 +481,7 @@ def test_pain_report_autosaves_and_displays(client):
     # not on strings like "left" or "2" that show up unconditionally
     # elsewhere on the page (hand dropdown, set numbers, etc.).
     assert "Tweaked a pulley" in page
-    assert re.search(r"<td>left</td>\s*<td>2</td>", page)
+    assert re.search(r"<td>Left</td>\s*<td>2</td>", page)
 
 
 def test_pain_report_save_is_an_upsert_keyed_on_hand(client):
@@ -512,7 +512,7 @@ def test_pain_report_save_is_an_upsert_keyed_on_hand(client):
 
     page = worksets_page(client, date="2026-07-04").text
     assert page.count("Tweaked a pulley") == 1
-    assert page.count("<td>left</td>") == 1
+    assert page.count("<td>Left</td>") == 1
 
     # A different hand still creates its own, independent row.
     client.post(
@@ -521,8 +521,8 @@ def test_pain_report_save_is_an_upsert_keyed_on_hand(client):
         headers={"HX-Request": "true"},
     )
     page = worksets_page(client, date="2026-07-04").text
-    assert page.count("<td>left</td>") == 1
-    assert page.count("<td>right</td>") == 1
+    assert page.count("<td>Left</td>") == 1
+    assert page.count("<td>Right</td>") == 1
 
 
 def test_pain_reports_and_session_meta_are_isolated_per_user(client):
@@ -663,7 +663,7 @@ def test_switch_hand_link_present_for_sequential_hand_order(client):
     client.post("/profile", data={"hand_order_pref": "sequential"})
 
     page = worksets_page(client).text
-    assert "Switch to right hand" in page
+    assert "Switch to Right hand" in page
 
 
 def test_no_new_write_route_is_added_for_the_disclosure(client):
@@ -1103,6 +1103,20 @@ def test_restore_focus_set_rejects_unknown_grip_type():
         training_log.restore_focus_set(
             session, user, 999999, 20, date, 1, None, payload
         )
+
+
+def test_up_next_row_renders_singular_and_range_labels(client):
+    setup_tested_user(client)
+    # 0 sets completed, 3 total sets: sets 2-3 remain
+    page = worksets_page(client, date="2026-07-04")
+    assert "Sets 2–3 up next · same load carries down" in page.text
+
+    # Complete set 1: now on set 2 of 3, exactly 1 set remains (set 3)
+    save_focus_set(client, 1, left=("42.5", "5", "8"), right=("40.0", "5", "7.5"))
+    page = worksets_page(client, date="2026-07-04")
+    assert "Set 3 up next · same load carries down" in page.text
+    assert "Sets 3–3" not in page.text
+
 
 
 

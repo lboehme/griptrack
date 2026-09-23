@@ -5,6 +5,7 @@
 <p class="page-sub">Your heaviest single pull per hand, grip and edge — the basis for every warmup suggestion.</p>
 {% if combos %}
 <div class="card">
+<div class="table-scroll">
 <table>
   <thead>
     <tr><th>Hand</th><th>Grip</th><th>Dimension</th><th>Current max</th></tr>
@@ -12,14 +13,15 @@
   <tbody>
     {% for combo in combos %}
     <tr data-combo="{{ combo.hand }}|{{ combo.grip_name }}|{{ combo.edge_mm }}">
-      <td>{{ combo.hand }}</td>
-      <td>{{ combo.grip_name }}</td>
+      <td>{{ combo.hand|display_name }}</td>
+      <td>{{ combo.grip_name|display_name }}</td>
       <td>{{ combo.edge_mm }} mm <span class="muted">({{ combo.dimension_name }})</span></td>
       <td><strong class="max-weight">{{ combo.current_max }}</strong> <span class="muted">{{ user.unit_pref }}</span></td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
+</div>
 </div>
 {% else %}
 <div class="notice">
@@ -29,6 +31,7 @@
 {% if test_history %}
 <div class="card">
 <h3>Test History</h3>
+<div class="table-scroll">
 <table>
   <thead>
     <tr><th>Date</th><th>Hand</th><th>Grip</th><th>Dimension</th><th>Weight</th><th></th></tr>
@@ -36,9 +39,9 @@
   <tbody>
     {% for test, grip in test_history %}
     <tr>
-      <td>{{ test.date }}</td>
-      <td>{{ test.hand }}</td>
-      <td>{{ grip.name }}</td>
+      <td>{{ test.date|human_date }}</td>
+      <td>{{ test.hand|display_name }}</td>
+      <td>{{ grip.name|display_name }}</td>
       <td>{{ test.edge_mm }} mm <span class="muted">({{ grip.dimension_name }})</span></td>
       <td>
         <strong {% if test.voided_at %}class="muted" style="text-decoration: line-through;"{% endif %}>{{ test.weight }}</strong> 
@@ -58,6 +61,7 @@
   </tbody>
 </table>
 </div>
+</div>
 {% endif %}
 <div class="card">
 <h3>Run guided test</h3>
@@ -68,7 +72,7 @@
     <label>Grip type
       <select name="grip_type_id" class="grip-select">
         {% for grip in grip_types %}
-        <option value="{{ grip.id }}" data-dimension-name="{{ grip.dimension_name }}">{{ grip.name }}</option>
+        <option value="{{ grip.id }}" data-dimension-name="{{ grip.dimension_name }}">{{ grip.name|display_name }}</option>
         {% endfor %}
       </select>
     </label>
@@ -88,7 +92,7 @@
     <label>Grip type
       <select name="grip_type_id" class="grip-select">
         {% for grip in grip_types %}
-        <option value="{{ grip.id }}" data-dimension-name="{{ grip.dimension_name }}">{{ grip.name }}</option>
+        <option value="{{ grip.id }}" data-dimension-name="{{ grip.dimension_name }}">{{ grip.name|display_name }}</option>
         {% endfor %}
       </select>
     </label>

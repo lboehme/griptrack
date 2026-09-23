@@ -517,8 +517,8 @@ def test_per_combo_progression_settings_override(client):
         follow_redirects=True,
     )
     assert response.status_code == 200
-    assert "half crimp" in response.text
-    assert "set" in response.text
+    assert "half crimp" in response.text.lower()
+    assert "set" in response.text.lower()
 
 
 def test_progression_settings_per_user_isolation(client):

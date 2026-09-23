@@ -14,7 +14,7 @@
   <div class="form-row">
     <label>Style
       <select name="style">
-        {% for s in styles %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+        {% for s in styles %}<option value="{{ s }}">{{ s|display_name }}</option>{% endfor %}
       </select>
     </label>
   </div>
