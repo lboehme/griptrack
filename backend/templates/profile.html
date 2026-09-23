@@ -9,7 +9,7 @@
 <p style="margin-top:0">Current:
   {% if current_bodyweight %}
   <strong><span class="current-bodyweight">{{ current_bodyweight.weight }}</span> {{ user.unit_pref }}</strong>
-  <span class="muted">(logged {{ current_bodyweight.date }})</span>
+  <span class="muted">(logged {{ current_bodyweight.date|human_date }})</span>
   {% else %}
   <span class="muted">not logged yet</span>
   {% endif %}
@@ -101,8 +101,8 @@
   <tbody>
     {% for cp in combo_progressions %}
     <tr>
-      <td><strong>{{ grip_names.get(cp.grip_type_id, "Unknown") }}</strong> · {{ cp.edge_mm }} mm {{ grip_dimension_names.get(cp.grip_type_id, "edge depth") }}</td>
-      <td>{{ cp.path }}</td>
+      <td><strong>{{ grip_names.get(cp.grip_type_id, "Unknown")|display_name }}</strong> · {{ cp.edge_mm }} mm {{ grip_dimension_names.get(cp.grip_type_id, "edge depth") }}</td>
+      <td>{{ cp.path|display_name }}</td>
       <td>{{ cp.rep_min }}–{{ cp.rep_max }}</td>
       <td>{{ cp.max_sets }}</td>
       <td>
@@ -127,7 +127,7 @@
       <label>Grip type
         <select name="grip_type_id" required>
           {% for g in grip_types %}
-          <option value="{{ g.id }}">{{ g.name }}</option>
+          <option value="{{ g.id }}">{{ g.name|display_name }}</option>
           {% endfor %}
         </select>
       </label>

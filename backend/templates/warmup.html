@@ -15,12 +15,12 @@
 
 <section class="focus-header">
   <div class="focus-header-row">
-    <h2 class="focus-title">{{ grip.name }} · {{ edge_mm }} mm {{ grip.dimension_name }}</h2>
+    <h2 class="focus-title">{{ grip.name|display_name }} · {{ edge_mm }} mm {{ grip.dimension_name }}</h2>
     {% if steps %}
     <span class="focus-pill">Step <span class="focus-pill-n">{{ current_step }}</span> of <span class="focus-pill-m">{{ steps|length }}</span></span>
     {% endif %}
   </div>
-  <p class="page-sub focus-subtitle">{{ date }}{% if session_number and session_number > 1 %} · session {{ session_number }}{% endif %}{% if hands|length == 1 %} · <span class="hand-heading">{{ hands[0] }} hand</span>{% endif %}</p>
+  <p class="page-sub focus-subtitle">{{ date|human_date }}{% if session_number and session_number > 1 %} · session {{ session_number }}{% endif %}{% if hands|length == 1 %} · <span class="hand-heading">{{ hands[0]|display_name }} hand</span>{% endif %}</p>
   {% if steps %}
   <div class="focus-progress-bar" data-total-steps="{{ steps|length }}">
     {% for step in steps %}
@@ -31,22 +31,22 @@
 </section>
 
 {% if training_session %}
-<p class="session-started">Session {{ training_session.date }}{% if training_session.session_number > 1 %} #{{ training_session.session_number }}{% endif %} — in progress</p>
+<p class="session-started">Session {{ training_session.date|human_date }}{% if training_session.session_number > 1 %} #{{ training_session.session_number }}{% endif %} — in progress</p>
 {% endif %}
 
 {% if untested_hands %}
 <div class="notice">
   No max-weight test yet for your
-  <strong>{{ untested_hands|join(" and ") }}</strong> hand on this grip/edge.
+  <strong>{{ untested_hands|map('display_name')|join(" and ") }}</strong> hand on this grip/edge.
   Run a guided max test below — or enter an estimated max to warm up with
   for this session only.
 </div>
 {% for hand in untested_hands %}
 <div class="card">
-  <a class="btn btn-secondary" href="/max-tests/guided?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}&amp;hand={{ hand }}">Run guided max test — {{ hand }} hand</a>
+  <a class="btn btn-secondary" href="/max-tests/guided?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}&amp;hand={{ hand }}">Run guided max test — {{ hand|display_name }} hand</a>
   <form method="post" action="/session/estimate" class="estimate-form" data-hand="{{ hand }}">
     {% include "_combo_fields.html" %}
-    <label class="mini">Estimated max for this session — {{ hand }} hand ({{ user.unit_pref }})
+    <label class="mini">Estimated max for this session — {{ hand|display_name }} hand ({{ user.unit_pref }})
       <input type="number" name="weight" step="0.25" min="0.25" required>
     </label>
     <button type="submit">Use estimate</button>
@@ -85,7 +85,7 @@
   <a class="btn" href="/session/worksets?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}{% if hands|length == 1 %}&amp;hand={{ hands[0] }}{% endif %}{% if session_number %}&amp;session_number={{ session_number }}{% endif %}">Continue to work sets →</a>
   {% if hands|length == 1 %}
   {% set other = "right" if hands[0] == "left" else "left" %}
-  <a class="btn btn-secondary" href="/session/warmup?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}&amp;hand={{ other }}{% if session_number %}&amp;session_number={{ session_number }}{% endif %}">Switch to {{ other }} hand</a>
+  <a class="btn btn-secondary" href="/session/warmup?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}&amp;hand={{ other }}{% if session_number %}&amp;session_number={{ session_number }}{% endif %}">Switch to {{ other|display_name }} hand</a>
   {% endif %}
 </div>
 <script type="application/json" id="planned-hands-data">{{ planned_hands|tojson }}</script>

@@ -150,6 +150,38 @@ body {
   font-size: .93rem;
 }
 
+/* ---------- touch polish (#141) ---------- */
+
+/* 1. Remove tap highlight flash on interactive controls (PR #137, #141) */
+button,
+.btn,
+a,
+.completed-row,
+.tabbar,
+.tabbar a,
+.tab-bar,
+.tab-item {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 2. Prevent double-tap zoom delay and text selection / callout on controls (#141) */
+.stepper-btn,
+.stepper-btn-sm,
+.ramp-tick,
+.tabbar,
+.tabbar a,
+.tab-bar,
+.tab-item {
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.stepper-btn,
+.stepper-btn-sm {
+  -webkit-touch-callout: none;
+}
+
 /* ---------- bottom tab bar ---------- */
 
 .tabbar {
@@ -383,7 +415,9 @@ button, .btn {
   transition: transform .08s ease, box-shadow .15s ease, filter .15s ease;
 }
 
-button:hover, .btn:hover { filter: brightness(1.05); }
+@media (hover: hover) {
+  button:hover, .btn:hover { filter: brightness(1.05); }
+}
 
 button:active, .btn:active {
   transform: scale(.975);
@@ -972,7 +1006,11 @@ input[type="number"]::-webkit-outer-spin-button {
   cursor: pointer;
 }
 
-.completed-row:hover, .completed-row:focus-visible { border-color: var(--accent); }
+.completed-row:focus-visible { border-color: var(--accent); }
+
+@media (hover: hover) {
+  .completed-row:hover { border-color: var(--accent); }
+}
 
 .completed-row-editing {
   border-color: var(--accent);
@@ -1038,8 +1076,11 @@ input[type="number"]::-webkit-outer-spin-button {
 
 .how-it-felt-card details[open] summary::after { transform: rotate(180deg); }
 
-.how-it-felt-card summary:hover,
 .how-it-felt-card summary:focus-visible { color: var(--accent); }
+
+@media (hover: hover) {
+  .how-it-felt-card summary:hover { color: var(--accent); }
+}
 
 .how-it-felt-body {
   padding: 0 1.15rem 1.15rem;
@@ -1311,9 +1352,11 @@ code.invite-code {
   line-height: 1;
 }
 
-.nudge-dismiss-btn:hover {
-  color: var(--text);
-  background: var(--surface-2);
+@media (hover: hover) {
+  .nudge-dismiss-btn:hover {
+    color: var(--text);
+    background: var(--surface-2);
+  }
 }
 
 .nudge-dismiss-btn:active {

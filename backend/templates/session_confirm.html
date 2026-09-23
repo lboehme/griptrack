@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}No session yet — GripTrack{% endblock %}
 {% block content %}
-<h2>No session on {{ date }}</h2>
+<h2>No session on {{ date|human_date }}</h2>
 <p class="page-sub">You haven't logged a session on this date yet — confirm before it's created, so a stray past date doesn't quietly add history.</p>
 <div class="card session-confirm-card">
   <form method="post" action="/session/create">
