@@ -21,6 +21,7 @@ from backend.limits import (
     MAX_REP_MIN,
     MAX_REP_TARGET,
     MAX_REST_SECONDS,
+    MAX_ROW_ID,
     MAX_WEIGHT,
     MIN_MAX_SETS,
     MIN_REP_MAX,
@@ -95,7 +96,7 @@ def update_progression(
     rep_min: int = Form(ge=MIN_REP_MIN, le=MAX_REP_MIN),
     rep_max: int = Form(ge=MIN_REP_MAX, le=MAX_REP_MAX),
     max_sets: int = Form(ge=MIN_MAX_SETS, le=MAX_MAX_SETS),
-    grip_type_id: int | None = Form(default=None),
+    grip_type_id: int | None = Form(default=None, ge=1, le=MAX_ROW_ID),
     edge_mm: int | None = Form(default=None, gt=0, le=MAX_EDGE_MM),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
@@ -128,7 +129,7 @@ def update_progression(
 @router.post("/profile/progression/delete")
 def delete_progression(
     request: Request,
-    grip_type_id: int = Form(),
+    grip_type_id: int = Form(ge=1, le=MAX_ROW_ID),
     edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),

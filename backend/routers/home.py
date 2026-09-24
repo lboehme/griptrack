@@ -6,7 +6,7 @@ from sqlmodel import Session
 
 from backend import auth, climbing, today, training_log
 from backend.db import get_session
-from backend.limits import MAX_EDGE_MM, MAX_SESSION_NUMBER
+from backend.limits import MAX_EDGE_MM, MAX_ROW_ID, MAX_SESSION_NUMBER
 from backend.models import User
 from backend.templating import templates
 
@@ -35,7 +35,7 @@ def home(
     change: bool = Query(default=False),
     saved: str | None = Query(default=None, max_length=16),
     grade_warning: bool = Query(default=False),
-    grip_type_id: int | None = Query(default=None),
+    grip_type_id: int | None = Query(default=None, ge=1, le=MAX_ROW_ID),
     edge_mm: int | None = Query(default=None, gt=0, le=MAX_EDGE_MM),
     user: User | None = Depends(auth.optional_user),
     session: Session = Depends(get_session),
@@ -77,7 +77,7 @@ def home(
 @router.get("/today/change")
 def change_picker(
     request: Request,
-    grip_type_id: int | None = Query(default=None),
+    grip_type_id: int | None = Query(default=None, ge=1, le=MAX_ROW_ID),
     edge_mm: int | None = Query(default=None, gt=0, le=MAX_EDGE_MM),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
@@ -101,7 +101,7 @@ def toggle_go_lighter(
     date: date_type = Form(),
     on: bool = Form(),
     session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
-    grip_type_id: int | None = Form(default=None),
+    grip_type_id: int | None = Form(default=None, ge=1, le=MAX_ROW_ID),
     edge_mm: int | None = Form(default=None, gt=0, le=MAX_EDGE_MM),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),

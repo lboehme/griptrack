@@ -1023,3 +1023,94 @@ def test_progress_pages_require_login(client):
         "/max-tests",
     ):
         assert client.get(path, follow_redirects=False).status_code == 401, path
+
+
+# ---------- grip_type_id is bounded on every route (PR #154 review MUST-FIX 4) ----------
+
+
+def _grip_routes():
+    """Every (method, path, location) whose endpoint takes a grip_type_id,
+    discovered from the app itself so a new route can't slip past."""
+    from fastapi.routing import APIRoute
+
+    from backend.main import create_app
+
+    def walk(routes):
+        for route in routes:
+            yield route
+            nested = getattr(route, "original_router", None)
+            if nested is not None:
+                yield from walk(nested.routes)
+
+    found = []
+    for route in walk(create_app().routes):
+        if not isinstance(route, APIRoute):
+            continue
+        dependant = route.dependant
+        names = {p.name for p in dependant.query_params} | {p.name for p in dependant.body_params}
+        if "grip_type_id" not in names:
+            continue
+        where = "query" if any(p.name == "grip_type_id" for p in dependant.query_params) else "form"
+        for method in sorted(route.methods - {"HEAD"}):
+            found.append((method, route.path, where))
+    return found
+
+
+GRIP_ROUTES = _grip_routes()
+
+# Otherwise-valid values for every field these routes take, so the only
+# thing wrong with the request is the oversized grip id.
+_VALID_FIELDS = {
+    "edge_mm": "20", "date": "2026-07-04", "hand": "left", "set_number": "1",
+    "step_index": "0", "weight": "30", "reps": "5", "left_weight": "30",
+    "left_reps": "5", "right_weight": "30", "right_reps": "5", "session_rpe": "5",
+    "sets": "4", "severity": "1", "on": "1", "page": "play", "path": "weight",
+    "rep_min": "5", "rep_max": "5", "max_sets": "6", "estimate": "30",
+    "left_estimate": "30", "right_estimate": "30", "kind": "work", "actual": "30",
+    "notes": "x",
+}
+
+
+def test_every_route_taking_a_grip_type_id_is_discovered():
+    paths = {path for _, path, _ in GRIP_ROUTES}
+    for expected in ("/", "/today/change", "/today/lighter", "/session/play",
+                     "/session/set", "/session/estimate", "/session/check",
+                     "/session/rung-done", "/max-tests", "/progress"):
+        assert expected in paths
+
+
+@pytest.mark.parametrize("method,path,where", GRIP_ROUTES)
+@pytest.mark.parametrize("grip", ["99999999999999999999", "2147483648", "0", "-1"])
+def test_an_out_of_range_grip_type_id_never_500s(client_factory, method, path, where, grip):
+    from fastapi.testclient import TestClient
+
+    base = client_factory()
+    client = TestClient(base.app, raise_server_exceptions=False)
+    register(client)
+    fields = {**_VALID_FIELDS, "grip_type_id": grip}
+    if method == "GET" or where == "query":
+        response = client.request(method, path, params=fields, follow_redirects=True)
+    else:
+        response = client.request(method, path, data=fields, follow_redirects=True)
+    assert response.status_code in (400, 404, 422), (path, response.status_code)
+
+
+@pytest.mark.parametrize("path,extra", [
+    ("/session/estimate", {"weight": "30"}),
+    ("/session/check", {"step_index": "0"}),
+])
+def test_estimate_and_check_refuse_an_unknown_grip_so_export_stays_importable(client, path, extra):
+    """An orphan SessionMaxEstimate (SQLite FKs are off) used to break
+    re-import of the user's own export ("unknown grip type")."""
+    from tests.helpers import export_archive, generate_invite, import_archive
+
+    register(client)
+    data = {"grip_type_id": "999", "edge_mm": "20", "date": "2026-07-04", "hand": "left", **extra}
+    assert client.post(path, data=data).status_code == 404
+
+    save_work_set(client, "left", 1, "30", "5")
+    archive = export_archive(client)
+    code = generate_invite(client)
+    register(client, "phone@example.com", "test-pw-5678", invite_code=code)
+    assert import_archive(client, archive).status_code == 303
+

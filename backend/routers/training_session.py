@@ -10,6 +10,7 @@ from backend.limits import (
     MAX_EDGE_MM,
     MAX_NOTES_LENGTH,
     MAX_REPS,
+    MAX_ROW_ID,
     MAX_SESSION_NUMBER,
     MAX_SESSION_RPE,
     MAX_SET_NUMBER,
@@ -181,7 +182,7 @@ def confirm_creation_response(
 def create_session(
     request: Request,
     page: str = Form(),
-    grip_type_id: int = Form(),
+    grip_type_id: int = Form(ge=1, le=MAX_ROW_ID),
     edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
     date: date_type = Form(),
     hand: str | None = Form(default=None),
@@ -203,7 +204,7 @@ def create_session(
 @router.get("/session/worksets")
 def worksets_page(
     request: Request,
-    grip_type_id: int = Query(),
+    grip_type_id: int = Query(ge=1, le=MAX_ROW_ID),
     edge_mm: int = Query(gt=0, le=MAX_EDGE_MM),
     date: date_type = Query(),
     hand: str | None = Query(default=None),
@@ -221,7 +222,7 @@ def worksets_page(
 @router.post("/session/workset")
 def save_work_set(
     request: Request,
-    grip_type_id: int = Form(),
+    grip_type_id: int = Form(ge=1, le=MAX_ROW_ID),
     edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
     date: date_type = Form(),
     hand: str = Form(),
@@ -255,7 +256,7 @@ def save_work_set(
 @router.post("/session/set")
 def save_focus_set(
     request: Request,
-    grip_type_id: int = Form(),
+    grip_type_id: int = Form(ge=1, le=MAX_ROW_ID),
     edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
     date: date_type = Form(),
     set_number: int = Form(ge=1, le=MAX_SET_NUMBER),
@@ -305,7 +306,7 @@ def save_focus_set(
 @router.post("/session/set/delete")
 def delete_focus_set(
     request: Request,
-    grip_type_id: int = Form(),
+    grip_type_id: int = Form(ge=1, le=MAX_ROW_ID),
     edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
     date: date_type = Form(),
     set_number: int = Form(ge=1, le=MAX_SET_NUMBER),
@@ -331,7 +332,7 @@ def delete_focus_set(
 @router.post("/session/set/restore")
 def restore_focus_set(
     request: Request,
-    grip_type_id: int = Form(),
+    grip_type_id: int = Form(ge=1, le=MAX_ROW_ID),
     edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
     date: date_type = Form(),
     set_number: int = Form(ge=1, le=MAX_SET_NUMBER),
@@ -373,7 +374,7 @@ def restore_focus_set(
 @router.post("/session/workset/delete")
 def delete_work_set(
     request: Request,
-    grip_type_id: int = Form(),
+    grip_type_id: int = Form(ge=1, le=MAX_ROW_ID),
     edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
     date: date_type = Form(),
     hand: str = Form(),
@@ -397,7 +398,7 @@ def delete_work_set(
 @router.post("/session/estimate")
 def save_session_estimate(
     request: Request,
-    grip_type_id: int = Form(),
+    grip_type_id: int = Form(ge=1, le=MAX_ROW_ID),
     edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
     date: date_type = Form(),
     hand: str = Form(),
@@ -423,7 +424,7 @@ def save_session_estimate(
 @router.post("/session/check")
 def check_warmup_step(
     request: Request,
-    grip_type_id: int = Form(),
+    grip_type_id: int = Form(ge=1, le=MAX_ROW_ID),
     edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
     date: date_type = Form(),
     hand: str = Form(),
@@ -447,7 +448,7 @@ def check_warmup_step(
 @router.post("/session/rung-done")
 def rung_done(
     request: Request,
-    grip_type_id: int = Form(),
+    grip_type_id: int = Form(ge=1, le=MAX_ROW_ID),
     edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
     date: date_type = Form(),
     hand: str | None = Form(default=None),
@@ -474,7 +475,7 @@ def rung_done(
 @router.post("/session/rest/extend")
 def extend_rest(
     request: Request,
-    grip_type_id: int = Form(),
+    grip_type_id: int = Form(ge=1, le=MAX_ROW_ID),
     edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
     date: date_type = Form(),
     hand: str | None = Form(default=None),
@@ -496,7 +497,7 @@ def extend_rest(
 @router.post("/session/rest/end")
 def end_rest(
     request: Request,
-    grip_type_id: int = Form(),
+    grip_type_id: int = Form(ge=1, le=MAX_ROW_ID),
     edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
     date: date_type = Form(),
     hand: str | None = Form(default=None),
@@ -519,7 +520,7 @@ def end_rest(
 @router.post("/session/sets")
 def plan_sets(
     request: Request,
-    grip_type_id: int = Form(),
+    grip_type_id: int = Form(ge=1, le=MAX_ROW_ID),
     edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
     date: date_type = Form(),
     sets: int = Form(ge=1, le=MAX_SET_NUMBER),
@@ -567,7 +568,7 @@ def update_session(
     session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
     notes: str | None = Form(default=None, max_length=MAX_NOTES_LENGTH),
     is_deload: str | None = Form(default=None),
-    grip_type_id: int | None = Form(default=None),
+    grip_type_id: int | None = Form(default=None, ge=1, le=MAX_ROW_ID),
     edge_mm: int | None = Form(default=None, gt=0, le=MAX_EDGE_MM),
     hand: str | None = Form(default=None),
     user: User = Depends(auth.current_user),
@@ -596,7 +597,7 @@ def update_session(
 @router.post("/session/rpe")
 def save_session_rpe(
     request: Request,
-    grip_type_id: int = Form(),
+    grip_type_id: int = Form(ge=1, le=MAX_ROW_ID),
     edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
     date: date_type = Form(),
     session_rpe: int = Form(ge=MIN_SESSION_RPE, le=MAX_SESSION_RPE),
@@ -646,7 +647,7 @@ def add_pain_report(
     severity: int = Form(ge=1, le=3),
     note: str | None = Form(default=None, max_length=MAX_NOTES_LENGTH),
     session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
-    grip_type_id: int | None = Form(default=None),
+    grip_type_id: int | None = Form(default=None, ge=1, le=MAX_ROW_ID),
     edge_mm: int | None = Form(default=None, gt=0, le=MAX_EDGE_MM),
     play_hand: str | None = Form(default=None),
     user: User = Depends(auth.current_user),
@@ -676,7 +677,7 @@ def new_session_form(user: User = Depends(auth.current_user)):
 @router.get("/session/warmup")
 def warmup_page(
     request: Request,
-    grip_type_id: int = Query(),
+    grip_type_id: int = Query(ge=1, le=MAX_ROW_ID),
     edge_mm: int = Query(gt=0, le=MAX_EDGE_MM),
     date: date_type = Query(),
     hand: str | None = Query(default=None),
@@ -692,7 +693,7 @@ def warmup_page(
 @router.get("/session/play")
 def play_page(
     request: Request,
-    grip_type_id: int = Query(),
+    grip_type_id: int = Query(ge=1, le=MAX_ROW_ID),
     edge_mm: int = Query(gt=0, le=MAX_EDGE_MM),
     date: date_type = Query(),
     hand: str | None = Query(default=None),

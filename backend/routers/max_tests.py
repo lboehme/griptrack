@@ -6,7 +6,7 @@ from sqlmodel import Session, select
 
 from backend import auth, training_log
 from backend.db import get_session
-from backend.limits import MAX_EDGE_MM, MAX_WEIGHT
+from backend.limits import MAX_EDGE_MM, MAX_ROW_ID, MAX_WEIGHT
 from backend.models import GripType, User
 from backend.routers.settings import saved_response
 
@@ -19,7 +19,7 @@ MAXES_PAGE = "/progress/maxes"
 @router.post("/max-tests")
 def log_max_test(
     hand: str = Form(),
-    grip_type_id: int = Form(),
+    grip_type_id: int = Form(ge=1, le=MAX_ROW_ID),
     edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
     date: date_type = Form(),
     weight: float = Form(gt=0, le=MAX_WEIGHT),
