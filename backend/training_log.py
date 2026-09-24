@@ -560,6 +560,10 @@ def stamp_play_combo(
         training_session.play_grip_type_id == grip_type_id
         and training_session.play_edge_mm == edge_mm
     )
+    # Session load / duration run from the first real activity, not from a
+    # row created early by Go lighter or a morning tweak (PR #154 review).
+    if training_session.started_at is None:
+        training_session.started_at = utcnow()
     if not same:
         training_session.play_grip_type_id = grip_type_id
         training_session.play_edge_mm = edge_mm
@@ -1070,6 +1074,26 @@ def record_work_set(
         session.commit()
         session.refresh(work_set)
     return work_set
+
+
+def create_idle_session(
+    session: Session,
+    user: User,
+    date: date_type,
+    session_number: int | None = None,
+) -> TrainingSession:
+    """start_or_get_session for a write that isn't training (Go lighter, a
+    tweak logged before training): a row it creates has no started_at
+    yet -- the first rung-done / tick / estimate / Set commit stamps it
+    (stamp_play_combo), so Session load's duration isn't inflated."""
+    existed = find_session(session, user, date, session_number) is not None
+    training_session = start_or_get_session(session, user, date, session_number)
+    if not existed:
+        training_session.started_at = None
+        session.add(training_session)
+        session.commit()
+        session.refresh(training_session)
+    return training_session
 
 
 def start_or_get_session(

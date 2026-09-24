@@ -315,3 +315,24 @@ def test_a_set_committed_today_still_starts_the_rest(client):
 
     assert step_kind(response.text) == "rest"
 
+
+
+# ---------- nice-to-have: session load runs from the first real activity ----------
+
+
+@pytest.mark.parametrize("create", ["tweak", "lighter"])
+def test_a_row_created_before_training_has_no_start_until_play_begins(client, create):
+    setup_tested_user(client)
+    if create == "tweak":
+        client.post("/log/tweak", data={"date": TODAY, "hand": "left", "severity": "1"})
+    else:
+        client.post("/today/lighter", data={"date": TODAY, "on": "1"})
+    assert sessions(client)[0].started_at is None
+
+    before = datetime.now(timezone.utc).replace(tzinfo=None)
+    params = combo(client, date=TODAY)
+    client.post("/session/rung-done", data={**params, "step_index": 0})
+
+    started = sessions(client)[0].started_at
+    assert started is not None
+    assert started.replace(tzinfo=None) >= before - timedelta(seconds=1)

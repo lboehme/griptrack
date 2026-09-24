@@ -74,7 +74,10 @@ _Avoid_: sRPE (in UI copy), session difficulty, feel
 
 **Session load**:
 Session RPE × duration in minutes, where duration runs from `started_at` to
-`finished_at` (the Summary's Finish). Derived, never stored
+`finished_at` (the Summary's Finish). `started_at` is the first real activity
+on the session — the first rung-done, warmup tick, estimate or Set commit — not
+the row's creation: a row created early by Go lighter or a tweak logged before
+training has no `started_at` until play begins. Derived, never stored
 (`analytics.session_load`); `None` whenever Session RPE or either timestamp
 is missing, so an unfinished session has no load. Nothing consumes it yet —
 it's the standard load signal meant for the OvertrainingWarning and the

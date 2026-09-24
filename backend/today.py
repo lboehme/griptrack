@@ -563,7 +563,7 @@ def set_go_lighter(
     if needed), or the explicit second-session slot Today plans (PR #154
     review MUST-FIX 3: never the already-finished first session). Never
     automatic -- only this explicit toggle writes the flag."""
-    training_session = training_log.start_or_get_session(
+    training_session = training_log.create_idle_session(
         session, user, date, session_number
     )
     training_session.is_deload = on
@@ -688,7 +688,7 @@ def log_tweak(
     existing = training_log.find_session(session, user, date)
     if existing is None and training_log.is_past_date(date):
         raise LogDateError("No session on that date.")
-    training_session = existing or training_log.start_or_get_session(session, user, date)
+    training_session = existing or training_log.create_idle_session(session, user, date)
     return training_log.record_pain_report(
         session, training_session, hand, severity, (note or "").strip() or None
     )
