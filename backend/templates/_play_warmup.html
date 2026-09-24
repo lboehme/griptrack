@@ -25,6 +25,7 @@
     <input type="hidden" name="date" value="{{ date }}">
     <input type="hidden" name="hand" value="{{ hnd }}">
     {% if session_number %}<input type="hidden" name="session_number" value="{{ session_number }}">{% endif %}
+    {% if sets_init %}<input type="hidden" name="sets" value="{{ sets_init }}">{% endif %}
     <label class="mini">Estimated max for this session — {{ hnd|display_name }} hand ({{ user.unit_pref }})
       <input type="number" name="weight" step="0.25" min="0.25" required>
     </label>
@@ -52,6 +53,7 @@
         <input type="hidden" name="date" value="{{ date }}">
         <input type="hidden" name="hand" value="{{ hnd }}">
         {% if session_number %}<input type="hidden" name="session_number" value="{{ session_number }}">{% endif %}
+        {% if sets_init %}<input type="hidden" name="sets" value="{{ sets_init }}">{% endif %}
         <input type="hidden" name="step_index" value="{{ idx }}">
         <input type="checkbox" id="{{ check_id }}" class="step-check" data-hand="{{ hnd }}" data-step="{{ idx }}"{% if (hnd, idx) in w.checks %} checked{% endif %} aria-label="{{ hnd|display_name }} hand done" hx-post="/session/check" hx-include="closest form" hx-target="#play-root" hx-swap="innerHTML" hx-trigger="change">
       </form>
@@ -77,6 +79,7 @@
   <input type="hidden" name="date" value="{{ date }}">
   <input type="hidden" name="hand" value="{{ hand }}">
   {% if session_number %}<input type="hidden" name="session_number" value="{{ session_number }}">{% endif %}
+  {% if sets_init %}<input type="hidden" name="sets" value="{{ sets_init }}">{% endif %}
   <input type="hidden" name="step_index" value="{{ idx }}">
   <button type="submit" class="btn play-primary-btn" hx-post="/session/rung-done" hx-include="closest form" hx-target="#play-root" hx-swap="innerHTML">Rung done</button>
 </form>

@@ -12,10 +12,19 @@
   <details class="play-menu-wrap">
     <summary aria-label="More">⋯</summary>
     <div class="play-menu">
-      <a href="/session/play?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}{% if hand %}&amp;hand={{ hand }}{% endif %}{% if session_number %}&amp;session_number={{ session_number }}{% endif %}&amp;sets={{ worksets.more_sets }}">＋ Add a set</a>
-      {% if worksets.removable_to %}
-      <a href="/session/play?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}{% if hand %}&amp;hand={{ hand }}{% endif %}{% if session_number %}&amp;session_number={{ session_number }}{% endif %}&amp;sets={{ worksets.removable_to }}">－ Remove empty set</a>
-      {% endif %}
+      {# PR #154 review (D2): the planned set count is persisted on the
+         session by a POST, never carried as a GET sets= hint. #}
+      {% for label, target in [("＋ Add a set", worksets.more_sets), ("－ Remove empty set", worksets.removable_to)] if target %}
+      <form method="post" action="/session/sets">
+        <input type="hidden" name="grip_type_id" value="{{ grip.id }}">
+        <input type="hidden" name="edge_mm" value="{{ edge_mm }}">
+        <input type="hidden" name="date" value="{{ date }}">
+        <input type="hidden" name="hand" value="{{ hand }}">
+        {% if session_number %}<input type="hidden" name="session_number" value="{{ session_number }}">{% endif %}
+        <input type="hidden" name="sets" value="{{ target }}">
+        <button type="submit" hx-post="/session/sets" hx-include="closest form" hx-target="#play-root" hx-swap="innerHTML">{{ label }}</button>
+      </form>
+      {% endfor %}
     </div>
   </details>
 </header>

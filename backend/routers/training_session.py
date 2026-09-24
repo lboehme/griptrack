@@ -113,6 +113,23 @@ def play_response(
     )
 
 
+def _start_play(
+    session: Session,
+    user: User,
+    grip_type_id: int,
+    edge_mm: int,
+    date: date_type,
+    session_number: int | None,
+    sets: int | None,
+):
+    try:
+        return training_log.start_play_on_combo(
+            session, user, grip_type_id, edge_mm, date, session_number, sets
+        )
+    except training_log.UnknownGripTypeError:
+        raise HTTPException(status_code=404, detail="Unknown grip type") from None
+
+
 def require_grip_type(session: Session, grip_type_id: int) -> None:
     try:
         training_log.require_grip_type(session, grip_type_id)
@@ -386,13 +403,14 @@ def save_session_estimate(
     hand: str = Form(),
     weight: float = Form(gt=0, le=MAX_WEIGHT),
     session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
+    sets: int | None = Form(default=None, ge=1, le=MAX_SET_NUMBER),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
     if hand not in VALID_HANDS:
         return HTMLResponse("Hand must be left or right.", status_code=400)
-    training_session = training_log.start_or_get_session(
-        session, user, date, session_number
+    training_session = _start_play(
+        session, user, grip_type_id, edge_mm, date, session_number, sets
     )
     training_log.record_session_estimate(
         session, training_session, hand, grip_type_id, edge_mm, weight
@@ -411,13 +429,14 @@ def check_warmup_step(
     hand: str = Form(),
     step_index: int = Form(ge=0, le=MAX_SET_NUMBER),
     session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
+    sets: int | None = Form(default=None, ge=1, le=MAX_SET_NUMBER),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
     if hand not in VALID_HANDS:
         return HTMLResponse("Hand must be left or right.", status_code=400)
-    training_session = training_log.start_or_get_session(
-        session, user, date, session_number
+    training_session = _start_play(
+        session, user, grip_type_id, edge_mm, date, session_number, sets
     )
     training_log.toggle_warmup_check(session, training_session, hand, step_index)
     return play_response(
@@ -434,6 +453,7 @@ def rung_done(
     hand: str | None = Form(default=None),
     step_index: int = Form(ge=0, le=MAX_SET_NUMBER),
     session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
+    sets: int | None = Form(default=None, ge=1, le=MAX_SET_NUMBER),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
@@ -441,9 +461,8 @@ def rung_done(
     tile for this rung (any already ticked by hand are left as-is) and
     advances to the next rung, or the first work set once every rung is
     done."""
-    require_grip_type(session, grip_type_id)
-    training_session = training_log.start_or_get_session(
-        session, user, date, session_number
+    training_session = _start_play(
+        session, user, grip_type_id, edge_mm, date, session_number, sets
     )
     hands = training_log.hands_for(user, hand)
     training_log.complete_warmup_rung(session, training_session, hands, step_index)
@@ -494,6 +513,33 @@ def end_rest(
         training_log.clear_rest(training_session, session)
     return play_response(
         request, user, session, grip_type_id, edge_mm, date, hand, session_number
+    )
+
+
+@router.post("/session/sets")
+def plan_sets(
+    request: Request,
+    grip_type_id: int = Form(),
+    edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
+    date: date_type = Form(),
+    sets: int = Form(ge=1, le=MAX_SET_NUMBER),
+    hand: str | None = Form(default=None),
+    session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
+    user: User = Depends(auth.current_user),
+    session: Session = Depends(get_session),
+):
+    """The ⋯ menu's "＋ Add a set" / "－ Remove empty set" (PR #154 review,
+    D2): persists the combo's planned set count on the session, so every
+    later step and reload reads it rather than a URL hint."""
+    try:
+        training_log.set_planned_sets(
+            session, user, grip_type_id, edge_mm, date, session_number, sets
+        )
+    except training_log.UnknownGripTypeError:
+        raise HTTPException(status_code=404, detail="Unknown grip type") from None
+    return play_response(
+        request, user, session, grip_type_id, edge_mm, date,
+        hand if hand in VALID_HANDS else None, session_number,
     )
 
 

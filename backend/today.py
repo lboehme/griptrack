@@ -201,7 +201,11 @@ def _session_has_activity(session: Session, training_session: TrainingSession) -
 def _session_combo(
     session: Session, training_session: TrainingSession
 ) -> tuple[int, int] | None:
-    """The (grip_type_id, edge_mm) the session's latest work set was on."""
+    """The (grip_type_id, edge_mm) play is running in this session: the
+    stamped play combo (the first rung-done / tick / estimate / Set commit
+    on it, PR #154 review D2), else the latest work set's combo."""
+    if training_session.play_grip_type_id is not None and training_session.play_edge_mm is not None:
+        return (training_session.play_grip_type_id, training_session.play_edge_mm)
     worksets = _session_worksets(session, training_session)
     if not worksets:
         return None

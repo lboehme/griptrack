@@ -824,8 +824,12 @@ def test_add_a_set_extends_the_denominator(client):
     page = workset_step(client)
     assert play_step_title(page.text) == "Work set 1 of 3"
 
-    add_link = re.search(r'href="([^"]*sets=4[^"]*)"', page.text).group(1)
-    extended = client.get(add_link.replace("&amp;", "&")).text
+    add_form = re.search(
+        r'<form method="post" action="/session/sets">(.*?)</form>', page.text, re.DOTALL
+    ).group(1)
+    fields = dict(re.findall(r'name="(\w+)" value="([^"]*)"', add_form))
+    assert fields["sets"] == "4"
+    extended = client.post("/session/sets", data=fields, follow_redirects=True).text
     assert play_step_title(extended) == "Work set 1 of 4"
 
 
@@ -1149,6 +1153,8 @@ def test_no_new_write_route_is_added_beyond_play_and_its_actions(client):
         # Summary step (#147).
         "/session/rpe",
         "/session/finish",
+        # ⋯ Add a set / Remove empty set persist planned_sets (PR #154 review).
+        "/session/sets",
     }
 
 

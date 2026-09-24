@@ -1401,7 +1401,9 @@ code.invite-code {
   box-shadow: 0 10px 30px -12px color-mix(in srgb, var(--shade) 60%, transparent);
 }
 
-.play-menu a {
+.play-menu form { display: contents; }
+
+.play-menu button {
   width: auto;
   min-height: 2.5rem;
   justify-content: flex-start;
@@ -1418,7 +1420,7 @@ code.invite-code {
 }
 
 @media (hover: hover) {
-  .play-menu a:hover { background: var(--s2); }
+  .play-menu button:hover { background: var(--s2); }
 }
 
 /* ---- warmup rung step ---- */
