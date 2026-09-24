@@ -13,7 +13,8 @@
      data-next-set-number="{{ ws.current_set_number }}"
      data-total-sets="{{ ws.total_sets }}"
      {#- S3 native rest bridge (#148, docs/adr/0015): what steppers.js hands
-         window.GripTrackNative.startRest(...) when the Android shell exists. #}
+         window.GripTrackNative.startRest(...) when the Android shell exists.
+         data-rest-sound is the stored flag; it's toggled in Settings (#151). #}
      {% if rest_bridge %}
      data-rest-ends-at-ms="{{ rest_bridge.ends_at_ms }}"
      data-rest-title="{{ rest_bridge.title }}"
@@ -44,21 +45,5 @@
     {% if session_number %}<input type="hidden" name="session_number" value="{{ session_number }}">{% endif %}
     <button type="submit" class="btn btn-secondary rest-extend-btn" id="rest-extend-btn" formaction="/session/rest/extend" hx-post="/session/rest/extend" hx-include="closest form" hx-target="#play-root" hx-swap="innerHTML"{% if is_over %} hidden{% endif %}>+30 s</button>
     <button type="submit" class="btn {{ 'rest-start-btn' if is_over else 'rest-skip-btn' }}" hx-post="/session/rest/end" hx-include="closest form" hx-target="#play-root" hx-swap="innerHTML" id="rest-end-btn">{{ "Start set " ~ ws.current_set_number if is_over else "Skip rest" }}</button>
-  </form>
-
-  {# Rest sound (#148): off by default; S6 moves it to Settings. A plain
-     toggle button so it works without JS (303 back to play) and via htmx. #}
-  <form method="post" action="/session/rest/sound" class="rest-sound-form">
-    <input type="hidden" name="grip_type_id" value="{{ grip.id }}">
-    <input type="hidden" name="edge_mm" value="{{ edge_mm }}">
-    <input type="hidden" name="date" value="{{ date }}">
-    <input type="hidden" name="hand" value="{{ hand }}">
-    {% if session_number %}<input type="hidden" name="session_number" value="{{ session_number }}">{% endif %}
-    <button type="submit" class="rest-sound-btn" id="rest-sound-btn"
-            name="rest_sound" value="{{ 'off' if user.rest_sound else 'on' }}"
-            aria-pressed="{{ 'true' if user.rest_sound else 'false' }}"
-            hx-post="/session/rest/sound" hx-include="closest form" hx-target="#play-root" hx-swap="innerHTML">
-      {{ "Sound at 0:00: on" if user.rest_sound else "Sound at 0:00: off" }}
-    </button>
   </form>
 </div>

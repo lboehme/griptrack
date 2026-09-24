@@ -685,7 +685,7 @@ def test_ramp_values_step_through_each_rung_rounded_down_to_loadable(client):
 
 
 def clear_inventory(client):
-    rows = re.findall(r'class="plate-weight">([^<]+)<', client.get("/plates").text)
+    rows = re.findall(r'class="plate-weight">([^<]+)<', client.get("/settings/plates").text)
     for weight in rows:
         client.post("/plates", data={"weight": weight, "count": "0"})
 

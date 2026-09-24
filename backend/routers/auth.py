@@ -6,6 +6,7 @@ from backend import auth
 from backend.db import get_session
 from backend.limits import MAX_NAME_LENGTH
 from backend.models import User
+from backend.routers.settings import saved_response
 from backend.templating import templates
 
 # Registered unconditionally -- login/logout stay meaningful in both builds
@@ -37,6 +38,7 @@ def create_invite(
 
 @server_only_router.post("/admin/reset-password")
 def admin_reset_password(
+    request: Request,
     email: str = Form(),
     new_password: str = Form(),
     admin: User = Depends(auth.require_admin),
@@ -45,7 +47,7 @@ def admin_reset_password(
     user = auth.reset_password(session, email, new_password)
     if user is None:
         return HTMLResponse("No user with that email.", status_code=404)
-    return RedirectResponse("/", status_code=303)
+    return saved_response(request, "password")
 
 
 @router.get("/login")

@@ -28,16 +28,19 @@ def expected_ladder(inventory, cap=MAX_WEIGHT):
 
 
 def inventory_rows(client):
-    """Parse the plates page into {weight: count}."""
-    page = client.get("/plates").text
+    """Parse Settings → Plates' rack into the owned inventory {weight: count}.
+    The rack also shows the unit's starter denominations at count 0 (so they
+    stay tappable); those aren't owned, so they're left out here."""
+    page = client.get("/settings/plates").text
     return {
         float(w): int(c)
         for w, c in re.findall(
-            r'class="plate-weight">([^<]+)</\w+>.*?'
+            r'data-weight="([^"]+)".*?'
             r'class="plate-count" data-count="(\d+)"',
             page,
             re.DOTALL,
         )
+        if int(c) > 0
     }
 
 
@@ -167,3 +170,105 @@ def test_loadable_ladder_is_bounded_by_the_weight_limit_for_a_pathological_inven
     assert ladder[-1] <= MAX_WEIGHT
     assert all(rung <= MAX_WEIGHT for rung in ladder)
     assert ladder == sorted(set(ladder))
+
+
+# ---------- Settings → Plates: tap-to-count (#151) ----------
+
+
+def tap(client, weight, back="/settings/plates", htmx=False):
+    return client.post(
+        "/plates/tap",
+        data={"weight": weight, "back": back},
+        headers={"HX-Request": "true"} if htmx else None,
+        follow_redirects=False,
+    )
+
+
+def test_old_plates_page_redirects_to_settings_plates(client):
+    register(client)
+
+    response = client.get("/plates", follow_redirects=False)
+
+    assert (response.status_code, response.headers["location"]) == (303, "/settings/plates")
+
+
+def test_add_plate_form_lands_back_on_settings_plates(client):
+    register(client)
+
+    response = client.post("/plates", data={"weight": "7.5", "count": "2"}, follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"].startswith("/settings/plates")
+
+
+def test_tapping_a_plate_counts_one_more(client):
+    register(client)
+    before = inventory_rows(client)[10.0]
+
+    response = tap(client, "10")
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/settings/plates"
+    assert inventory_rows(client)[10.0] == before + 1
+
+
+def test_tapping_past_the_cycle_wraps_to_zero_and_keeps_the_starter_plate_tappable(client):
+    register(client)
+    client.post("/plates", data={"weight": "10", "count": str(plates.TAP_CYCLE_MAX)})
+
+    tap(client, "10")
+
+    assert 10.0 not in inventory_rows(client)
+    # A starter denomination at zero still renders as a (muted) circle...
+    page = client.get("/settings/plates").text
+    assert re.search(r'data-weight="10.0".*?data-count="0"', page, re.DOTALL)
+    # ...so the next tap brings it back.
+    tap(client, "10")
+    assert inventory_rows(client)[10.0] == 1
+
+
+def test_tap_answers_htmx_with_the_new_count_badge_and_summary(client):
+    register(client)
+    before = inventory_rows(client)[20.0]
+
+    response = tap(client, "20", htmx=True)
+
+    assert response.status_code == 200
+    assert f'class="plate-count" data-count="{before + 1}"' in response.text
+    assert 'id="plate-summary" hx-swap-oob="true"' in response.text
+
+
+def test_tap_redirect_only_goes_back_to_a_known_rack_page(client):
+    register(client)
+
+    assert tap(client, "5", back="/welcome/plates").headers["location"] == "/welcome/plates"
+    assert tap(client, "5", back="https://evil.example").headers["location"] == "/settings/plates"
+    assert tap(client, "5", back="//evil.example").headers["location"] == "/settings/plates"
+
+
+def test_tapping_a_plate_only_changes_the_tapping_users_rack(client):
+    register(client, email="founder@example.com")
+    founder_before = inventory_rows(client)[5.0]
+
+    register_second_user(client)
+    tap(client, "5")
+    tap(client, "5")
+
+    client.post("/logout")
+    login(client, "founder@example.com", "test-pw-1234")
+    assert inventory_rows(client)[5.0] == founder_before
+
+
+def test_tap_requires_login(client):
+    assert tap(client, "5").status_code == 401
+
+
+def test_settings_plates_summarises_what_can_be_loaded(client):
+    register(client)
+
+    page = client.get("/settings/plates").text
+
+    # Seeded kg stack: 2×0.5 … 1×20 tops out at 58.5 kg.
+    assert "58.5 kg" in page
+    assert "smallest plate is <strong>0.5 kg</strong>" in page
+    assert "Loading pin" in page

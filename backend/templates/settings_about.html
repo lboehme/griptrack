@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}About these numbers — GripTrack{% endblock %}
+{% block content %}
+{# Static (#151): the plain-language home for the technical terms that used
+   to sit in the analytics subtitles. Progress detail pages link here by
+   section id. #}
+{% with heading="About these numbers", sub="What GripTrack measures, and how, in plain words." %}{% include "_settings_head.html" %}{% endwith %}
+<div class="about">
+  <section class="card about-entry" id="volume">
+    <p class="overline">Volume</p>
+    <h3>How much work you did</h3>
+    <p>For each session and each hand, grip and edge: every set's weight × reps, added up. Heavier weight, more reps and more sets all count the same way, so it rises whenever you do more. Sessions marked lighter (deload) are left out of the trend, so an easy week doesn't look like a stall.</p>
+    <p class="muted">Also called TrainingVolume. Shown in {{ user.unit_pref }}·reps.</p>
+  </section>
+
+  <section class="card about-entry" id="intensity">
+    <p class="overline">Mean intensity</p>
+    <h3>How heavy the sets were</h3>
+    <p>Each work set's weight as a share of your max on that day, averaged over the session. It shows progress that volume can miss — for example heavier sets with fewer reps.</p>
+  </section>
+
+  <section class="card about-entry" id="max">
+    <p class="overline">Max and % of bodyweight</p>
+    <h3>Your current strength</h3>
+    <p>Your max for a hand, grip and edge is your last max test — or a heavier work set since then, because pulling more than your tested max proves you've got stronger. Warmups and weight suggestions are built from it.</p>
+    <p>Progress divides that max by your bodyweight on the same date, so it stays fair when your weight changes. 80% means you pulled 80% of your bodyweight with one hand.</p>
+    <p class="muted">Also called CurrentMax and %BW.</p>
+  </section>
+
+  <section class="card about-entry" id="rpe">
+    <p class="overline">Effort (RPE)</p>
+    <h3>How hard it felt</h3>
+    <p>RPE is a 1–10 effort scale. Per set, 7 means about three more reps were left in the tank and 10 means nothing was. At the end of a session you rate the whole session once (Easy 3 to Max 10) — that's the session RPE, separate from the per-set numbers.</p>
+  </section>
+
+  <section class="card about-entry" id="load">
+    <p class="overline">Session load</p>
+    <h3>Effort × time</h3>
+    <p>Session RPE × the session's length in minutes, from start to Finish. It's a standard way to track how much a session took out of you. It needs both a rating and a finished session, and nothing in the app acts on it yet.</p>
+  </section>
+
+  <section class="card about-entry" id="balance">
+    <p class="overline">Left/right balance</p>
+    <h3>The gap between your hands</h3>
+    <p>How far apart your hands are, as a percentage of the stronger one: +10% means your left is 10% ahead, −10% your right. It's worked out for both strength (your max) and work done (volume). Most people have a small, steady gap; GripTrack only flags it when the gap grows well past your own usual level, or reaches 15%.</p>
+  </section>
+
+  <section class="card about-entry" id="correlation">
+    <p class="overline">Strength vs grade</p>
+    <h3>Does your pull show in your climbing?</h3>
+    <p>For each boulder you sent, GripTrack pairs the grade with your max as % of bodyweight on that day, and checks whether harder sends tend to come with a stronger pull. The result runs from −1 to +1: near +1, they rise together; near 0, no clear link. It only ranks the values, so one unusual send can't skew it, and it waits for at least 8 sends before showing anything.</p>
+    <p class="muted">Technically a Spearman rank correlation (ρ). It's framed against Lattice's published finger-strength research as a reference point — their data covers hangboard hangs, not block pulls.</p>
+  </section>
+
+  <section class="card about-entry" id="flags">
+    <p class="overline">Flags</p>
+    <h3>Plateau and load spike</h3>
+    <p><strong>Plateau:</strong> your volume on a combo hasn't grown for several sessions — a hint to change grip or edge, or retest your max. <strong>Load spike, short rest:</strong> a session well above your recent average that came after less rest than usual. Both are hints, not diagnoses.</p>
+  </section>
+</div>
+{% endblock %}

@@ -34,8 +34,11 @@ def test_main_pages_make_no_requests_outside_localhost(live_server, authenticate
         f"{live_server}/climbs",
         f"{live_server}/progress/timeline",
         f"{live_server}/progress/maxes",
-        f"{live_server}/profile",
-        f"{live_server}/plates",
+        f"{live_server}/settings",
+        f"{live_server}/settings/training",
+        f"{live_server}/settings/progression",
+        f"{live_server}/settings/plates",
+        f"{live_server}/settings/about",
     ]
     for url in routes:
         page.goto(url)

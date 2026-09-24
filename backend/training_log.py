@@ -1111,6 +1111,32 @@ def get_protocol(session: Session, user: User) -> TrainingProtocol:
     return protocol
 
 
+def save_protocol(
+    session: Session, user: User, base_work_set_reps: int, default_rest_seconds: int
+) -> TrainingProtocol:
+    """Upsert the user's own TrainingProtocol row (Settings → Training):
+    the rep target and default rest. The global default row is never
+    touched; the ramp percentages stay global (ADR-0005)."""
+    protocol = session.exec(
+        select(TrainingProtocol).where(TrainingProtocol.user_id == user.id)
+    ).first()
+    if protocol is None:
+        protocol = TrainingProtocol(user_id=user.id)
+    protocol.base_work_set_reps = base_work_set_reps
+    protocol.default_rest_seconds = default_rest_seconds
+    session.add(protocol)
+    session.commit()
+    return protocol
+
+
+def set_hand_order(session: Session, user: User, hand_order_pref: str) -> None:
+    """Settings → Training: the user's HandOrderPreference. Callers
+    validate against VALID_HAND_ORDER_PREFS first."""
+    user.hand_order_pref = hand_order_pref
+    session.add(user)
+    session.commit()
+
+
 def compute_ramp_plan(
     session: Session,
     user: User,

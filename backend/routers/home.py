@@ -114,9 +114,3 @@ def toggle_go_lighter(
     today.set_go_lighter(session, user, date, on)
     query = _combo_query(grip_type_id, edge_mm)
     return RedirectResponse("/" + (f"?{query}" if query else ""), status_code=303)
-
-
-@router.get("/settings")
-def settings(user: User = Depends(auth.current_user)):
-    """Settings tab (S6 pending): the existing profile page for now."""
-    return RedirectResponse("/profile", status_code=303)

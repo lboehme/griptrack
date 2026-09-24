@@ -1,0 +1,27 @@
+{# The plate rack (#151): tap-to-count circles (V7 "Plate"), shared by
+   first run (/welcome/plates) and Settings → Plates. Each circle is its own
+   form, so it works without JS (303 back to `back`); with htmx a tap swaps
+   only that circle's count badge, and taps on one plate queue rather than
+   race. Counts wrap to 0 after plates.TAP_CYCLE_MAX. #}
+<div class="plate-rack" id="plate-rack">
+  <div class="plate-grid">
+    {% for plate in rack.plates %}
+    <form method="post" action="/plates/tap" class="plate-form"
+          hx-post="/plates/tap" hx-target="find .plate-count" hx-swap="outerHTML" hx-sync="this:queue all">
+      <input type="hidden" name="weight" value="{{ plate.weight }}">
+      <input type="hidden" name="back" value="{{ back }}">
+      <button type="submit" class="plate glass" data-weight="{{ plate.weight }}"
+              aria-label="{{ plate.weight|num_trim }} {{ user.unit_pref }} plate: tap to count one more">
+        <span class="plate-weight">{{ plate.weight|num_trim }}</span>
+        {% include "_plate_count.html" %}
+      </button>
+    </form>
+    {% endfor %}
+  </div>
+
+  <div class="card settings-row plate-pin">
+    <span class="settings-label">Loading pin<small>The handle or pin itself isn't counted — weights are the plates on it.</small></span>
+  </div>
+
+  {% include "_plate_summary.html" %}
+</div>

@@ -1,0 +1,142 @@
+#!/usr/bin/env python3
+"""Grep-based dead-code check for the frontend (#151).
+
+Two checks, stdlib only, no deps:
+
+1. **Dead CSS classes.** Every class selector in backend/static/app.css is
+   grepped (as a whole word) across the templates, the app's own static JS
+   and the backend Python (classes built in Python or via JS `classList`).
+   A class that appears nowhere is dead, and so is every selector that
+   needs it. Classes assembled dynamically (`"segment-" + state`,
+   `story-{{ s.kind }}`, `f"grade-{x}"`) count as used when a hyphen
+   prefix of the name appears followed by a JS/Jinja/f-string
+   interpolation.
+2. **Dead templates.** Every file in backend/templates is grepped (by file
+   name) across backend/. A template no other file names is never
+   rendered.
+3. **Dead static files.** Every top-level .js/.css under backend/static is
+   grepped (by file name) across backend/.
+
+Prints the lists with their counts and exits 1 if either is non-empty,
+so it can run as a gate:
+
+    scripts/check-dead-css          # summary + lists
+    scripts/check-dead-css --quiet  # counts only
+"""
+
+import re
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+BACKEND = ROOT / "backend"
+CSS = BACKEND / "static" / "app.css"
+TEMPLATES = BACKEND / "templates"
+# Vendored third-party bundles: their classes are theirs, not the app's.
+VENDORED = {"htmx.min.js", "uplot.iife.min.js"}
+
+CLASS_RE = re.compile(r"\.(-?[_a-zA-Z][\w-]*)")
+INTERPOLATION = r"""(\{\{|\{%|\$\{|\{|["']\s*\+)"""
+
+
+def strip_comments(css: str) -> str:
+    return re.sub(r"/\*.*?\*/", "", css, flags=re.DOTALL)
+
+
+def selectors(css: str) -> list[str]:
+    """Every rule's selector list (at-rule preludes skipped). Declaration
+    blocks never contain a `{`, so `[^{}]+{` only ever matches preludes."""
+    found = []
+    for match in re.finditer(r"([^{}]+)\{", strip_comments(css)):
+        prelude = match.group(1).strip()
+        if not prelude or prelude.startswith("@"):
+            continue
+        found.extend(part.strip() for part in prelude.split(","))
+    return found
+
+
+def css_classes(css: str) -> set[str]:
+    classes: set[str] = set()
+    for selector in selectors(css):
+        # Drop attribute selectors and url()s so "[href$='.zip']" can't
+        # read as a class.
+        cleaned = re.sub(r"\[[^\]]*\]", "", selector)
+        classes.update(CLASS_RE.findall(cleaned))
+    return classes
+
+
+def corpus() -> str:
+    files = list(TEMPLATES.rglob("*.html"))
+    files += [p for p in (BACKEND / "static").glob("*.js") if p.name not in VENDORED]
+    files += list(BACKEND.glob("*.py")) + list((BACKEND / "routers").glob("*.py"))
+    return "\n".join(p.read_text(encoding="utf-8") for p in files)
+
+
+def class_is_used(name: str, text: str) -> bool:
+    if re.search(rf"(?<![\w-]){re.escape(name)}(?![\w-])", text):
+        return True
+    # Dynamically assembled: some "prefix-" of the name followed by an
+    # interpolation ("segment-" + x, story-{{ kind }}, f"grade-{g}").
+    for i, char in enumerate(name):
+        if char == "-" and i > 0:
+            prefix = name[: i + 1]
+            if re.search(rf"(?<![\w-]){re.escape(prefix)}{INTERPOLATION}", text):
+                return True
+    return False
+
+
+def dead_classes() -> list[str]:
+    text = corpus()
+    return sorted(c for c in css_classes(CSS.read_text(encoding="utf-8")) if not class_is_used(c, text))
+
+
+def dead_templates() -> list[str]:
+    backend_files = [p for p in BACKEND.rglob("*") if p.is_file() and p.suffix in {".py", ".html"}]
+    dead = []
+    for template in sorted(TEMPLATES.rglob("*.html")):
+        name = template.relative_to(TEMPLATES).as_posix()
+        used = any(
+            name in p.read_text(encoding="utf-8") for p in backend_files if p != template
+        )
+        if not used:
+            dead.append(name)
+    return dead
+
+
+def dead_static_files() -> list[str]:
+    """Top-level JS/CSS under backend/static no other backend file names."""
+    sources = [
+        p for p in BACKEND.rglob("*")
+        if p.is_file() and p.suffix in {".py", ".html", ".js"}
+    ]
+    dead = []
+    for asset in sorted((BACKEND / "static").glob("*")):
+        if asset.suffix not in {".js", ".css"}:
+            continue
+        if not any(asset.name in p.read_text(encoding="utf-8") for p in sources if p != asset):
+            dead.append(asset.name)
+    return dead
+
+
+def main() -> int:
+    quiet = "--quiet" in sys.argv[1:]
+    total = len(css_classes(CSS.read_text(encoding="utf-8")))
+    classes = dead_classes()
+    templates = dead_templates()
+    template_total = len(list(TEMPLATES.rglob("*.html")))
+    statics = dead_static_files()
+    print(f"CSS classes in app.css: {total}, unused: {len(classes)}")
+    print(f"Templates: {template_total}, never referenced: {len(templates)}")
+    print(f"Static JS/CSS files never referenced: {len(statics)}")
+    if not quiet:
+        for c in classes:
+            print(f"  dead class  .{c}")
+        for t in templates:
+            print(f"  dead template  {t}")
+        for f in statics:
+            print(f"  dead static file  {f}")
+    return 1 if classes or templates or statics else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

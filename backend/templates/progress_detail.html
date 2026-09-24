@@ -9,7 +9,7 @@
 <p class="overline"><a class="progress-back" href="/progress">‹ Progress</a></p>
 <h2>{{ title }}</h2>
 {% if section == "volume" %}
-<p class="page-sub">Volume = weight × reps per session, for every combination you train.</p>
+<p class="page-sub">Volume = weight × reps per session, for every combination you train. <a class="about-link" href="/settings/about#volume">About these numbers</a></p>
 {% if combos %}
 {% for combo in combos %}
 <div class="card">
@@ -29,7 +29,7 @@
       <span>Mean Intensity</span>
     </span>
   </div>
-  <div class="trend-chart" data-chart-combo="{{ combo.combo_key }}" role="img" aria-label="TrainingVolume trend for {{ combo.hand|display_name }} {{ combo.grip_name|display_name }} @ {{ combo.edge_mm }} mm"></div>
+  <div class="trend-chart" data-chart-combo="{{ combo.combo_key }}" role="img" aria-label="Volume trend for {{ combo.hand|display_name }} {{ combo.grip_name|display_name }} @ {{ combo.edge_mm }} mm"></div>
   <details class="show-data">
   <summary>Show data</summary>
   <ul class="plain volume-list">
@@ -55,7 +55,7 @@
 {% if asymmetry_pairs %}
 <div class="card asymmetry-card">
   <h3>L/R Asymmetry</h3>
-  <p class="page-sub" style="margin-bottom: .8rem;">Signed gap ((L − R) / max(L, R)) over time. Shaded bands show ±10–15% reference zone.</p>
+  <p class="page-sub asymmetry-sub">How far apart your hands are, in percent — above zero, your left is ahead. Shaded bands mark the usual ±10–15%. <a class="about-link" href="/settings/about#balance">About these numbers</a></p>
   <div class="asymmetry-legend">
     <span class="asymmetry-legend-item">
       <span class="asymmetry-legend-swatch strength"></span>
@@ -119,7 +119,7 @@
   <h3>Strength ↔ boulder grade</h3>
   {% if correlation.r is not none %}
   <p class="corr-headline">
-    Spearman ρ = <strong class="corr-r" data-r="{{ "%.2f"|format(correlation.r) }}" data-n="{{ correlation.n }}">{{ "%.2f"|format(correlation.r) }}</strong>
+    Strength and grade: <strong class="corr-r" data-r="{{ "%.2f"|format(correlation.r) }}" data-n="{{ correlation.n }}">{{ "%.2f"|format(correlation.r) }}</strong>
     <span class="muted">across {{ correlation.n }} boulder sends</span>
   </p>
   <details class="show-data">
@@ -134,7 +134,7 @@
     {% endfor %}
   </ul>
   </details>
-  <p class="muted corr-note">Rank correlation (Spearman's ρ) between your best pull (as % of bodyweight at the time) and boulder grade. Framed against Lattice's published finger-strength research as a reference point — their data covers hangboard hangs, not block pulls.</p>
+  <p class="muted corr-note">Near +1, your harder sends come with a stronger pull (as % of bodyweight); near 0, there's no clear link. <a class="about-link" href="/settings/about#correlation">About these numbers</a></p>
   {% else %}
   <p class="corr-headline muted">
     {% if correlation.n < 8 %}
