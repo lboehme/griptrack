@@ -66,7 +66,7 @@ balance, strength vs grade, maxes and the timeline) and **Settings**
 (grouped list rows with autosaving detail pages; tap-to-count plates;
 rest sound; backup export/restore; About these numbers). Wave 4 shipped
 RPE autoregulation per ProgressionPath (ADR-0011/-0012), retest and estimate
-nudges, the mean-intensity series and the stored rest timer. Tests: 667 at
+nudges, the mean-intensity series and the stored rest timer. Tests: 703 at
 the HTTP seam plus a `pytest-playwright` browser layer (39 specs), with
 ruff/mypy/pip-audit gates and `scripts/check-dead-css`. **The app runs as a
 self-contained local Android app** (embedded CPython/FastAPI on `127.0.0.1`

@@ -114,7 +114,7 @@ process worth stealing:
   canonical terms) and [`docs/adr/`](docs/adr/) (records of every
   decision with a real trade-off). Slices are then filed as GitHub
   issues small enough for one agent run.
-- **Test-first, at one seam.** All ~670 tests drive the app through HTTP
+- **Test-first, at one seam.** All ~700 tests drive the app through HTTP
   with a fresh in-memory database per test — no mocks, no unit tests
   coupled to internals. Refactoring under the tests is cheap because
   they only pin observable behavior.
