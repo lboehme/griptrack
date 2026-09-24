@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Sessions &amp; climbs — GripTrack{% endblock %}
+{% block content %}
+{# Timeline (#150): every TrainingSession and Climb, newest first, grouped
+   by week (backend/progress.py timeline_view). Replaced /history. A
+   session row opens it in /session/play (finished ones land on their
+   summary); its raw sets stay behind a "Show sets" disclosure. #}
+<p class="overline"><a class="progress-back" href="/progress">‹ Progress</a></p>
+<h2>Sessions &amp; climbs</h2>
+<nav class="chip-row progress-chips timeline-filter" aria-label="Filter">
+  <a class="chip-link{% if not climbs_only %} on{% endif %}" href="/progress/timeline"{% if not climbs_only %} aria-current="page"{% endif %}>Everything</a>
+  <a class="chip-link{% if climbs_only %} on{% endif %}" href="/progress/timeline?show=climbs"{% if climbs_only %} aria-current="page"{% endif %}>Climbs only</a>
+</nav>
+{% if weeks %}
+{% for week in weeks %}
+<section class="timeline-week" data-week="{{ week.start }}">
+  <p class="overline">{{ week.label or ("Week of " ~ week.start|human_date) }}</p>
+  <ul class="plain card timeline-list">
+    {% for entry in week.entries %}
+    {% if entry.kind == "session" %}
+    {% set ts = entry.session %}
+    <li class="history-session" data-date="{{ ts.date }}" data-session-number="{{ ts.session_number }}">
+      {% if entry.href %}<a class="timeline-row" href="{{ entry.href }}">{% else %}<div class="timeline-row">{% endif %}
+        <span class="timeline-text">
+          <span class="timeline-title">
+            <strong>{% if entry.grip_name %}{{ entry.grip_name|display_name }} · {{ entry.edge_mm }} mm{% else %}Warmup only{% endif %}</strong>
+            {%- if entry.more_combos %} <span class="muted">+{{ entry.more_combos }}</span>{% endif %}
+            {% if ts.is_deload %}<span class="pill deload-tag">Deload</span>{% endif %}
+          </span>
+          <span class="timeline-meta">
+            {{ ts.date|human_date }}{% if ts.session_number > 1 %} · session {{ ts.session_number }}{% endif %}
+            {%- if entry.top %} · top <span data-top-weight="{{ entry.top.weight }}">{{ entry.top.weight|num_trim }} {{ user.unit_pref }}</span> × {{ entry.top.reps }}{% endif %}
+            {%- if entry.work_sets %} · <span data-volume="{{ entry.volume }}">{{ "{:,.0f}".format(entry.volume) }}</span> {{ user.unit_pref }}·reps{% endif %}
+            {%- if ts.session_rpe is not none %} · <span data-session-rpe="{{ ts.session_rpe }}">RPE {{ ts.session_rpe }}</span>{% endif %}
+          </span>
+        </span>
+        {% if entry.href %}<svg class="timeline-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>{% endif %}
+      {% if entry.href %}</a>{% else %}</div>{% endif %}
+      <details class="show-data">
+        <summary>Show sets</summary>
+        <ul class="plain history-sets">
+          {% for ws in entry.work_sets %}
+          <li class="history-set" data-hand="{{ ws.hand }}" data-set="{{ ws.set_number }}" data-weight="{{ ws.weight }}" data-reps="{{ ws.reps }}">
+            <span class="hand-heading">{{ ws.hand[0]|upper }}</span>
+            <strong>{{ ws.weight }} {{ user.unit_pref }}</strong> × {{ ws.reps }}
+            <span class="muted">· set {{ ws.set_number }} · {{ grip_names[ws.grip_type_id]|display_name }} @ {{ ws.edge_mm }} mm {{ grip_dimension_names[ws.grip_type_id] }}{% if ws.rpe is not none %} · RPE {{ ws.rpe }}{% endif %}</span>
+          </li>
+          {% else %}
+          <li class="muted">No work sets logged.</li>
+          {% endfor %}
+        </ul>
+      </details>
+    </li>
+    {% else %}
+    {% set climb = entry.climb %}
+    {% include "_climb_row.html" %}
+    {% endif %}
+    {% endfor %}
+  </ul>
+</section>
+{% endfor %}
+{% else %}
+<div class="notice">{% if climbs_only %}No climbs logged yet.{% else %}Nothing logged yet — your sessions and climbs will show up here.{% endif %}</div>
+{% endif %}
+{% endblock %}

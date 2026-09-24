@@ -25,7 +25,7 @@ def test_cross_origin_posts_are_rejected(client):
     assert response.status_code == 403
     # The climb must not have been created (the page's grade placeholder
     # also contains "V5", so check the logged-climb data attribute).
-    assert 'data-grade="V5"' not in client.get("/history").text
+    assert 'data-grade="V5"' not in client.get("/progress/timeline").text
 
 
 def test_same_origin_posts_pass(client):
@@ -265,7 +265,7 @@ def test_oversized_climb_text_inputs_are_rejected(client):
     assert novel_notes.status_code == 422
 
     # Nothing was saved.
-    assert 'data-grade=' not in client.get("/history").text
+    assert 'data-grade=' not in client.get("/progress/timeline").text
 
 
 def test_session_number_is_bounded(client):
@@ -296,7 +296,7 @@ def test_session_number_is_bounded(client):
     assert too_low.status_code == 422
 
     # Neither absurd attempt created a row.
-    history = client.get("/history").text
+    history = client.get("/progress/timeline").text
     assert 'data-date="2026-07-04"' not in history
 
 
@@ -380,14 +380,14 @@ def test_import_discards_a_spoofed_file_supplied_user_id(client):
     assert response.status_code == 303
 
     # Landed under the importing user (friend) ...
-    assert "founders climb" in client.get("/history").text
+    assert "founders climb" in client.get("/progress/timeline").text
 
     # ... and founder's own data was neither duplicated nor overwritten.
     client.post("/logout")
     from tests.helpers import login
 
     login(client, "founder@example.com", "test-pw-1234")
-    founder_climbs = client.get("/history").text
+    founder_climbs = client.get("/progress/timeline").text
     assert founder_climbs.count("founders climb") == 1
 
 
@@ -769,7 +769,7 @@ def test_bogus_hand_is_rejected_on_session_routes(client):
     assert ok.status_code == 303
 
     # No phantom-hand row leaked into history.
-    assert "banana" not in client.get("/history").text
+    assert "banana" not in client.get("/progress/timeline").text
 
 
 def test_anonymous_requests_do_not_emit_null_pk_warning(client):
@@ -903,7 +903,7 @@ def test_log_sheet_inputs_are_bounded(client):
     assert big_severity.status_code == 422
 
     # Nothing was saved.
-    assert 'data-grade=' not in client.get("/history").text
+    assert 'data-grade=' not in client.get("/progress/timeline").text
 
 
 def test_today_query_and_form_numbers_are_bounded(client):
@@ -950,7 +950,7 @@ def test_cross_origin_log_sheet_posts_are_rejected(client):
         "/log/tweak", data={"date": "2026-07-04", "hand": "left", "severity": 1}, headers=evil
     ).status_code == 403
     assert client.post("/today/lighter", data={"date": "2026-07-04", "on": "1"}, headers=evil).status_code == 403
-    assert 'data-grade=' not in client.get("/history").text
+    assert 'data-grade=' not in client.get("/progress/timeline").text
 
 
 def test_log_sheet_and_today_actions_require_login(client):

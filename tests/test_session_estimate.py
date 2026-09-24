@@ -163,7 +163,7 @@ def test_worksets_from_an_estimate_only_combo_count_toward_volume(client):
     save_work_set(client, "left", 1, "40", "5", date="2026-07-04")
     save_work_set(client, "left", 2, "40", "5", date="2026-07-04")
 
-    page = client.get("/dashboard").text
+    page = client.get("/progress/volume").text
 
     # 40x5 + 40x5 = 400, same TrainingVolume any tested combo would get.
     assert (
@@ -186,7 +186,7 @@ def test_estimate_only_training_never_feeds_the_strength_grade_correlation(clien
     log_climb(client, "2026-06-12", "V4")
     log_climb(client, "2026-06-22", "V6")
 
-    page = client.get("/dashboard").text
+    page = client.get("/progress/grade").text
 
     assert 'class="corr-r"' not in page
     assert 'class="corr-point"' not in page

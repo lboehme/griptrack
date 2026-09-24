@@ -118,7 +118,7 @@ def test_first_run_screen_three_links_to_guided_test_and_skip(webview_client):
 
     test_screen = webview_client.get("/welcome/test")
     assert test_screen.status_code == 200
-    assert 'href="/max-tests"' in test_screen.text
+    assert 'href="/progress/maxes"' in test_screen.text
     assert 'href="/"' in test_screen.text
 
 

@@ -164,7 +164,7 @@ def test_session_is_revoked_after_admin_password_reset(client):
     # checks session_version); the home route degrades to anonymous
     # instead (see test_home_page_treats_revoked_session_as_anonymous).
     stale_headers = {"Cookie": f"session={friend_session}"}
-    protected = client.get("/dashboard", headers=stale_headers)
+    protected = client.get("/progress", headers=stale_headers)
     assert protected.status_code == 401
 
     # The friend can log in with the new password
@@ -196,7 +196,7 @@ def test_other_users_session_survives_admin_password_reset(client):
     # The bystander's session, untouched by the reset, still works — sent
     # as a raw Cookie header for the same reattachment reason noted above.
     response = client.get(
-        "/dashboard", headers={"Cookie": f"session={bystander_session}"}
+        "/progress", headers={"Cookie": f"session={bystander_session}"}
     )
     assert response.status_code == 200
 

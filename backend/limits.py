@@ -17,6 +17,9 @@ MAX_EDGE_MM = 1000
 MAX_PLATE_WEIGHT = 1000
 MAX_PLATE_COUNT = 100
 MAX_SESSION_NUMBER = 20
+# Row-id query params (e.g. /progress?grip_type_id=): anything past a
+# signed 32-bit int can't be a real row and would overflow SQLite binding.
+MAX_ROW_ID = 2_147_483_647
 
 # Session RPE (#147): the summary step's whole-session effort rating.
 MIN_SESSION_RPE = 1

@@ -22,7 +22,7 @@ def setup_tested_user(client):
 
 
 def volume_points(client):
-    page = client.get("/dashboard").text
+    page = client.get("/progress/volume").text
     points = {}
     for combo, date, volume in re.findall(
         r'class="volume-point" data-combo="([^"]+)" data-date="([\d-]+)" '
@@ -189,7 +189,7 @@ def test_past_date_with_no_session_shows_confirm_prompt_and_creates_nothing(clie
     assert "play-topbar" not in page.text
 
     # Still nothing in history for that date.
-    history = client.get("/history").text
+    history = client.get("/progress/timeline").text
     assert f'data-date="{past_date}"' not in history
 
 

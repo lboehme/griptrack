@@ -1,7 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Max tests — GripTrack{% endblock %}
+{% block title %}Maxes — GripTrack{% endblock %}
 {% block content %}
-<h2>Max tests</h2>
+{# Maxes (#150): moved unchanged from the old /max-tests page; the POST
+   endpoints (/max-tests, /max-tests/{id}/void) keep their URLs and land
+   back here. #}
+<p class="overline"><a class="progress-back" href="/progress">‹ Progress</a></p>
+<h2>Maxes</h2>
 <p class="page-sub">Your heaviest single pull per hand, grip and edge — the basis for every warmup suggestion.</p>
 {% if combos %}
 <div class="card">
@@ -30,7 +34,8 @@
 {% endif %}
 {% if test_history %}
 <div class="card">
-<h3>Test History</h3>
+<details class="show-data">
+<summary>Test history</summary>
 <div class="table-scroll">
 <table>
   <thead>
@@ -61,6 +66,7 @@
   </tbody>
 </table>
 </div>
+</details>
 </div>
 {% endif %}
 <div class="card">

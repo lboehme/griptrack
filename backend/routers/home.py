@@ -116,12 +116,6 @@ def toggle_go_lighter(
     return RedirectResponse("/" + (f"?{query}" if query else ""), status_code=303)
 
 
-@router.get("/progress")
-def progress(user: User = Depends(auth.current_user)):
-    """Progress tab (S5 pending): the existing dashboard for now."""
-    return RedirectResponse("/dashboard", status_code=303)
-
-
 @router.get("/settings")
 def settings(user: User = Depends(auth.current_user)):
     """Settings tab (S6 pending): the existing profile page for now."""

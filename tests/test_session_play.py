@@ -777,7 +777,7 @@ def test_started_session_is_listed_in_history(client):
     gid = grip_type_id(client, "half crimp")
     rung_done(client, gid, 0)  # starts the session
 
-    page = client.get("/history").text
+    page = client.get("/progress/timeline").text
     assert 'class="history-session" data-date="2026-07-04"' in page
 
 
@@ -1184,7 +1184,7 @@ def test_saving_an_edited_set_updates_in_place_with_no_duplicate(client):
     response = save_focus_set(client, 1, left=("40.0", "4", "9"))
     assert response.status_code == 200
 
-    history = client.get("/history").text
+    history = client.get("/progress/timeline").text
     assert history.count('data-hand="left" data-set="1"') == 1
     assert history.count('data-hand="right" data-set="1"') == 1
     assert history.count('data-hand="left" data-set="2"') == 1
@@ -1337,7 +1337,7 @@ def test_delete_set_renumbers_remaining_sets_without_gaps_ported(client):
     assert completed_detail(page.text, 2) == "L 45.0 × 5 @ 9.0 · R 42.0 × 5 @ 9.0 kg"
     assert completed_detail(page.text, 3) is None
 
-    history = client.get("/history").text
+    history = client.get("/progress/timeline").text
     assert history.count('data-hand="left" data-set="1"') == 1
     assert history.count('data-hand="left" data-set="2"') == 1
     assert history.count('data-hand="left" data-set="3"') == 0
@@ -1471,7 +1471,7 @@ def test_an_accidentally_added_set_can_be_deleted_via_legacy_endpoint(client):
     )
     assert response.status_code == 200
 
-    history = client.get("/history").text
+    history = client.get("/progress/timeline").text
     assert 'data-set="3"' in history
     assert 'data-set="4"' not in history
 
@@ -1575,7 +1575,7 @@ def test_reposting_the_same_session_hand_set_updates_in_place(client):
     assert current_set_field(page.text, "left", "reps") == "4"
     assert current_set_field(page.text, "left", "rpe") == "9.0"
 
-    history = client.get("/history").text
+    history = client.get("/progress/timeline").text
     assert history.count('data-set="1"') == 1
 
 

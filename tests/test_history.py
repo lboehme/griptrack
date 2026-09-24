@@ -10,8 +10,8 @@ from tests.helpers import (
 
 
 def history_sessions(client):
-    """Parse /history into {date: [(hand, set_number, weight, reps), ...]}."""
-    page = client.get("/history").text
+    """Parse the Progress timeline into {date: [(hand, set_number, weight, reps), ...]}."""
+    page = client.get("/progress/timeline").text
     sessions = {}
     for date, block in re.findall(
         r'class="history-session" data-date="([\d-]+)"(.*?)</details>',
@@ -27,7 +27,7 @@ def history_sessions(client):
 
 
 def history_climbs(client):
-    page = client.get("/history").text
+    page = client.get("/progress/timeline").text
     return re.findall(
         r'class="climb" data-discipline="(\w+)" data-grade="([^"]+)" '
         r'data-style="(\w+)" data-date="([\d-]+)"',

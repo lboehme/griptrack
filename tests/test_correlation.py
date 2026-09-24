@@ -4,13 +4,13 @@ from tests.helpers import log_bodyweight, log_climb, log_max_test, register
 
 
 def correlation_stat(client):
-    page = client.get("/dashboard").text
+    page = client.get("/progress/grade").text
     match = re.search(r'class="corr-r" data-r="([-\d.]+)" data-n="(\d+)"', page)
     return (float(match.group(1)), int(match.group(2))) if match else None
 
 
 def correlation_points(client):
-    page = client.get("/dashboard").text
+    page = client.get("/progress/grade").text
     return {
         date: (float(pct), float(grade))
         for date, pct, grade in re.findall(
@@ -96,7 +96,7 @@ def test_flat_strength_across_eight_sends_shows_zero_variance_message(client):
         log_climb(client, f"2026-06-{i:02d}", grade)
 
     assert correlation_stat(client) is None
-    page = client.get("/dashboard").text
+    page = client.get("/progress/grade").text
     expected = (
         "Your strength or boulder grades haven't changed across these sends yet, "
         "so there's nothing to correlate."
@@ -117,7 +117,7 @@ def test_flat_grades_across_eight_sends_shows_zero_variance_message(client):
         log_climb(client, f"2026-06-{i:02d}", "V4")
 
     assert correlation_stat(client) is None
-    page = client.get("/dashboard").text
+    page = client.get("/progress/grade").text
     expected = (
         "Your strength or boulder grades haven't changed across these sends yet, "
         "so there's nothing to correlate."
@@ -136,6 +136,6 @@ def test_too_few_boulder_climbs_message_pluralisation(client):
     for i, grade in enumerate(["V1", "V2", "V3", "V4", "V5", "V6", "V7"], start=2):
         log_climb(client, f"2026-06-{i:02d}", grade)
 
-    page = client.get("/dashboard").text
+    page = client.get("/progress/grade").text
     assert "Log 1 more boulder send to unlock strength vs. grade correlation." in page
     assert "boulder sends" not in page

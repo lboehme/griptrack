@@ -52,7 +52,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/></svg>
       Today
     </a>
-    {% set on_progress = path.startswith("/progress") or path.startswith("/dashboard") or path.startswith("/history") or path.startswith("/max-tests") %}
+    {% set on_progress = path.startswith("/progress") or path.startswith("/max-tests") %}
     <a class="tab-item{% if on_progress %} active{% endif %}" href="/progress"{% if on_progress %} aria-current="page"{% endif %}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19 10 12l4 4 6-8"/></svg>
       Progress
