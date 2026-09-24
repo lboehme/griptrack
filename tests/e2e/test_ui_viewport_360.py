@@ -2,23 +2,12 @@
 
 from playwright.sync_api import expect
 
+from tests.e2e.conftest import advance_to_worksets, start_session_play
+
 
 def _seed_session_and_worksets(page, live_server):
-    for hand in ("left", "right"):
-        page.goto(f"{live_server}/max-tests")
-        form = page.locator('form[action="/max-tests"]')
-        form.locator(f'input[name="hand"][value="{hand}"]').check()
-        form.locator("select.grip-select").select_option(label=["Half crimp", "half crimp"])
-        form.locator('input[name="edge_mm"]').fill("20")
-        form.locator('input[name="weight"]').fill("40")
-        form.locator('button[type="submit"]').click()
-
-    page.goto(f"{live_server}/session/new")
-    page.locator(".grip-select").select_option(label=["Half crimp", "half crimp"])
-    page.locator('input[name="edge_mm"]').fill("20")
-    page.get_by_role("button", name="Start warmup").click()
-    page.get_by_role("link", name="Continue to work sets").click()
-    expect(page.locator(".focus-pill")).to_be_visible()
+    start_session_play(page, live_server)
+    advance_to_worksets(page)
 
 
 def test_main_pages_have_no_horizontal_overflow_at_360px(live_server, authenticated_page):
@@ -32,12 +21,26 @@ def test_main_pages_have_no_horizontal_overflow_at_360px(live_server, authentica
 
     routes = [
         "/",
-        "/max-tests",
-        "/session/new",
-        "/climbs",
-        "/dashboard",
-        "/profile",
-        "/plates",
+        "/?change=1",
+        "/?log=climb",
+        "/?log=bodyweight",
+        "/?log=tweak",
+        "/progress",
+        "/progress?range=all",
+        "/progress/volume",
+        "/progress/balance",
+        "/progress/grade",
+        "/progress/maxes",
+        "/progress/timeline",
+        "/progress/timeline?show=climbs",
+        "/settings",
+        "/settings/name",
+        "/settings/training",
+        "/settings/progression",
+        "/settings/plates",
+        "/settings/restore",
+        "/settings/about",
+        "/settings/admin",
     ]
 
     for route in routes:
@@ -77,18 +80,23 @@ def test_worksets_card_elements_and_set_done_within_360x740(live_server, authent
             f"> card right {card_box['x'] + card_box['width']}"
         )
 
-    # 3. 'Set done' button is above the tabbar fold on 360x740 viewport
+    # 3. 'Set done' button is above the fold on a 360x740 viewport -- session
+    # play has no tab bar (V5: full screen, no chrome during a session), so
+    # this checks against the viewport itself rather than a .tabbar element.
     btn = page.locator(".set-done-btn")
     expect(btn).to_be_visible()
     btn_box = btn.bounding_box()
-    tabbar_box = page.locator(".tabbar").bounding_box()
-    assert btn_box is not None and tabbar_box is not None
-    assert btn_box["y"] + btn_box["height"] <= tabbar_box["y"], (
-        f"Set done button bottom {btn_box['y'] + btn_box['height']} is below tab bar top {tabbar_box['y']}"
+    assert btn_box is not None
+    assert btn_box["y"] + btn_box["height"] <= 740, (
+        f"Set done button bottom {btn_box['y'] + btn_box['height']} is below the 740px viewport"
     )
+    assert page.locator(".tabbar").count() == 0, "No tab bar during a session (V5)"
 
-    # 4. Check completed-set checkmark SVG size after logging a set
+    # 4. Check completed-set checkmark SVG size after logging a set -- a
+    # non-final commit lands on the rest step first (session play, #146),
+    # so skip rest to get back to the work-set step's completed list.
     btn.click()
+    page.get_by_role("button", name="Skip rest").click()
     completed_row = page.locator('.completed-row[data-set="1"]')
     expect(completed_row).to_be_visible()
     svg = page.locator(".completed-check svg").first
@@ -96,6 +104,39 @@ def test_worksets_card_elements_and_set_done_within_360x740(live_server, authent
     assert svg_box is not None
     assert svg_box["width"] >= 10, f"Checkmark svg width {svg_box['width']} < 10px"
     assert svg_box["height"] >= 10, f"Checkmark svg height {svg_box['height']} < 10px"
+
+
+def test_summary_finish_is_above_the_fold_with_no_overflow_at_360x740(
+    live_server, authenticated_page
+):
+    """The summary step (#147) is the longest session screen; its Finish
+    button is pinned in the bottom action area (V8), so it must be visible
+    at 360x740 without scrolling, with no horizontal overflow."""
+    page = authenticated_page
+    page.set_viewport_size({"width": 360, "height": 740})
+    _seed_session_and_worksets(page, live_server)
+    for set_number in range(1, 4):
+        page.locator(".set-done-btn").click()
+        if set_number < 3:
+            page.get_by_role("button", name="Skip rest").click()
+    expect(page.get_by_text("Session done")).to_be_visible()
+
+    for tweak in ("none", "left"):  # also with the tweak picker revealed
+        page.locator(f"label:has(#tweak-hand-{tweak})").click()
+        page.evaluate("() => window.scrollTo(0, 0)")
+        scroll_width = page.evaluate("() => document.documentElement.scrollWidth")
+        inner_width = page.evaluate("() => window.innerWidth")
+        assert scroll_width <= inner_width, (
+            f"Horizontal overflow on summary: scrollWidth {scroll_width} > {inner_width}"
+        )
+        finish = page.locator(".summary-finish-btn")
+        expect(finish).to_be_visible()
+        box = finish.bounding_box()
+        assert box is not None
+        assert box["y"] >= 0 and box["y"] + box["height"] <= 740, (
+            f"Finish button spans {box['y']}..{box['y'] + box['height']}, outside 0..740"
+        )
+        assert box["height"] >= 44
 
 
 def test_worksets_stepper_buttons_fit_at_130_percent_font_scale(live_server, authenticated_page):
@@ -116,11 +157,11 @@ def test_worksets_stepper_buttons_fit_at_130_percent_font_scale(live_server, aut
         assert rpe_plus["x"] + rpe_plus["width"] <= card_box["x"] + card_box["width"] + 1
 
 
-def test_profile_progression_select_has_full_width_at_412px(live_server, authenticated_page):
+def test_settings_progression_select_has_full_width_at_412px(live_server, authenticated_page):
     """Default progression select has a full row and is not squeezed/truncated."""
     page = authenticated_page
     page.set_viewport_size({"width": 412, "height": 844})
-    page.goto(f"{live_server}/profile")
+    page.goto(f"{live_server}/settings/progression")
 
     select = page.locator('select[name="path"]').first
     expect(select).to_be_visible()
@@ -128,3 +169,45 @@ def test_profile_progression_select_has_full_width_at_412px(live_server, authent
     assert select_box is not None
     # In a full-row layout, select spans almost the whole card width (> 250px on 412px viewport)
     assert select_box["width"] > 250, f"Progression select width {select_box['width']} is too narrow, likely half-row"
+
+
+def _no_horizontal_overflow(page, where):
+    scroll_width = page.evaluate("() => document.documentElement.scrollWidth")
+    inner_width = page.evaluate("() => window.innerWidth")
+    assert scroll_width <= inner_width, (
+        f"Horizontal overflow on {where}: scrollWidth {scroll_width} > innerWidth {inner_width}"
+    )
+
+
+def test_today_and_log_sheet_fit_360px(live_server, authenticated_page):
+    """Today (#149) with a real plan, and each ＋ Log sheet tab opened via
+    htmx, stay inside a 360 px viewport: no horizontal page scroll, the
+    sheet and its grade chips inside the screen, Start above the tab bar."""
+    page = authenticated_page
+    page.set_viewport_size({"width": 360, "height": 740})
+    start_session_play(page, live_server)
+    page.goto(f"{live_server}/")
+    expect(page.locator(".today-plan")).to_be_visible()
+    _no_horizontal_overflow(page, "Today")
+
+    start = page.get_by_role("button", name="Start session")
+    tabbar = page.locator(".tabbar").bounding_box()
+    start_box = start.bounding_box()
+    assert start_box is not None and tabbar is not None
+    assert start_box["y"] + start_box["height"] <= tabbar["y"] + 1, "Start is hidden behind the tab bar"
+
+    page.locator(".tabbar-log").click()
+    sheet = page.locator(".log-sheet")
+    expect(sheet).to_be_visible()
+    for tab in ("Climb", "Bodyweight", "Tweak"):
+        page.locator(".sheet-tab", has_text=tab).click()
+        expect(page.locator(f".sheet-{tab.lower()}")).to_be_visible()
+        _no_horizontal_overflow(page, f"sheet {tab}")
+        box = sheet.bounding_box()
+        assert box is not None
+        assert box["x"] >= 0 and box["x"] + box["width"] <= 360 + 1
+        if tab == "Climb":
+            for chip in page.locator(".grade-chips .grade-chip").all():
+                chip_box = chip.bounding_box()
+                assert chip_box is not None
+                assert chip_box["x"] + chip_box["width"] <= 360 + 1

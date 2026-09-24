@@ -6,6 +6,18 @@
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
 
+    <!-- S3 native rest bridge (#148, docs/adr/0015): lock-screen rest
+         countdown, rest-over vibration, and an exact alarm at the rest end.
+         USE_EXACT_ALARM (API 33+) is the timer-app permission, granted at
+         install; SCHEDULE_EXACT_ALARM covers API 31-32. Below 31 exact
+         alarms need no permission. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
+
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
@@ -23,6 +35,10 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <receiver
+            android:name=".RestAlarmReceiver"
+            android:exported="false" />
 
     </application>
 

@@ -266,7 +266,7 @@ def test_voided_test_is_ignored_by_retest_and_estimate_nudges(client):
     assert nudge_banner_type(warmup_page(client, date="2026-07-06").text) is None
 
     # Void the left test via POST /max-tests/{id}/void
-    page = client.get("/max-tests")
+    page = client.get("/progress/maxes")
     for test_id in re.findall(r'action="/max-tests/(\d+)/void"', page.text):
         client.post(f"/max-tests/{test_id}/void", follow_redirects=True)
 

@@ -30,6 +30,9 @@ ESTIMATE_NUDGE_COUNT = 3
 AUTOREG_TRIGGER_SESSIONS = 2
 AUTOREG_RPE_READY_MAX = 7.0
 AUTOREG_RPE_HOLD_MIN = 9.0
+# Strength–grade correlation floor (Wave 2): fewer parseable boulder sends
+# than this and Spearman's rho isn't computed.
+CORRELATION_MIN_POINTS = 8
 
 
 
@@ -128,10 +131,28 @@ def strength_grade_correlation(session: Session, user: User) -> dict:
     # construction just above.
     pcts: list[float] = [point["pct_bodyweight"] for point in points]  # type: ignore[misc]
     grades: list[float] = [point["grade_value"] for point in points]  # type: ignore[misc]
-    if len(points) >= 8 and len(set(pcts)) > 1 and len(set(grades)) > 1:
+    if len(points) >= CORRELATION_MIN_POINTS and len(set(pcts)) > 1 and len(set(grades)) > 1:
         # Spearman rank correlation is the Pearson correlation of the ranks.
         result["r"] = statistics.correlation(_rank(pcts), _rank(grades))
     return result
+
+
+def session_load(training_session: TrainingSession) -> float | None:
+    """Session load (#147, CONTEXT.md): Session RPE × duration in minutes,
+    the standard sRPE training-load signal (docs/adr/0014). Derived, never
+    stored. Duration runs from started_at to finished_at, so it's None
+    until the session has been finished -- and None whenever Session RPE
+    or either timestamp is missing. Not consumed by any analytics yet
+    (the overtraining warning / injury guardian #28 are the intended
+    readers)."""
+    if training_session.session_rpe is None:
+        return None
+    minutes = training_log.duration_minutes(
+        training_session.started_at, training_session.finished_at
+    )
+    if minutes is None:
+        return None
+    return training_session.session_rpe * minutes
 
 
 def training_volume_trend(
@@ -350,6 +371,56 @@ def asymmetry_warning(gap_trend: list[tuple[date_type, float]]) -> bool:
     if recent < baseline:
         return False
     return (recent - baseline >= ASYM_DRIFT_PP) or (recent >= ASYM_BACKSTOP_PCT)
+
+
+def strength_pct_bodyweight_series(
+    session: Session,
+    user: User,
+    grip_type_id: int,
+    edge_mm: int,
+    since: date_type | None = None,
+) -> dict[str, list[tuple[date_type, float]]]:
+    """Progress's headline series (#150): per hand, CurrentMax as a fraction
+    of bodyweight as of each date this (grip, edge) combo was trained or
+    tested, oldest first. Each value is
+    compute_current_max(as_of=d) / bodyweight_at(as_of=d) -- the CurrentMax
+    rule and the bodyweight time series (ADR-0001) are reused, never
+    re-derived here. Dates where a hand has no CurrentMax yet (untested,
+    estimate-only, or only voided tests) or the user has no bodyweight
+    logged at-or-before it are skipped for that hand. `since` drops dates
+    before it (the range picker)."""
+    workset_dates = session.exec(
+        select(TrainingSession.date)
+        .join(WorkSet, WorkSet.training_session_id == TrainingSession.id)
+        .where(TrainingSession.user_id == user.id)
+        .where(WorkSet.grip_type_id == grip_type_id)
+        .where(WorkSet.edge_mm == edge_mm)
+        .distinct()
+    ).all()
+    test_dates = session.exec(
+        select(MaxWeightTest.date)
+        .where(MaxWeightTest.user_id == user.id)
+        .where(MaxWeightTest.voided_at.is_(None))
+        .where(MaxWeightTest.grip_type_id == grip_type_id)
+        .where(MaxWeightTest.edge_mm == edge_mm)
+        .distinct()
+    ).all()
+    dates = sorted(
+        d for d in set(workset_dates) | set(test_dates) if since is None or d >= since
+    )
+
+    series: dict[str, list[tuple[date_type, float]]] = {"left": [], "right": []}
+    for d in dates:
+        bodyweight = training_log.bodyweight_at(session, user, as_of=d)
+        if bodyweight is None or bodyweight.weight <= 0:
+            continue
+        for hand in ("left", "right"):
+            current_max = training_log.compute_current_max(
+                session, user, hand, grip_type_id, edge_mm, as_of=d
+            )
+            if current_max is not None:
+                series[hand].append((d, current_max / bodyweight.weight))
+    return series
 
 
 def dashboard_view(session: Session, user: User) -> dict:

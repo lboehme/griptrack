@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Admin — GripTrack{% endblock %}
+{% block content %}
+{# Server build only (ADR-0004/-0013): the WebView build 404s this page. #}
+{% with heading="Admin", sub="For a shared server: invites, grip types and password resets." %}{% include "_settings_head.html" %}{% endwith %}
+<section class="card settings-form">
+  <p class="overline">Invite a friend</p>
+  <p class="settings-note">Makes a one-time code for the registration page.</p>
+  <form method="post" action="/invites">
+    <button type="submit" class="btn-secondary">Generate invite code</button>
+  </form>
+</section>
+
+<section class="card settings-form">
+  <p class="overline">Grip types</p>
+  <form method="post" action="/grip-types">
+    <label>New grip type <input type="text" name="name" maxlength="60" required></label>
+    <button type="submit" class="btn-secondary">Add grip type</button>
+  </form>
+</section>
+
+<section class="card settings-form">
+  <p class="overline">Reset a password</p>
+  <p class="settings-note">Signs that person out everywhere.</p>
+  <form method="post" action="/admin/reset-password">
+    <label>Their email <input type="email" name="email" maxlength="254" autocomplete="off" required></label>
+    <label>New password <input type="password" name="new_password" minlength="8" autocomplete="new-password" required></label>
+    <button type="submit" class="btn-secondary">Reset password</button>
+  </form>
+</section>
+{% endblock %}

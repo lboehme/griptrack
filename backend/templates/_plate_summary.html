@@ -1,0 +1,7 @@
+<p class="plate-summary" id="plate-summary"{% if oob is defined and oob %} hx-swap-oob="true"{% endif %}>
+  {%- if rack.smallest -%}
+  You can load up to <strong>{{ rack.max_load|num_trim }} {{ user.unit_pref }}</strong>; your smallest plate is <strong>{{ rack.smallest|num_trim }} {{ user.unit_pref }}</strong>.
+  {%- else -%}
+  No plates yet — tap a plate to count it.
+  {%- endif -%}
+</p>

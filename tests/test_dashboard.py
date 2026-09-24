@@ -19,8 +19,8 @@ from tests.helpers import (
 
 
 def chart_payload(client):
-    """Parse /dashboard's `#volume-trend-data` JSON-in-DOM payload."""
-    page = client.get("/dashboard").text
+    """Parse the Progress detail page's `#volume-trend-data` JSON-in-DOM payload."""
+    page = client.get("/progress/volume").text
     match = re.search(
         r'<script type="application/json" id="volume-trend-data">(.*?)</script>',
         page,
@@ -31,8 +31,8 @@ def chart_payload(client):
 
 
 def asymmetry_chart_payload(client):
-    """Parse /dashboard's `#asymmetry-chart-data` JSON-in-DOM payload."""
-    page = client.get("/dashboard").text
+    """Parse the Progress detail page's `#asymmetry-chart-data` JSON-in-DOM payload."""
+    page = client.get("/progress/balance").text
     match = re.search(
         r'<script type="application/json" id="asymmetry-chart-data">(.*?)</script>',
         page,
@@ -42,8 +42,8 @@ def asymmetry_chart_payload(client):
 
 
 def volume_points(client):
-    """Parse /dashboard into {combo: [(date, volume), ...]} in page order."""
-    page = client.get("/dashboard").text
+    """Parse the Progress detail page into {combo: [(date, volume), ...]} in page order."""
+    page = client.get("/progress/volume").text
     points = {}
     for combo, date, volume in re.findall(
         r'class="volume-point" data-combo="([^"]+)" data-date="([\d-]+)" '
@@ -55,9 +55,9 @@ def volume_points(client):
 
 
 def _asymmetry_points(client, series):
-    """Parse /dashboard into {combo: [(date, gap), ...]} for the given
+    """Parse the Progress detail page into {combo: [(date, gap), ...]} for the given
     asymmetry series ("strength" or "load"), in page order."""
-    page = client.get("/dashboard").text
+    page = client.get("/progress/balance").text
     points = {}
     for combo, date, gap in re.findall(
         r'class="asymmetry-point"[^>]*data-combo="([^"]+)"[^>]*data-series="'
@@ -71,17 +71,17 @@ def _asymmetry_points(client, series):
 
 
 def strength_asymmetry_points(client):
-    """Parse /dashboard into {combo: [(date, gap), ...]} for strength series."""
+    """Parse the Progress detail page into {combo: [(date, gap), ...]} for strength series."""
     return _asymmetry_points(client, "strength")
 
 
 def load_asymmetry_points(client):
-    """Parse /dashboard into {combo: [(date, gap), ...]} for load series."""
+    """Parse the Progress detail page into {combo: [(date, gap), ...]} for load series."""
     return _asymmetry_points(client, "load")
 
 
 def plateau_flags(client):
-    page = client.get("/dashboard").text
+    page = client.get("/progress/volume").text
     return set(re.findall(r'class="pill plateau-flag" data-combo="([^"]+)"', page))
 
 
@@ -132,14 +132,14 @@ def test_plateau_flag_ignores_deload_sessions(client):
     assert plateau_flags(client) == set()
 
 def overtraining_flags(client):
-    page = client.get("/dashboard").text
+    page = client.get("/progress/volume").text
     return set(
         re.findall(r'class="pill overtraining-flag" data-combo="([^"]+)"', page)
     )
 
 
 def asymmetry_warning_flags(client):
-    page = client.get("/dashboard").text
+    page = client.get("/progress/balance").text
     return set(
         re.findall(
             r'class="pill asymmetry-warning-flag" data-combo="([^"]+)"', page
@@ -431,7 +431,7 @@ def test_dashboard_omits_asymmetry_section_when_no_paired_data(client):
     assert view["asymmetry_pairs"] == []
     assert view["asymmetry_chart_data"] == []
 
-    page = client.get("/dashboard").text
+    page = client.get("/progress/balance").text
     assert "asymmetry-card" not in page
     assert asymmetry_chart_payload(client) is None
 
@@ -441,7 +441,7 @@ def test_dashboard_omits_asymmetry_section_when_no_paired_data(client):
     assert view["asymmetry_pairs"] == []
     assert view["asymmetry_chart_data"] == []
 
-    page = client.get("/dashboard").text
+    page = client.get("/progress/balance").text
     assert "asymmetry-card" not in page
     assert asymmetry_chart_payload(client) is None
 
@@ -497,7 +497,7 @@ def test_asymmetry_ignores_voided_max_tests(client):
     assert asymmetry_chart_payload(client) is not None
 
     # Void all max tests
-    page = client.get("/max-tests").text
+    page = client.get("/progress/maxes").text
     void_actions = re.findall(r'action="/max-tests/(\d+)/void"', page)
     for test_id in void_actions:
         client.post(f"/max-tests/{test_id}/void", follow_redirects=True)
@@ -601,7 +601,7 @@ def test_combos_with_only_session_estimate_renders_load_gap_series_and_appears_o
     assert pair["load_trend"][0] == (date_type(2026, 6, 1), (175.0 - 150.0) / 175.0 * 100.0)
 
     # HTTP seam
-    page = client.get("/dashboard").text
+    page = client.get("/progress/balance").text
     assert "asymmetry-card" in page
     assert "Training Load Gap" in page
     assert "Strength Max Gap" not in page
@@ -636,7 +636,7 @@ def test_combos_with_only_max_weight_tests_renders_strength_gap_series_only(clie
     assert len(pair["strength_trend"]) == 1
 
     # HTTP seam
-    page = client.get("/dashboard").text
+    page = client.get("/progress/balance").text
     assert "asymmetry-card" in page
     assert "Strength Max Gap" in page
     assert "Training Load Gap" not in page
@@ -658,19 +658,19 @@ def test_combos_with_only_max_weight_tests_renders_strength_gap_series_only(clie
 def test_dashboard_omits_asymmetry_section_only_when_both_series_are_empty(client):
     register(client)
     # 1. Completely empty
-    page = client.get("/dashboard").text
+    page = client.get("/progress/balance").text
     assert "asymmetry-card" not in page
 
     # 2. Single hand test and single hand work sets
     log_max_test(client, "left", "half crimp", 20, "2026-06-01", "40")
     save_work_set(client, "left", 1, "40", "5", date="2026-06-02")
-    page = client.get("/dashboard").text
+    page = client.get("/progress/balance").text
     assert "asymmetry-card" not in page
 
     # 3. Both hands on different combos (unpaired)
     log_max_test(client, "right", "open hand", 10, "2026-06-01", "30")
     save_work_set(client, "right", 1, "30", "5", date="2026-06-02", grip="open hand", edge_mm=10)
-    page = client.get("/dashboard").text
+    page = client.get("/progress/balance").text
     assert "asymmetry-card" not in page
 
     # 4. Bilateral combo with only deload session (no max test, so both series empty)
@@ -687,7 +687,7 @@ def test_dashboard_omits_asymmetry_section_only_when_both_series_are_empty(clien
     assert pinch_strength == []
     assert pinch_load == []
 
-    page = client.get("/dashboard").text
+    page = client.get("/progress/balance").text
     assert "asymmetry-card" not in page
 
 
@@ -881,7 +881,7 @@ def test_dashboard_asymmetry_warning_renders_when_warning_fires_and_absent_when_
     assert pairs_by_key["asymmetry|open hand|10"]["asymmetry_warning"] is False
 
     # HTTP seam
-    page = client.get("/dashboard").text
+    page = client.get("/progress/balance").text
     assert "⚠ asymmetry drift" in page
 
     flags = asymmetry_warning_flags(client)

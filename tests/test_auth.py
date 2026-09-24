@@ -6,9 +6,8 @@ def test_first_user_registers_without_invite_and_is_logged_in(client):
 
     assert response.status_code == 303
 
-    home = client.get("/")
-    assert home.status_code == 200
-    assert "founder@example.com" in home.text
+    assert client.get("/").status_code == 200
+    assert "founder@example.com" in client.get("/settings").text
 
 
 def test_second_registration_without_invite_is_rejected(client):
@@ -35,8 +34,7 @@ def test_friend_registers_with_admin_generated_invite(client):
     response = register(client, "friend@example.com", "friend-pw", invite_code=code)
 
     assert response.status_code == 303
-    home = client.get("/")
-    assert "friend@example.com" in home.text
+    assert "friend@example.com" in client.get("/settings").text
 
 
 def test_used_invite_cannot_be_redeemed_again(client):
@@ -131,7 +129,7 @@ def test_login_and_logout_round_trip(client):
         follow_redirects=False,
     )
     assert right.status_code == 303
-    assert "founder@example.com" in client.get("/").text
+    assert "founder@example.com" in client.get("/settings").text
 
 
 def test_session_is_revoked_after_admin_password_reset(client):
@@ -166,7 +164,7 @@ def test_session_is_revoked_after_admin_password_reset(client):
     # checks session_version); the home route degrades to anonymous
     # instead (see test_home_page_treats_revoked_session_as_anonymous).
     stale_headers = {"Cookie": f"session={friend_session}"}
-    protected = client.get("/dashboard", headers=stale_headers)
+    protected = client.get("/progress", headers=stale_headers)
     assert protected.status_code == 401
 
     # The friend can log in with the new password
@@ -198,7 +196,7 @@ def test_other_users_session_survives_admin_password_reset(client):
     # The bystander's session, untouched by the reset, still works — sent
     # as a raw Cookie header for the same reattachment reason noted above.
     response = client.get(
-        "/dashboard", headers={"Cookie": f"session={bystander_session}"}
+        "/progress", headers={"Cookie": f"session={bystander_session}"}
     )
     assert response.status_code == 200
 

@@ -26,10 +26,14 @@ from sqlmodel import Session, SQLModel, select
 from sqlmodel.sql.expression import SelectOfScalar
 
 from backend.limits import (
+    MAX_EDGE_MM,
     MAX_IMPORT_MEMBER_BYTES,
     MAX_IMPORT_MEMBERS,
     MAX_IMPORT_ROWS_PER_MEMBER,
     MAX_IMPORT_UPLOAD_BYTES,
+    MAX_SESSION_RPE,
+    MAX_SET_NUMBER,
+    MIN_SESSION_RPE,
 )
 from backend.models import (
     VALID_UNITS,
@@ -85,6 +89,11 @@ class ArchiveMember:
     # trimmed to (id, name): dimension_name is fixed seed data, not
     # something a restore needs to carry.
     fields: tuple[str, ...] | None = None
+    # Columns added after FORMAT_VERSION 1 shipped. An older archive that
+    # simply lacks them still imports (the model default, None, applies);
+    # any other header mismatch -- an unknown extra column, a missing
+    # required one, a reordering -- is still rejected.
+    optional_fields: tuple[str, ...] = ()
 
     @property
     def filename(self) -> str:
@@ -146,7 +155,17 @@ ARCHIVE_MEMBERS: tuple[ArchiveMember, ...] = (
     ArchiveMember(BodyWeightLog, scope=Scope.USER, weight_cols=("weight",)),
     ArchiveMember(Climb, scope=Scope.USER),
     ArchiveMember(MaxWeightTest, scope=Scope.USER, weight_cols=("weight",)),
-    ArchiveMember(TrainingSession, scope=Scope.USER),
+    ArchiveMember(
+        TrainingSession,
+        scope=Scope.USER,
+        # rest_ends_at arrived with session play (#146), session_rpe and
+        # finished_at with its summary step (#147), the play state
+        # (planned_sets + the in-progress combo) with the PR #154 review.
+        optional_fields=(
+            "rest_ends_at", "session_rpe", "finished_at",
+            "planned_sets", "play_grip_type_id", "play_edge_mm",
+        ),
+    ),
     ArchiveMember(PainReport, scope=Scope.TRAINING_SESSION),
     ArchiveMember(WarmupStepCheck, scope=Scope.TRAINING_SESSION),
     ArchiveMember(SessionMaxEstimate, scope=Scope.TRAINING_SESSION, weight_cols=("weight",)),
@@ -439,7 +458,13 @@ def _read_member_rows(
     renames = member.renames(unit)
     expected_header = member.header(unit)
     reader = csv.DictReader(io.StringIO(text))
-    if reader.fieldnames != expected_header:
+    optional_headers = {renames.get(f, f) for f in member.optional_fields}
+    actual_header = list(reader.fieldnames or [])
+    # Exactly the expected header, minus any subset of the optional
+    # (later-added) columns, in the same order.
+    if actual_header != [
+        h for h in expected_header if h in actual_header or h not in optional_headers
+    ]:
         raise ArchiveError(
             f"{member.filename}: unexpected columns -- archive doesn't match "
             "this format version."
@@ -509,4 +534,47 @@ def _build_row(
             )
         kwargs["grip_type_id"] = local_id
 
+    if member.model is TrainingSession:
+        _check_training_session_row(
+            member, row_num, kwargs, grip_name_by_old_id, local_grip_id_by_name
+        )
+
     return member.model(**kwargs)
+
+
+def _bounded(
+    member: "ArchiveMember", row_num: int, kwargs: dict, field: str, low: int, high: int
+) -> None:
+    value = kwargs.get(field)
+    if value is not None and not (low <= value <= high):
+        raise ArchiveError(
+            f"{member.filename} row {row_num}, column {field!r}: "
+            f"must be between {low} and {high}."
+        )
+
+
+def _check_training_session_row(
+    member: "ArchiveMember",
+    row_num: int,
+    kwargs: dict,
+    grip_name_by_old_id: dict[int, str],
+    local_grip_id_by_name: dict[str, int],
+) -> None:
+    """Bounds for a TrainingSession row's play/summary columns, the same
+    limits the live routes enforce (limits.py). A pending rest is transient
+    play state, never restored -- a restored session must not reopen on a
+    stale rest step. The in-progress combo's grip is resolved by name like
+    every other grip reference; an unknown one just drops the (transient)
+    combo rather than failing the whole import."""
+    _bounded(member, row_num, kwargs, "session_rpe", MIN_SESSION_RPE, MAX_SESSION_RPE)
+    _bounded(member, row_num, kwargs, "planned_sets", 1, MAX_SET_NUMBER)
+    _bounded(member, row_num, kwargs, "play_edge_mm", 1, MAX_EDGE_MM)
+    kwargs["rest_ends_at"] = None
+    old_play_grip = kwargs.get("play_grip_type_id")
+    if old_play_grip is not None:
+        name = grip_name_by_old_id.get(old_play_grip)
+        kwargs["play_grip_type_id"] = (
+            local_grip_id_by_name.get(name) if name is not None else None
+        )
+    if kwargs.get("play_grip_type_id") is None or kwargs.get("play_edge_mm") is None:
+        kwargs["play_grip_type_id"] = kwargs["play_edge_mm"] = None

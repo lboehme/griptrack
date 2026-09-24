@@ -8,6 +8,7 @@ count and target weight.
 
 MAX_WEIGHT = 1000        # kg or lbs; covers any bodyweight or block-pull load
 MAX_NAME_LENGTH = 60     # display name (user text, not numeric)
+MAX_TOGGLE_LENGTH = 8    # an on/off form value (e.g. the Rest sound toggle)
 MAX_GRADE_LENGTH = 32    # climb grade string ("V5", "7A+", odd local scales)
 MAX_NOTES_LENGTH = 2000  # free-text climb notes
 MAX_REPS = 1000
@@ -16,6 +17,13 @@ MAX_EDGE_MM = 1000
 MAX_PLATE_WEIGHT = 1000
 MAX_PLATE_COUNT = 100
 MAX_SESSION_NUMBER = 20
+# Row-id query params (e.g. /progress?grip_type_id=): anything past a
+# signed 32-bit int can't be a real row and would overflow SQLite binding.
+MAX_ROW_ID = 2_147_483_647
+
+# Session RPE (#147): the summary step's whole-session effort rating.
+MIN_SESSION_RPE = 1
+MAX_SESSION_RPE = 10
 
 # Training protocol settings (rep target and rest duration, #127)
 MIN_REP_TARGET = 1
@@ -27,6 +35,10 @@ MIN_REST_SECONDS = 15
 MAX_REST_SECONDS = 1800
 MIN_DEFAULT_REST_SECONDS = MIN_REST_SECONDS
 MAX_DEFAULT_REST_SECONDS = MAX_REST_SECONDS
+# "+30 s" taps can push a pending rest at most this far past the longest
+# stored rest; the Android bridge (RestBridge.MAX_REST_AHEAD_MS, 2 h) accepts
+# anything up to MAX_REST_SECONDS + this, so it never refuses a real rest.
+MAX_REST_EXTENSION_SECONDS = 600
 
 
 # Import (backend.archive, #102, #120) is an untrusted-file ingress point:

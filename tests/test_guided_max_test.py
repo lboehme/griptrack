@@ -271,7 +271,7 @@ def test_guided_routine_writes_nothing_to_session_max_estimate(client):
         },
     ).text
     assert 'class="estimate-form" data-hand="left"' in page
-    assert 'class="ramp-weight"' not in page
+    assert "rung-tile-weight" not in page
 
 
 def test_guided_default_estimate_ignores_any_existing_session_max_estimate(client):

@@ -22,7 +22,7 @@ def setup_tested_user(client):
 
 
 def volume_points(client):
-    page = client.get("/dashboard").text
+    page = client.get("/progress/volume").text
     points = {}
     for combo, date, volume in re.findall(
         r'class="volume-point" data-combo="([^"]+)" data-date="([\d-]+)" '
@@ -121,7 +121,7 @@ def test_second_session_affordance_only_appears_once_today_has_one(client):
     setup_tested_user(client)
     today = date_type.today().isoformat()
 
-    before = client.get("/session/new").text
+    before = client.get("/today/change").text
     assert "start-second-session" not in before
 
     grip_id = grip_type_id(client, "half crimp")
@@ -133,7 +133,7 @@ def test_second_session_affordance_only_appears_once_today_has_one(client):
         },
     )
 
-    after = client.get("/session/new").text
+    after = client.get("/today/change").text
     assert "start-second-session" in after
     assert 'name="session_number" value="2"' in after
 
@@ -186,10 +186,10 @@ def test_past_date_with_no_session_shows_confirm_prompt_and_creates_nothing(clie
 
     assert page.status_code == 200
     assert "session-confirm-card" in page.text
-    assert 'class="ramp-weight"' not in page.text
+    assert "play-topbar" not in page.text
 
     # Still nothing in history for that date.
-    history = client.get("/history").text
+    history = client.get("/progress/timeline").text
     assert f'data-date="{past_date}"' not in history
 
 
@@ -213,7 +213,7 @@ def test_past_date_confirmation_creates_the_session_then_proceeds(client):
         params={"grip_type_id": grip_id, "edge_mm": 20, "date": past_date},
     )
     assert "session-confirm-card" not in page.text
-    assert 'class="ramp-weight"' in page.text
+    assert "play-topbar" in page.text
 
 
 def test_past_date_worksets_page_also_gates_creation(client):
@@ -227,7 +227,7 @@ def test_past_date_worksets_page_also_gates_creation(client):
     )
 
     assert "session-confirm-card" in page.text
-    assert 'class="workset-cell"' not in page.text
+    assert "play-topbar" not in page.text
 
 
 def test_today_still_creates_implicitly_with_no_confirmation_needed(client):
@@ -241,7 +241,7 @@ def test_today_still_creates_implicitly_with_no_confirmation_needed(client):
     )
 
     assert "session-confirm-card" not in page.text
-    assert 'class="ramp-weight"' in page.text
+    assert "play-topbar" in page.text
 
 
 def test_yesterday_with_a_recent_session_needs_no_confirmation(client):
@@ -258,7 +258,7 @@ def test_yesterday_with_a_recent_session_needs_no_confirmation(client):
         params={"grip_type_id": grip_id, "edge_mm": 20, "date": yesterday},
     )
     assert "session-confirm-card" not in page.text
-    assert 'class="ramp-weight"' in page.text
+    assert "play-topbar" in page.text
 
 
 def test_warmup_page_pins_a_concrete_session_number_before_any_session_exists(client):

@@ -285,6 +285,13 @@ def normalize_name(name: str | None) -> str | None:
     return name or None
 
 
+def set_display_name(session: Session, user: User, name: str | None) -> None:
+    """Settings → Name: store the trimmed display name (blank clears it)."""
+    user.name = normalize_name(name)
+    session.add(user)
+    session.commit()
+
+
 def register_user(
     session: Session,
     email: str,

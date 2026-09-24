@@ -1,0 +1,146 @@
+{% set ws = worksets %}
+{% if undo %}
+<div class="notice undo-banner" role="status">
+  <span>Set {{ undo.set_number }} deleted.</span>
+  <form method="post" action="/session/set/restore" class="undo-form">
+    <input type="hidden" name="grip_type_id" value="{{ grip.id }}">
+    <input type="hidden" name="edge_mm" value="{{ edge_mm }}">
+    <input type="hidden" name="date" value="{{ date }}">
+    <input type="hidden" name="hand" value="{{ hand }}">
+    {% if session_number %}<input type="hidden" name="session_number" value="{{ session_number }}">{% endif %}
+    <input type="hidden" name="set_number" value="{{ undo.set_number }}">
+    {% for uh, uvals in undo.hands.items() %}
+    <input type="hidden" name="{{ uh }}_weight" value="{{ uvals.weight }}">
+    <input type="hidden" name="{{ uh }}_reps" value="{{ uvals.reps }}">
+    {% if uvals.rpe is not none %}<input type="hidden" name="{{ uh }}_rpe" value="{{ uvals.rpe }}">{% endif %}
+    {% endfor %}
+    <button type="submit" class="btn btn-secondary undo-btn" hx-post="/session/set/restore" hx-include="closest form" hx-target="#play-root" hx-swap="innerHTML">Undo</button>
+  </form>
+</div>
+{% endif %}
+{% if ws.nudge %}
+<div class="notice nudge-banner nudge-{{ ws.nudge.type }}" data-nudge="{{ ws.nudge.type }}">
+  <div class="nudge-content">
+    <span>{{ ws.nudge.message }}</span>
+    <a class="nudge-link btn btn-secondary" href="/max-tests/guided?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}{% if ws.nudge.hands|length == 1 %}&amp;hand={{ ws.nudge.hands[0] }}{% endif %}">Run guided max test</a>
+  </div>
+  <button type="button" class="nudge-dismiss-btn" aria-label="Dismiss" onclick="this.closest('.nudge-banner').remove()">✕</button>
+</div>
+{% endif %}
+
+{% set positive_rungs = ws.ladder|select('gt', 0)|list %}
+<div id="focus-screen" class="js-enabled{% if not positive_rungs %} no-ladder{% endif %}" data-unit="{{ user.unit_pref }}" data-rest-seconds="{{ ws.default_rest_seconds }}">
+
+{% set cancel_url = "/session/play?grip_type_id=" ~ grip.id ~ "&edge_mm=" ~ edge_mm ~ "&date=" ~ date ~ (("&hand=" ~ hand) if hand else "") ~ (("&session_number=" ~ session_number) if session_number else "") %}
+{% if ws.editing or ws.current_set_number <= ws.total_sets %}
+<form method="post" action="/session/set" id="set-form" data-current-set="{{ ws.display_set_number }}" data-total-sets="{{ ws.total_sets }}" data-editing="{{ 'true' if ws.editing else 'false' }}"
+      hx-post="/session/set" hx-target="#play-root" hx-swap="innerHTML">
+  <input type="hidden" name="grip_type_id" value="{{ grip.id }}">
+  <input type="hidden" name="edge_mm" value="{{ edge_mm }}">
+  <input type="hidden" name="date" value="{{ date }}">
+  <input type="hidden" name="hand" value="{{ hand }}">
+  {% if session_number %}<input type="hidden" name="session_number" value="{{ session_number }}">{% endif %}
+  {% if sets_init %}<input type="hidden" name="sets" value="{{ sets_init }}">{% endif %}
+  <input type="hidden" name="set_number" value="{{ ws.display_set_number }}" id="set-number-field">
+  <input type="hidden" name="editing" value="{{ 'true' if ws.editing else 'false' }}">
+
+  {% for hnd in ws.card_hands %}
+  {% set seed_weight = ws.seed[hnd].weight %}
+  <div class="hand-card glass strong" data-hand="{{ hnd }}">
+    <div class="hand-card-header">
+      <span class="hand-badge hand-badge-{{ hnd }}">{{ hnd[0]|upper }}</span>
+      <span class="hand-label">{{ hnd|capitalize }} hand</span>
+      {% if ws.autoreg_suggestions and ws.autoreg_suggestions.get(hnd) %}
+      <span class="autoreg-hint" data-role="autoreg-hint" data-hand="{{ hnd }}">{{ ws.autoreg_suggestions[hnd].message }}</span>
+      {% endif %}
+    </div>
+    <div class="weight-stepper">
+      <button type="button" class="stepper-btn stepper-minus" data-field="weight" data-hand="{{ hnd }}" aria-label="Decrease {{ hnd }} weight">−</button>
+      <div class="weight-display">
+        <span class="weight-value" data-role="weight-display" data-hand="{{ hnd }}">{{ seed_weight if seed_weight is not none else "–" }}</span>
+        <span class="weight-caption">{{ user.unit_pref }} · plate-loadable</span>
+      </div>
+      <button type="button" class="stepper-btn stepper-plus" data-field="weight" data-hand="{{ hnd }}" aria-label="Increase {{ hnd }} weight">＋</button>
+      <label class="raw-input-label">{{ user.unit_pref }}
+        <input type="number" name="{{ hnd }}_weight" value="{{ seed_weight if seed_weight is not none else '' }}" step="0.25" min="0.25" required class="raw-input" data-role="weight-input" data-hand="{{ hnd }}">
+      </label>
+    </div>
+    {% set breakdown = plate_breakdown(seed_weight, inventory) %}
+    {% if breakdown %}
+    <div class="rung-tile-plates muted" data-role="plate-breakdown" data-hand="{{ hnd }}">Pin{% for p in breakdown %} + {{ p|num_trim }}{% endfor %}</div>
+    {% endif %}
+    <div class="reps-rpe-grid">
+      <div class="field-group">
+        <span class="field-label">Reps</span>
+        <div class="mini-stepper">
+          <button type="button" class="stepper-btn-sm stepper-minus" data-field="reps" data-hand="{{ hnd }}" aria-label="Decrease {{ hnd }} reps">−</button>
+          <span class="mini-value" data-role="reps-display" data-hand="{{ hnd }}">{{ ws.seed[hnd].reps }}</span>
+          <button type="button" class="stepper-btn-sm stepper-plus" data-field="reps" data-hand="{{ hnd }}" aria-label="Increase {{ hnd }} reps">＋</button>
+        </div>
+        <label class="raw-input-label">reps
+          <input type="number" name="{{ hnd }}_reps" value="{{ ws.seed[hnd].reps }}" step="1" min="1" required class="raw-input" data-role="reps-input" data-hand="{{ hnd }}">
+        </label>
+      </div>
+      <div class="field-group">
+        <span class="field-label">RPE</span>
+        <div class="mini-stepper">
+          <button type="button" class="stepper-btn-sm stepper-minus" data-field="rpe" data-hand="{{ hnd }}" aria-label="Decrease {{ hnd }} RPE">−</button>
+          <span class="mini-value{% if ws.seed[hnd].rpe is none %} rpe-inactive{% endif %}" data-role="rpe-display" data-hand="{{ hnd }}">{{ ws.seed[hnd].rpe|num_trim if ws.seed[hnd].rpe is not none else "7" }}</span>
+          <button type="button" class="stepper-btn-sm stepper-plus" data-field="rpe" data-hand="{{ hnd }}" aria-label="Increase {{ hnd }} RPE">＋</button>
+        </div>
+        <label class="raw-input-label">RPE
+          <input type="number" name="{{ hnd }}_rpe" value="{{ ws.seed[hnd].rpe if ws.seed[hnd].rpe is not none else '' }}" step="0.5" min="1" max="10" placeholder="–" class="raw-input" data-role="rpe-input" data-hand="{{ hnd }}">
+        </label>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+
+  <div class="set-actions">
+    <button type="submit" class="set-done-btn">{{ "Save" if ws.editing else "Set done" }}</button>
+    <a class="btn btn-secondary set-cancel-btn" href="{{ cancel_url }}"{% if not ws.editing %} hidden{% endif %}>Cancel</a>
+    <button type="submit" formaction="/session/set/delete" formnovalidate class="btn btn-secondary set-delete-btn" id="set-delete-btn" hx-post="/session/set/delete" hx-include="closest form" hx-target="#play-root" hx-swap="innerHTML"{% if not ws.editing %} hidden{% endif %}>− Delete this set</button>
+    <p class="set-error" id="set-error" role="alert" hidden></p>
+  </div>
+</form>
+{% else %}
+<div class="card focus-all-done">
+  <p class="muted" style="margin:0">All {{ ws.total_sets }} set{{ "s" if ws.total_sets != 1 }} logged for this combination. Use the ⋯ menu to add another.</p>
+</div>
+{% endif %}
+
+<section class="completed-section">
+  <h3 class="completed-heading">Completed</h3>
+  <div class="completed-list">
+  {% for n in range(1, ws.current_set_number) %}
+    {% set edit_url = "/session/play?grip_type_id=" ~ grip.id ~ "&edge_mm=" ~ edge_mm ~ "&date=" ~ date ~ "&edit=" ~ n ~ (("&hand=" ~ hand) if hand else "") ~ (("&session_number=" ~ session_number) if session_number else "") %}
+    <a class="completed-row{% if ws.editing and n == ws.display_set_number %} completed-row-editing{% endif %}" data-set="{{ n }}" href="{{ edit_url }}" hx-get="{{ edit_url }}" hx-target="#play-root" hx-swap="innerHTML" hx-push-url="true">
+      <span class="completed-check" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9.5 18 20 6.5"/></svg></span>
+      <span class="completed-set-label">Set {{ n }}</span>
+      <span class="completed-detail">
+        {% if ws.hands|length == 1 %}
+          {% set wset = ws.saved.get((ws.hands[0], n)) %}
+          {{ wset.weight }} {{ user.unit_pref }} × {{ wset.reps }}{% if wset.rpe is not none %} @ {{ wset.rpe }}{% endif %}
+        {% else %}
+          {% for h in ws.hands %}{% set wset = ws.saved.get((h, n)) %}{{ h[0]|upper }} {{ wset.weight }} × {{ wset.reps }}{% if wset.rpe is not none %} @ {{ wset.rpe }}{% endif %}{% if not loop.last %} · {% endif %}{% endfor %} {{ user.unit_pref }}
+        {% endif %}
+      </span>
+    </a>
+  {% else %}
+    <p class="muted completed-empty">No sets logged yet.</p>
+  {% endfor %}
+  </div>
+  {% if ws.current_set_number < ws.total_sets %}
+  <div class="up-next-row">{% if ws.current_set_number + 1 == ws.total_sets %}Set {{ ws.current_set_number + 1 }}{% else %}Sets {{ ws.current_set_number + 1 }}–{{ ws.total_sets }}{% endif %} up next · same load carries down</div>
+  {% endif %}
+</section>
+
+<script type="application/json" id="ladder-data">{{ ws.ladder|tojson }}</script>
+
+</div><!-- #focus-screen -->
+
+{% if other_hand %}
+<div class="flow-next">
+  <a class="btn btn-secondary" href="/session/play?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}&amp;hand={{ other_hand }}{% if session_number %}&amp;session_number={{ session_number }}{% endif %}">Switch to {{ other_hand|display_name }} hand</a>
+</div>
+{% endif %}

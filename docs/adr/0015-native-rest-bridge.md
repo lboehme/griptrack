@@ -57,3 +57,22 @@ unaffected.
   and extend.
 - The web countdown remains the source of truth for what's displayed in the
   app. The native alarm is the source of truth for the alert.
+
+## Implementation notes (#148, 2026-09-24)
+
+Small deviations from the text above, none of them changing the decision:
+
+- **`startRest` takes a fifth argument**, the rest-over line ("Pull. Set 3
+  is ready"): `startRest(endsAtEpochMs, title, detail, sound, readyTitle)`.
+  A JavaScript interface only carries primitives, and the alarm receiver has
+  no other way to learn the next set's number.
+- **The Rest sound toggle sits on the rest step for now**, not in Settings;
+  S6 moves it. It is stored per user (`User.rest_sound`).
+- **The web ring reaching 0:00 no longer cancels the native side.** Doing so
+  raced the alarm and could swallow the vibration. The alarm is cancelled
+  only by Skip rest / Start set N, the next step rendering, or leaving the
+  play page (pause ✕, Back).
+- **The bridge only answers pages from the loopback server**, and it
+  rejects a rest end in the past or more than 30 minutes ahead and caps text
+  at 80 characters.
+

@@ -6,40 +6,20 @@ from sqlmodel import Session, select
 
 from backend import auth, training_log
 from backend.db import get_session
-from backend.limits import MAX_EDGE_MM, MAX_WEIGHT
+from backend.limits import MAX_EDGE_MM, MAX_ROW_ID, MAX_WEIGHT
 from backend.models import GripType, User
-from backend.templating import templates
+from backend.routers.settings import saved_response
 
 router = APIRouter()
 
-
-@router.get("/max-tests")
-def max_tests_page(
-    request: Request,
-    user: User = Depends(auth.current_user),
-    session: Session = Depends(get_session),
-):
-    grip_types = session.exec(select(GripType).order_by(GripType.name)).all()
-    combos = training_log.tested_combinations(session, user)
-    tests = training_log.max_test_history(session, user)
-
-    return templates.TemplateResponse(
-        request,
-        "max_tests.html",
-        {
-            "user": user,
-            "grip_types": grip_types,
-            "combos": combos,
-            "test_history": tests,
-            "today": date_type.today().isoformat(),
-        },
-    )
+# The Maxes detail page under Progress (#150); GET /max-tests redirects there.
+MAXES_PAGE = "/progress/maxes"
 
 
 @router.post("/max-tests")
 def log_max_test(
     hand: str = Form(),
-    grip_type_id: int = Form(),
+    grip_type_id: int = Form(ge=1, le=MAX_ROW_ID),
     edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
     date: date_type = Form(),
     weight: float = Form(gt=0, le=MAX_WEIGHT),
@@ -53,23 +33,24 @@ def log_max_test(
     training_log.record_max_weight_test(
         session, user, hand, grip_type_id, edge_mm, date, weight
     )
-    return RedirectResponse("/max-tests", status_code=303)
+    return RedirectResponse(MAXES_PAGE, status_code=303)
 
 
 @router.post("/grip-types")
 def add_grip_type(
+    request: Request,
     name: str = Form(min_length=1, max_length=60),
     admin: User = Depends(auth.require_admin),
     session: Session = Depends(get_session),
 ):
     name = name.strip()
     if not name:
-        return RedirectResponse("/profile", status_code=303)
+        return RedirectResponse("/settings/admin", status_code=303)
     existing = session.exec(select(GripType).where(GripType.name == name)).first()
     if existing is None:
         session.add(GripType(name=name))
         session.commit()
-    return RedirectResponse("/profile", status_code=303)
+    return saved_response(request, "grip-type")
 
 
 @router.post("/max-tests/{test_id}/void")
@@ -81,4 +62,4 @@ def void_max_test(
     test = training_log.void_max_weight_test(session, user, test_id)
     if test is None:
         raise HTTPException(status_code=403, detail="Cannot void this test")
-    return RedirectResponse("/max-tests", status_code=303)
+    return RedirectResponse(MAXES_PAGE, status_code=303)

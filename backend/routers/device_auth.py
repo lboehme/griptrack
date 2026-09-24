@@ -83,7 +83,9 @@ def welcome_start(request: Request, session: Session = Depends(get_session)):
         return RedirectResponse("/", status_code=303)
     if not request.session.get(FIRST_RUN_GRANT):
         return _first_run_refused()
-    return templates.TemplateResponse(request, "welcome_start.html", {})
+    return templates.TemplateResponse(
+        request, "welcome_start.html", {"hide_tabbar": True}
+    )
 
 
 def _first_run_refused() -> HTMLResponse:
@@ -135,10 +137,18 @@ def welcome_plates(
     return templates.TemplateResponse(
         request,
         "welcome_plates.html",
-        {"user": user, "items": plates.inventory_for(session, user)},
+        {
+            "user": user,
+            "rack": plates.rack_view(session, user),
+            "back": "/welcome/plates",
+            # First run is a story, not a tab screen (#149): no tab bar.
+            "hide_tabbar": True,
+        },
     )
 
 
 @router.get("/welcome/test")
 def welcome_test(request: Request, user: User = Depends(auth.current_user)):
-    return templates.TemplateResponse(request, "welcome_test.html", {"user": user})
+    return templates.TemplateResponse(
+        request, "welcome_test.html", {"user": user, "hide_tabbar": True}
+    )

@@ -25,7 +25,7 @@ def test_cross_origin_posts_are_rejected(client):
     assert response.status_code == 403
     # The climb must not have been created (the page's grade placeholder
     # also contains "V5", so check the logged-climb data attribute).
-    assert 'data-grade="V5"' not in client.get("/climbs").text
+    assert 'data-grade="V5"' not in client.get("/progress/timeline").text
 
 
 def test_same_origin_posts_pass(client):
@@ -265,7 +265,7 @@ def test_oversized_climb_text_inputs_are_rejected(client):
     assert novel_notes.status_code == 422
 
     # Nothing was saved.
-    assert 'data-grade=' not in client.get("/climbs").text
+    assert 'data-grade=' not in client.get("/progress/timeline").text
 
 
 def test_session_number_is_bounded(client):
@@ -296,7 +296,7 @@ def test_session_number_is_bounded(client):
     assert too_low.status_code == 422
 
     # Neither absurd attempt created a row.
-    history = client.get("/history").text
+    history = client.get("/progress/timeline").text
     assert 'data-date="2026-07-04"' not in history
 
 
@@ -380,14 +380,14 @@ def test_import_discards_a_spoofed_file_supplied_user_id(client):
     assert response.status_code == 303
 
     # Landed under the importing user (friend) ...
-    assert "founders climb" in client.get("/climbs").text
+    assert "founders climb" in client.get("/progress/timeline").text
 
     # ... and founder's own data was neither duplicated nor overwritten.
     client.post("/logout")
     from tests.helpers import login
 
     login(client, "founder@example.com", "test-pw-1234")
-    founder_climbs = client.get("/climbs").text
+    founder_climbs = client.get("/progress/timeline").text
     assert founder_climbs.count("founders climb") == 1
 
 
@@ -769,7 +769,7 @@ def test_bogus_hand_is_rejected_on_session_routes(client):
     assert ok.status_code == 303
 
     # No phantom-hand row leaked into history.
-    assert "banana" not in client.get("/history").text
+    assert "banana" not in client.get("/progress/timeline").text
 
 
 def test_anonymous_requests_do_not_emit_null_pk_warning(client):
@@ -788,3 +788,365 @@ def test_anonymous_requests_do_not_emit_null_pk_warning(client):
 
     null_pk = [w for w in caught if "NULL primary key" in str(w.message)]
     assert not null_pk, f"unexpected NULL-PK warning(s): {[str(w.message) for w in null_pk]}"
+
+
+def test_rest_sound_toggle_is_bounded_and_rejects_cross_origin_posts(client):
+    """S3 native rest bridge (#148), toggled from Settings since #151: the
+    Rest sound toggle takes user text, so it's length-capped (422 past the
+    cap) and only "on"/"off" are accepted (400 otherwise); a cross-origin
+    POST is refused like every other state-changing route (CSRF Origin
+    check)."""
+    from backend.limits import MAX_TOGGLE_LENGTH
+
+    register(client)
+
+    too_long = client.post(
+        "/settings/rest-sound",
+        data={"rest_sound": "o" * (MAX_TOGGLE_LENGTH + 1)},
+        follow_redirects=False,
+    )
+    assert too_long.status_code == 422
+
+    bogus = client.post(
+        "/settings/rest-sound", data={"rest_sound": "loud"}, follow_redirects=False
+    )
+    assert bogus.status_code == 400
+
+    cross_origin = client.post(
+        "/settings/rest-sound",
+        data={"rest_sound": "on"},
+        headers={"Origin": "https://evil.example"},
+        follow_redirects=False,
+    )
+    assert cross_origin.status_code == 403
+
+
+def test_plate_tap_is_bounded_and_rejects_cross_origin_posts(client):
+    """Tap-to-count (#151) takes a plate weight (bounded like POST /plates,
+    the subset-sum's DoS-sensitive input) and a `back` path (length-capped,
+    and only ever one of two known pages -- never an open redirect)."""
+    register(client)
+
+    assert client.post(
+        "/plates/tap", data={"weight": "1000000"}, follow_redirects=False
+    ).status_code == 422
+    assert client.post(
+        "/plates/tap", data={"weight": "0"}, follow_redirects=False
+    ).status_code == 422
+    assert client.post(
+        "/plates/tap", data={"weight": "5", "back": "/" + "a" * 200}, follow_redirects=False
+    ).status_code == 422
+    cross_origin = client.post(
+        "/plates/tap",
+        data={"weight": "5"},
+        headers={"Origin": "https://evil.example"},
+        follow_redirects=False,
+    )
+    assert cross_origin.status_code == 403
+
+
+def test_settings_saved_query_is_bounded_and_never_echoed(client):
+    """`?saved=` only picks one of the fixed toast strings; an unknown key
+    shows no toast, and nothing from the query string reaches the page."""
+    register(client)
+
+    assert client.get("/settings", params={"saved": "x" * 500}).status_code == 422
+    page = client.get("/settings", params={"saved": "<script>alert(1)</script>"})
+    assert page.status_code == 200
+    assert "alert(1)" not in page.text
+    assert 'class="toast"' not in page.text
+
+
+def test_session_rpe_is_bounded_and_numeric(client):
+    """Session RPE (#147) is a bounded 1–10 integer (backend/limits.py):
+    an out-of-range, fractional or non-numeric value is rejected before it
+    can reach the training_sessions row."""
+    from backend.limits import MAX_SESSION_RPE, MIN_SESSION_RPE
+
+    register(client)
+    save_work_set(client, "left", 1, "40", "5", date="2026-07-04")
+    common = {
+        "grip_type_id": grip_type_id(client, "half crimp"),
+        "edge_mm": 20,
+        "date": "2026-07-04",
+    }
+    for bad in (
+        str(MIN_SESSION_RPE - 1), str(MAX_SESSION_RPE + 1), "1e9", "-1", "7.5",
+        "NaN", "seven", "'; DROP TABLE training_sessions;--",
+    ):
+        response = client.post(
+            "/session/rpe", data={**common, "session_rpe": bad}, follow_redirects=False
+        )
+        assert response.status_code == 422, f"session_rpe {bad!r} was accepted"
+
+    ok = client.post(
+        "/session/rpe",
+        data={**common, "session_rpe": str(MAX_SESSION_RPE)},
+        follow_redirects=False,
+    )
+    assert ok.status_code == 303
+
+
+# ---------- Today + ＋ Log sheet (#149) ----------
+
+
+def test_log_sheet_inputs_are_bounded(client):
+    from backend.limits import MAX_GRADE_LENGTH, MAX_NOTES_LENGTH, MAX_WEIGHT
+    register(client)
+    base = {"style": "flash", "when": "today", "today": "2026-07-04"}
+
+    too_long_grade = client.post("/log/climb", data={**base, "grade": "V" * (MAX_GRADE_LENGTH + 1)})
+    assert too_long_grade.status_code == 422
+    too_long_other = client.post(
+        "/log/climb",
+        data={**base, "grade": "__other__", "grade_other": "V" * (MAX_GRADE_LENGTH + 1)},
+    )
+    assert too_long_other.status_code == 422
+    too_long_notes = client.post(
+        "/log/climb", data={**base, "grade": "7A", "notes": "x" * (MAX_NOTES_LENGTH + 1)}
+    )
+    assert too_long_notes.status_code == 422
+    too_long_when = client.post("/log/climb", data={**base, "grade": "7A", "when": "t" * 100})
+    assert too_long_when.status_code == 422
+
+    heavy = client.post("/log/bodyweight", data={"date": "2026-07-04", "weight": MAX_WEIGHT + 1})
+    assert heavy.status_code == 422
+    negative = client.post("/log/bodyweight", data={"date": "2026-07-04", "weight": -5})
+    assert negative.status_code == 422
+
+    long_note = client.post(
+        "/log/tweak",
+        data={"date": "2026-07-04", "hand": "left", "severity": 1, "note": "x" * (MAX_NOTES_LENGTH + 1)},
+    )
+    assert long_note.status_code == 422
+    long_hand = client.post(
+        "/log/tweak", data={"date": "2026-07-04", "hand": "l" * 100, "severity": 1}
+    )
+    assert long_hand.status_code == 422
+    big_severity = client.post(
+        "/log/tweak", data={"date": "2026-07-04", "hand": "left", "severity": 10**9}
+    )
+    assert big_severity.status_code == 422
+
+    # Nothing was saved.
+    assert 'data-grade=' not in client.get("/progress/timeline").text
+
+
+def test_today_query_and_form_numbers_are_bounded(client):
+    from backend.limits import MAX_EDGE_MM
+    register(client)
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "40")
+    grip_id = grip_type_id(client, "half crimp")
+
+    assert client.get("/", params={"grip_type_id": grip_id, "edge_mm": MAX_EDGE_MM + 1}).status_code == 422
+    assert client.get("/", params={"grip_type_id": grip_id, "edge_mm": 0}).status_code == 422
+    assert client.get("/today/change", params={"grip_type_id": grip_id, "edge_mm": MAX_EDGE_MM + 1}).status_code == 422
+    assert client.get("/", params={"log": "x" * 100}).status_code == 422
+    assert client.get("/", params={"saved": "x" * 100}).status_code == 422
+    assert client.get("/log/sheet", params={"tab": "x" * 100}).status_code == 422
+    lighter = client.post(
+        "/today/lighter",
+        data={"date": "2026-07-04", "on": "1", "grip_type_id": grip_id, "edge_mm": MAX_EDGE_MM + 1},
+    )
+    assert lighter.status_code == 422
+
+
+def test_saved_toast_never_echoes_the_query_string(client):
+    register(client)
+
+    response = client.get("/", params={"saved": "<b>x</b>"})
+    page = response.text
+
+    assert response.status_code == 200
+    assert "<b>x</b>" not in page
+    assert 'class="toast"' not in page
+
+
+def test_cross_origin_log_sheet_posts_are_rejected(client):
+    register(client)
+    evil = {"Origin": "https://evil.example"}
+
+    assert client.post(
+        "/log/climb",
+        data={"grade": "7A", "style": "flash", "when": "today", "today": "2026-07-04"},
+        headers=evil,
+    ).status_code == 403
+    assert client.post("/log/bodyweight", data={"date": "2026-07-04", "weight": 70}, headers=evil).status_code == 403
+    assert client.post(
+        "/log/tweak", data={"date": "2026-07-04", "hand": "left", "severity": 1}, headers=evil
+    ).status_code == 403
+    assert client.post("/today/lighter", data={"date": "2026-07-04", "on": "1"}, headers=evil).status_code == 403
+    assert 'data-grade=' not in client.get("/progress/timeline").text
+
+
+def test_log_sheet_and_today_actions_require_login(client):
+    assert client.get("/log/sheet").status_code == 401
+    assert client.post("/today/lighter", data={"date": "2026-07-04", "on": "1"}).status_code == 401
+    assert client.post(
+        "/log/tweak", data={"date": "2026-07-04", "hand": "left", "severity": 1}
+    ).status_code == 401
+
+
+def test_progress_query_params_are_bounded_and_validated(client):
+    from backend.limits import MAX_EDGE_MM, MAX_ROW_ID
+    register(client)
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "40")
+    grip_id = grip_type_id(client, "half crimp")
+
+    def status(path, **params):
+        return client.get(path, params=params, follow_redirects=False).status_code
+
+    assert status("/progress", grip_type_id=grip_id, edge_mm=20, range="all") == 200
+    assert status("/progress", range="1y") == 422
+    assert status("/progress", range="x" * 10_000) == 422
+    assert status("/progress", grip_type_id=grip_id, edge_mm=MAX_EDGE_MM + 1) == 422
+    assert status("/progress", grip_type_id=grip_id, edge_mm=0) == 422
+    assert status("/progress", grip_type_id=0, edge_mm=20) == 422
+    assert status("/progress", grip_type_id=MAX_ROW_ID + 1, edge_mm=20) == 422
+    assert status("/progress", grip_type_id=10**40, edge_mm=20) == 422
+    assert status("/progress", grip_type_id="1 OR 1=1", edge_mm=20) == 422
+    assert status("/progress", grip_type_id=99999, edge_mm=20) == 404
+    assert status("/progress/timeline", show="sessions") == 422
+    assert status("/progress/nope") == 422
+
+
+def test_progress_pages_require_login(client):
+    for path in (
+        "/progress",
+        "/progress/volume",
+        "/progress/balance",
+        "/progress/grade",
+        "/progress/maxes",
+        "/progress/timeline",
+        "/dashboard",
+        "/history",
+        "/max-tests",
+    ):
+        assert client.get(path, follow_redirects=False).status_code == 401, path
+
+
+# ---------- grip_type_id is bounded on every route (PR #154 review MUST-FIX 4) ----------
+
+
+def _grip_routes():
+    """Every (method, path, location) whose endpoint takes a grip_type_id,
+    discovered from the app itself so a new route can't slip past."""
+    from fastapi.routing import APIRoute
+
+    from backend.main import create_app
+
+    def walk(routes):
+        for route in routes:
+            yield route
+            nested = getattr(route, "original_router", None)
+            if nested is not None:
+                yield from walk(nested.routes)
+
+    found = []
+    for route in walk(create_app().routes):
+        if not isinstance(route, APIRoute):
+            continue
+        dependant = route.dependant
+        names = {p.name for p in dependant.query_params} | {p.name for p in dependant.body_params}
+        if "grip_type_id" not in names:
+            continue
+        where = "query" if any(p.name == "grip_type_id" for p in dependant.query_params) else "form"
+        for method in sorted(route.methods - {"HEAD"}):
+            found.append((method, route.path, where))
+    return found
+
+
+GRIP_ROUTES = _grip_routes()
+
+# Otherwise-valid values for every field these routes take, so the only
+# thing wrong with the request is the oversized grip id.
+_VALID_FIELDS = {
+    "edge_mm": "20", "date": "2026-07-04", "hand": "left", "set_number": "1",
+    "step_index": "0", "weight": "30", "reps": "5", "left_weight": "30",
+    "left_reps": "5", "right_weight": "30", "right_reps": "5", "session_rpe": "5",
+    "sets": "4", "severity": "1", "on": "1", "page": "play", "path": "weight",
+    "rep_min": "5", "rep_max": "5", "max_sets": "6", "estimate": "30",
+    "left_estimate": "30", "right_estimate": "30", "kind": "work", "actual": "30",
+    "notes": "x",
+}
+
+
+def test_every_route_taking_a_grip_type_id_is_discovered():
+    paths = {path for _, path, _ in GRIP_ROUTES}
+    for expected in ("/", "/today/change", "/today/lighter", "/session/play",
+                     "/session/set", "/session/estimate", "/session/check",
+                     "/session/rung-done", "/max-tests", "/progress"):
+        assert expected in paths
+
+
+@pytest.mark.parametrize("method,path,where", GRIP_ROUTES)
+@pytest.mark.parametrize("grip", ["99999999999999999999", "2147483648", "0", "-1"])
+def test_an_out_of_range_grip_type_id_never_500s(client_factory, method, path, where, grip):
+    from fastapi.testclient import TestClient
+
+    base = client_factory()
+    client = TestClient(base.app, raise_server_exceptions=False)
+    register(client)
+    fields = {**_VALID_FIELDS, "grip_type_id": grip}
+    if method == "GET" or where == "query":
+        response = client.request(method, path, params=fields, follow_redirects=True)
+    else:
+        response = client.request(method, path, data=fields, follow_redirects=True)
+    assert response.status_code in (400, 404, 422), (path, response.status_code)
+
+
+@pytest.mark.parametrize("path,extra", [
+    ("/session/estimate", {"weight": "30"}),
+    ("/session/check", {"step_index": "0"}),
+])
+def test_estimate_and_check_refuse_an_unknown_grip_so_export_stays_importable(client, path, extra):
+    """An orphan SessionMaxEstimate (SQLite FKs are off) used to break
+    re-import of the user's own export ("unknown grip type")."""
+    from tests.helpers import export_archive, generate_invite, import_archive
+
+    register(client)
+    data = {"grip_type_id": "999", "edge_mm": "20", "date": "2026-07-04", "hand": "left", **extra}
+    assert client.post(path, data=data).status_code == 404
+
+    save_work_set(client, "left", 1, "30", "5")
+    archive = export_archive(client)
+    code = generate_invite(client)
+    register(client, "phone@example.com", "test-pw-5678", invite_code=code)
+    assert import_archive(client, archive).status_code == 303
+
+
+
+@pytest.mark.usefixtures("session_date_is_today")
+def test_rest_extend_is_capped_server_side(client):
+    """PR #154 review MUST-FIX 7: +30 s taps can't push rest_ends_at more
+    than MAX_REST_SECONDS + MAX_REST_EXTENSION_SECONDS ahead (the native
+    bridge refuses an end too far ahead, which would leave a stale alarm)."""
+    import re
+    from datetime import datetime, timedelta, timezone
+
+    from backend.limits import MAX_REST_EXTENSION_SECONDS, MAX_REST_SECONDS
+    from tests.helpers import complete_warmup, save_focus_set
+
+    register(client)
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "40")
+    log_max_test(client, "right", "half crimp", 20, "2026-07-01", "40")
+    client.post(
+        "/profile/protocol",
+        data={"base_work_set_reps": 5, "default_rest_seconds": MAX_REST_SECONDS},
+    )
+    gid = grip_type_id(client, "half crimp")
+    complete_warmup(client, gid, 20)
+    save_focus_set(client, 1, left=(30, 5, 7), right=(30, 5, 7))
+
+    data = {"grip_type_id": gid, "edge_mm": 20, "date": "2026-07-04"}
+    for _ in range(40):  # 40 × 30 s = 20 min of taps
+        response = client.post("/session/rest/extend", data=data, headers={"HX-Request": "true"})
+        assert response.status_code == 200
+    ends_at = datetime.fromisoformat(
+        re.search(r'data-rest-ends-at="([^"]+)"', response.text).group(1)
+    )
+    if ends_at.tzinfo is None:
+        ends_at = ends_at.replace(tzinfo=timezone.utc)
+    ahead = ends_at - datetime.now(timezone.utc)
+    assert ahead <= timedelta(seconds=MAX_REST_SECONDS + MAX_REST_EXTENSION_SECONDS)
+    assert ahead > timedelta(seconds=MAX_REST_SECONDS + MAX_REST_EXTENSION_SECONDS - 60)

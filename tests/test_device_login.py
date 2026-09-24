@@ -118,7 +118,7 @@ def test_first_run_screen_three_links_to_guided_test_and_skip(webview_client):
 
     test_screen = webview_client.get("/welcome/test")
     assert test_screen.status_code == 200
-    assert 'href="/max-tests"' in test_screen.text
+    assert 'href="/progress/maxes"' in test_screen.text
     assert 'href="/"' in test_screen.text
 
 
@@ -297,13 +297,16 @@ def test_login_and_register_links_are_hidden_from_the_anonymous_home_page(webvie
     assert 'href="/register"' not in anonymous_home.text
 
 
-def test_invite_and_admin_grip_type_cards_are_hidden_from_profile(webview_client):
+def test_invite_and_admin_grip_type_cards_are_hidden_from_settings(webview_client):
     complete_first_run(webview_client)
 
-    profile = webview_client.get("/profile")
-    assert profile.status_code == 200
-    assert 'action="/invites"' not in profile.text
-    assert 'action="/grip-types"' not in profile.text
+    settings = webview_client.get("/settings")
+    assert settings.status_code == 200
+    assert 'action="/invites"' not in settings.text
+    assert 'action="/grip-types"' not in settings.text
+    assert 'href="/settings/admin"' not in settings.text
+    # ...and the Admin page itself doesn't exist in this build.
+    assert webview_client.get("/settings/admin").status_code == 404
 
 
 # --- Isolation: no token / no cookie means no data access -----------------

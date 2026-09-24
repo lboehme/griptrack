@@ -38,6 +38,10 @@ class User(SQLModel, table=True):
     # hand's full flow, then the other (see HandOrderPreference in CONTEXT.md).
     hand_order_pref: str = "alternating"
     session_version: int = Field(default=1, sa_column_kwargs={"server_default": "1"})
+    # Rest sound (#148, docs/adr/0015): whether the native rest-over alert
+    # also plays the default notification sound. Off by default -- vibration
+    # alone, since shared gyms are quiet places.
+    rest_sound: bool = Field(default=False, sa_column_kwargs={"server_default": "0"})
     created_at: datetime = Field(default_factory=utcnow)
 
 
@@ -138,6 +142,32 @@ class TrainingSession(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow)
     # Descriptive only — not identity-bearing (see class docstring).
     started_at: datetime | None = Field(default_factory=utcnow)
+    # Session play (#146, docs/adr/0014): set to now + TrainingProtocol
+    # .default_rest_seconds on a normal (non-final, non-edit) Set commit made
+    # from /session/play; cleared by +30s exhaustion-independent Skip/Start.
+    # The play step is "rest" whenever this is not None and the next set
+    # hasn't been committed yet — even once it's in the past, the rest step
+    # just shows "Pull" / "Start set N" until the user acts.
+    rest_ends_at: datetime | None = Field(default=None)
+    # Session summary (#147, docs/adr/0014): the whole-session effort rating
+    # (Session RPE, 1–10, bounded by limits.MIN/MAX_SESSION_RPE -- the
+    # summary's five chips post 3/5/7/9/10) and when the user tapped
+    # Finish. Both nullable: a session that never reached Finish simply has
+    # neither. Session load (Session RPE × duration in minutes) is derived
+    # from these plus started_at in analytics.session_load, never stored.
+    session_rpe: int | None = Field(default=None)
+    finished_at: datetime | None = Field(default=None)
+    # Session play state (PR #154 review, D2): the combo play is actually
+    # running (stamped by the first rung-done / warmup tick / estimate /
+    # Set commit on it -- never by a GET), and that combo's planned set
+    # count (Today's "+1 set", ⋯ Add a set / Remove empty set). NULL
+    # planned_sets means "the protocol default". A pending rest_ends_at
+    # only belongs to the stamped combo.
+    planned_sets: int | None = Field(default=None)
+    play_grip_type_id: int | None = Field(
+        default=None, foreign_key="grip_types.id", nullable=True
+    )
+    play_edge_mm: int | None = Field(default=None)
 
 
 class PainReport(SQLModel, table=True):

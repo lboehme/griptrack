@@ -10,6 +10,40 @@ from backend.models import CLIMB_STYLES, Climb, User
 # so history keeps rendering them).
 NEW_CLIMB_DISCIPLINE = "boulder"
 
+# Loud feedback for a grade the correlation can't parse (issue #55). A
+# server-side constant, never echoed from user input -- shared by the legacy
+# /climbs form and the ＋ Log sheet's Climb tab (#149).
+GRADE_NOT_RECOGNIZED_MESSAGE = (
+    "Climb logged, but the grade wasn't recognized — this climb won't "
+    "appear in the strength/grade correlation."
+)
+
+
+# V-scale floor for each gym-circuit grade colour band (V2 of
+# docs/ui-review-2026-09.md): 6A/6A+ = V3 ... 7B and up = V8+. Below V3
+# (below 6A) has no band in the spec, so it renders with no colour. Values
+# are app.css custom-property names: templates wrap them in var(), the
+# Progress chart resolves them at runtime (no colour literals in Python).
+GRADE_COLOR_BANDS: list[tuple[float, str]] = [
+    (8.0, "--grade-7b"),
+    (6.0, "--grade-7a"),
+    (5.0, "--grade-6c"),
+    (4.0, "--grade-6b"),
+    (3.0, "--grade-6a"),
+]
+
+
+def grade_color_token(grade: object) -> str:
+    """The app.css token name of a boulder grade's colour band, or "" when
+    the grade doesn't parse or sits below the lowest band (6A)."""
+    value = parse_boulder_grade(str(grade)) if grade is not None else None
+    if value is None:
+        return ""
+    for floor, token in GRADE_COLOR_BANDS:
+        if value >= floor:
+            return token
+    return ""
+
 
 class InvalidStyleError(ValueError):
     """Raised when an unrecognized climb style is provided."""
@@ -54,6 +88,34 @@ def climbs_newest_first(session: Session, user: User) -> list[Climb]:
         session.exec(
             select(Climb)
             .where(Climb.user_id == user.id)
+            .order_by(Climb.date.desc(), Climb.id.desc())
+        ).all()
+    )
+
+
+def recent_climbs(session: Session, user: User, limit: int) -> list[Climb]:
+    """The user's `limit` newest climbs (same ordering as
+    climbs_newest_first), for the ＋ Log sheet's grade/style defaults."""
+    return list(
+        session.exec(
+            select(Climb)
+            .where(Climb.user_id == user.id)
+            .order_by(Climb.date.desc(), Climb.id.desc())
+            .limit(limit)
+        ).all()
+    )
+
+
+def climbs_between(
+    session: Session, user: User, start: date_type, end: date_type
+) -> list[Climb]:
+    """The user's climbs dated start..end inclusive, newest first."""
+    return list(
+        session.exec(
+            select(Climb)
+            .where(Climb.user_id == user.id)
+            .where(Climb.date >= start)
+            .where(Climb.date <= end)
             .order_by(Climb.date.desc(), Climb.id.desc())
         ).all()
     )

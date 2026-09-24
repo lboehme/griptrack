@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — GripTrack{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="/static/uplot.min.css">
+{% endblock %}
+{% block content %}
+{# Go deeper detail pages (#150). Each section's markup moved unchanged
+   from the old Trends page (dashboard.html); only the page chrome is new. #}
+<p class="overline"><a class="progress-back" href="/progress">‹ Progress</a></p>
+<h2>{{ title }}</h2>
+{% if section == "volume" %}
+<p class="page-sub">Volume = weight × reps per session, for every combination you train. <a class="about-link" href="/settings/about#volume">About these numbers</a></p>
+{% if combos %}
+{% for combo in combos %}
+<div class="card">
+  <h3>
+    <span class="hand-heading">{{ combo.hand[0]|upper }}</span>
+    {{ combo.grip_name|display_name }} @ {{ combo.edge_mm }} mm {{ combo.dimension_name }}
+    {% if combo.plateau %}<span class="pill plateau-flag" data-combo="{{ combo.combo_key }}">plateau</span>{% endif %}
+    {% if combo.overtraining %}<span class="pill overtraining-flag" data-combo="{{ combo.combo_key }}">⚠ load spike, short rest</span>{% endif %}
+  </h3>
+  <div class="trend-legend">
+    <span class="trend-legend-item">
+      <span class="trend-legend-swatch volume"></span>
+      <span>Volume</span>
+    </span>
+    <span class="trend-legend-item">
+      <span class="trend-legend-swatch intensity"></span>
+      <span>Mean Intensity</span>
+    </span>
+  </div>
+  <div class="trend-chart" data-chart-combo="{{ combo.combo_key }}" role="img" aria-label="Volume trend for {{ combo.hand|display_name }} {{ combo.grip_name|display_name }} @ {{ combo.edge_mm }} mm"></div>
+  <details class="show-data">
+  <summary>Show data</summary>
+  <ul class="plain volume-list">
+    {% for date, volume in combo.trend %}
+    <li class="volume-point" data-combo="{{ combo.combo_key }}" data-date="{{ date }}" data-volume="{{ volume }}">
+      <span class="muted">{{ date|human_date }}</span>
+      <strong>{{ volume }}</strong> <span class="muted">{{ user.unit_pref }}·reps</span>
+    </li>
+    {% endfor %}
+  </ul>
+  </details>
+</div>
+{% endfor %}
+<script type="application/json" id="volume-trend-data">{{ chart_data|tojson }}</script>
+{% endif %}
+{% if not combos %}
+<div class="notice">
+  Nothing to show yet — log a few <a href="/">training sessions</a>
+  and your volume trend will appear here.
+</div>
+{% endif %}
+{% elif section == "balance" %}
+{% if asymmetry_pairs %}
+<div class="card asymmetry-card">
+  <h3>L/R Asymmetry</h3>
+  <p class="page-sub asymmetry-sub">How far apart your hands are, in percent — above zero, your left is ahead. Shaded bands mark the usual ±10–15%. <a class="about-link" href="/settings/about#balance">About these numbers</a></p>
+  <div class="asymmetry-legend">
+    <span class="asymmetry-legend-item">
+      <span class="asymmetry-legend-swatch strength"></span>
+      <span>Strength Max</span>
+    </span>
+    <span class="asymmetry-legend-item">
+      <span class="asymmetry-legend-swatch load"></span>
+      <span>Training Load</span>
+    </span>
+  </div>
+  {% for pair in asymmetry_pairs %}
+  <div class="asymmetry-pair">
+    <h4 style="margin: .6rem 0 .3rem; font-size: 1.05rem;">
+      {{ pair.grip_name|display_name }} @ {{ pair.edge_mm }} mm {{ pair.dimension_name }}
+      {% if pair.asymmetry_warning %}<span class="pill asymmetry-warning-flag" data-combo="{{ pair.combo_key }}">⚠ asymmetry drift</span>{% endif %}
+    </h4>
+    <div class="asymmetry-chart" data-chart-asymmetry="{{ pair.combo_key }}" role="img" aria-label="Asymmetry trend for {{ pair.grip_name|display_name }} @ {{ pair.edge_mm }} mm"></div>
+    {% if pair.strength_trend %}
+    <p class="asymmetry-series-label muted">Strength Max Gap</p>
+    <details class="show-data">
+    <summary>Show data</summary>
+    <ul class="plain asymmetry-list">
+      {% for date, gap in pair.strength_trend %}
+      <li class="asymmetry-point" data-combo="{{ pair.combo_key }}" data-series="strength" data-date="{{ date }}" data-gap="{{ "%.1f"|format(gap) }}">
+        <span class="muted">{{ date|human_date }}</span>
+        <strong>{% if gap > 0 %}+{% endif %}{{ "%.1f"|format(gap) }}%</strong>
+        <span class="muted">{% if gap > 0 %}L stronger{% elif gap < 0 %}R stronger{% else %}Equal{% endif %}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    </details>
+    {% endif %}
+    {% if pair.load_trend %}
+    <p class="asymmetry-series-label muted">Training Load Gap</p>
+    <details class="show-data">
+    <summary>Show data</summary>
+    <ul class="plain asymmetry-list">
+      {% for date, gap in pair.load_trend %}
+      <li class="asymmetry-point" data-combo="{{ pair.combo_key }}" data-series="load" data-date="{{ date }}" data-gap="{{ "%.1f"|format(gap) }}">
+        <span class="muted">{{ date|human_date }}</span>
+        <strong>{% if gap > 0 %}+{% endif %}{{ "%.1f"|format(gap) }}%</strong>
+        <span class="muted">{% if gap > 0 %}L higher load{% elif gap < 0 %}R higher load{% else %}Equal{% endif %}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    </details>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+<script type="application/json" id="asymmetry-chart-data">{{ asymmetry_chart_data|tojson }}</script>
+{% endif %}
+{% if not asymmetry_pairs %}
+<div class="notice">
+  Nothing to compare yet — train or test both hands on the same grip and edge.
+</div>
+{% endif %}
+{% else %}
+{% if correlation and correlation.n > 0 %}
+<div class="card corr-card">
+  <h3>Strength ↔ boulder grade</h3>
+  {% if correlation.r is not none %}
+  <p class="corr-headline">
+    Strength and grade: <strong class="corr-r" data-r="{{ "%.2f"|format(correlation.r) }}" data-n="{{ correlation.n }}">{{ "%.2f"|format(correlation.r) }}</strong>
+    <span class="muted">across {{ correlation.n }} boulder sends</span>
+  </p>
+  <details class="show-data">
+  <summary>Show data</summary>
+  <ul class="plain corr-points">
+    {% for point in correlation.points %}
+    <li class="corr-point" data-date="{{ point.date }}" data-pct="{{ "%.3f"|format(point.pct_bodyweight) }}" data-grade="{{ point.grade_value }}">
+      <span class="muted">{{ point.date|human_date }}</span>
+      <span>{{ "%.0f"|format(point.pct_bodyweight * 100) }}% BW</span>
+      <strong>{{ point.grade }}</strong>
+    </li>
+    {% endfor %}
+  </ul>
+  </details>
+  <p class="muted corr-note">Near +1, your harder sends come with a stronger pull (as % of bodyweight); near 0, there's no clear link. <a class="about-link" href="/settings/about#correlation">About these numbers</a></p>
+  {% else %}
+  <p class="corr-headline muted">
+    {% if correlation.n < 8 %}
+    Log {{ 8 - correlation.n }} more boulder send{{ 's' if (8 - correlation.n) != 1 else '' }} to unlock strength vs. grade correlation.
+    {% else %}
+    Your strength or boulder grades haven't changed across these sends yet, so there's nothing to correlate.
+    {% endif %}
+  </p>
+  {% endif %}
+</div>
+{% endif %}
+{% if not correlation or correlation.n == 0 %}
+<div class="notice">
+  Nothing to correlate yet — log a max test, your bodyweight and a few boulder sends.
+</div>
+{% endif %}
+{% endif %}
+{% if (section == "volume" and combos) or (section == "balance" and asymmetry_pairs) %}
+<script src="/static/uplot.iife.min.js" defer></script>
+<script src="/static/dashboard-chart.js" defer></script>
+{% endif %}
+{% endblock %}

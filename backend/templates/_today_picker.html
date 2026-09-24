@@ -1,0 +1,30 @@
+{# Today's Change picker (#149) — replaces /session/new's form. "Use this"
+   re-renders Today for the chosen combo in place (htmx, no history entry;
+   a plain GET to / without JS). #}
+<section class="card today-card today-picker" id="today-picker">
+  <form method="get" action="/" class="today-picker-form"
+        hx-get="/" hx-select="#today-root" hx-target="#today-root" hx-swap="outerHTML">
+    <label>Grip type
+      <select name="grip_type_id" class="grip-select">
+        {% for grip in picker.grip_types %}
+        <option value="{{ grip.id }}"{% if grip.id == picker.selected_grip_type_id %} selected{% endif %} data-dimension-name="{{ grip.dimension_name }}">{{ grip.name|display_name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label><span class="dimension-label">Edge depth (mm)</span>
+      <input type="number" name="edge_mm" value="{{ picker.selected_edge_mm or "" }}" step="1" min="1" max="1000" inputmode="numeric" required>
+    </label>
+    <div class="today-picker-actions">
+      <a class="btn btn-secondary" href="/" data-picker-close>Cancel</a>
+      <button type="submit">Use this</button>
+    </div>
+  </form>
+  {% if view.next_session_number_today and picker.selected_grip_type_id and picker.selected_edge_mm %}
+  <form method="get" action="/session/play" class="today-second-form">
+    <input type="hidden" name="grip_type_id" value="{{ picker.selected_grip_type_id }}">
+    <input type="hidden" name="edge_mm" value="{{ picker.selected_edge_mm }}">
+    <input type="hidden" name="date" value="{{ view.today }}" class="local-date-default">
+    <button type="submit" name="session_number" value="{{ view.next_session_number_today }}" class="btn-secondary start-second-session">Start a second session today</button>
+  </form>
+  {% endif %}
+</section>

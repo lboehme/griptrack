@@ -15,11 +15,12 @@ object SessionLifecycleHelper {
 
     const val HOME_PATH = "/"
 
+    // Tab bar (#149): Today (/), Progress, Settings. Progress (#150) and
+    // Settings (#151) are real pages; /dashboard, /history, /profile and
+    // /plates only 303 into them now, so they're no longer roots.
     val TAB_ROOTS = setOf(
-        "/session/new",
-        "/dashboard",
-        "/climbs",
-        "/profile"
+        "/progress",
+        "/settings"
     )
 
     val NON_RESTORABLE_SESSION_PATHS = setOf(
@@ -93,7 +94,7 @@ object SessionLifecycleHelper {
      * on process resurrection or recreation.
      *
      * Only active `/session/...` pages (e.g. warmup, worksets) are restored.
-     * Tab roots like `/session/new`, auth pages, and POST actions are rejected.
+     * Tab roots, the retired `/session/new`, auth pages, and POST actions are rejected.
      */
     fun isRestorableSessionPath(pathAndQuery: String?): Boolean {
         if (pathAndQuery.isNullOrBlank()) return false

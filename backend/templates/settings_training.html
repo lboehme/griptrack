@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Training — GripTrack{% endblock %}
+{% block content %}
+{% with heading="Training", sub="Session defaults. Changes save as you make them." %}{% include "_settings_head.html" %}{% endwith %}
+
+<form class="card settings-form" method="post" action="/profile"
+      hx-post="/profile" hx-trigger="change, submit" hx-target="#log-sheet-slot" hx-swap="innerHTML">
+  <fieldset class="settings-fieldset">
+    <legend class="overline">Hand order</legend>
+    <div class="settings-choices" role="radiogroup" aria-label="Hand order">
+      {% for value, label, hint in [
+        ("alternating", "Alternating", "Both hands side by side, set by set"),
+        ("sequential", "One hand, then the other", "All sets on one hand, then the other"),
+      ] %}
+      <label class="chip settings-choice">
+        <input type="radio" name="hand_order_pref" value="{{ value }}" class="chip-radio"{% if user.hand_order_pref == value %} checked{% endif %}>
+        <span class="chip-face"><strong>{{ label }}</strong><small>{{ hint }}</small></span>
+      </label>
+      {% endfor %}
+    </div>
+  </fieldset>
+  <noscript><button type="submit" class="btn-secondary">Save hand order</button></noscript>
+</form>
+
+<form class="card settings-form" method="post" action="/profile/protocol"
+      hx-post="/profile/protocol" hx-trigger="change, submit" hx-target="#log-sheet-slot" hx-swap="innerHTML">
+  <p class="overline">Work sets</p>
+  <div class="form-row">
+    <label>Rep target
+      <input type="number" name="base_work_set_reps" value="{{ protocol.base_work_set_reps }}" min="1" max="30" inputmode="numeric" required>
+    </label>
+    <label>Rest (seconds)
+      <input type="number" name="default_rest_seconds" value="{{ protocol.default_rest_seconds }}" min="15" max="1800" inputmode="numeric" required>
+    </label>
+  </div>
+  <noscript><button type="submit" class="btn-secondary">Save session defaults</button></noscript>
+</form>
+{% endblock %}

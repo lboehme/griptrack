@@ -1,0 +1,86 @@
+{% set w = warmup %}
+{% if w.nudge %}
+<div class="notice nudge-banner nudge-{{ w.nudge.type }}" data-nudge="{{ w.nudge.type }}">
+  <div class="nudge-content">
+    <span>{{ w.nudge.message }}</span>
+    <a class="nudge-link btn btn-secondary" href="/max-tests/guided?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}{% if w.nudge.hands|length == 1 %}&amp;hand={{ w.nudge.hands[0] }}{% endif %}">Run guided max test</a>
+  </div>
+  <button type="button" class="nudge-dismiss-btn" aria-label="Dismiss" onclick="this.closest('.nudge-banner').remove()">✕</button>
+</div>
+{% endif %}
+
+{% if w.untested_hands %}
+<div class="notice">
+  No max-weight test yet for your
+  <strong>{{ w.untested_hands|map('display_name')|join(" and ") }}</strong> hand on this grip/edge.
+  Run a guided max test below — or enter an estimated max to warm up with
+  for this session only.
+</div>
+{% for hnd in w.untested_hands %}
+<div class="card">
+  <a class="btn btn-secondary" href="/max-tests/guided?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}&amp;hand={{ hnd }}">Run guided max test — {{ hnd|display_name }} hand</a>
+  <form method="post" action="/session/estimate" class="estimate-form" data-hand="{{ hnd }}">
+    <input type="hidden" name="grip_type_id" value="{{ grip.id }}">
+    <input type="hidden" name="edge_mm" value="{{ edge_mm }}">
+    <input type="hidden" name="date" value="{{ date }}">
+    <input type="hidden" name="hand" value="{{ hnd }}">
+    {% if session_number %}<input type="hidden" name="session_number" value="{{ session_number }}">{% endif %}
+    {% if sets_init %}<input type="hidden" name="sets" value="{{ sets_init }}">{% endif %}
+    <label class="mini">Estimated max for this session — {{ hnd|display_name }} hand ({{ user.unit_pref }})
+      <input type="number" name="weight" step="0.25" min="0.25" required>
+    </label>
+    <button type="submit" hx-post="/session/estimate" hx-include="closest form" hx-target="#play-root" hx-swap="innerHTML">Use estimate</button>
+  </form>
+</div>
+{% endfor %}
+{% endif %}
+
+{% if w.planned_hands and w.steps and w.current_step <= w.steps|length %}
+{% set idx = w.current_step - 1 %}
+{% set rung = w.steps[idx] %}
+<div class="rung-percent">{{ rung.percent }}%</div>
+<p class="rung-caption muted">of your current max · rung {{ w.current_step }} of {{ w.steps|length }}</p>
+
+<div class="rung-tiles{% if w.planned_hands|length == 1 %} rung-tiles-single{% endif %}">
+  {% for hnd in w.planned_hands %}
+  {% set check_id = "play-check-" ~ hnd ~ "-" ~ idx %}
+  <div class="glass strong rung-tile{% if (hnd, idx) in w.checks %} on{% endif %}" data-hand="{{ hnd }}">
+    <div class="rung-tile-top">
+      <span class="hand-badge hand-badge-{{ hnd }}">{{ hnd[0]|upper }}</span>
+      <form method="post" action="/session/check" class="rung-tick">
+        <input type="hidden" name="grip_type_id" value="{{ grip.id }}">
+        <input type="hidden" name="edge_mm" value="{{ edge_mm }}">
+        <input type="hidden" name="date" value="{{ date }}">
+        <input type="hidden" name="hand" value="{{ hnd }}">
+        {% if session_number %}<input type="hidden" name="session_number" value="{{ session_number }}">{% endif %}
+        {% if sets_init %}<input type="hidden" name="sets" value="{{ sets_init }}">{% endif %}
+        <input type="hidden" name="step_index" value="{{ idx }}">
+        <input type="checkbox" id="{{ check_id }}" class="step-check" data-hand="{{ hnd }}" data-step="{{ idx }}"{% if (hnd, idx) in w.checks %} checked{% endif %} aria-label="{{ hnd|display_name }} hand done" hx-post="/session/check" hx-include="closest form" hx-target="#play-root" hx-swap="innerHTML" hx-trigger="change">
+      </form>
+    </div>
+    <div class="rung-tile-weight">{{ w.plans[hnd][idx]["weight"] }}<span class="rung-unit">{{ user.unit_pref }}</span></div>
+    {% set breakdown = plate_breakdown(w.plans[hnd][idx]["weight"], inventory) %}
+    {% if breakdown %}
+    <div class="rung-tile-plates muted">Pin{% for p in breakdown %} + {{ p|num_trim }}{% endfor %}</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+<div class="rung-next-list muted">
+  {% for nxt in w.steps[idx + 1: idx + 3] %}
+  <span>Next · {{ nxt.percent }}%</span>
+  {% endfor %}
+</div>
+
+<form method="post" action="/session/rung-done" class="play-primary-form">
+  <input type="hidden" name="grip_type_id" value="{{ grip.id }}">
+  <input type="hidden" name="edge_mm" value="{{ edge_mm }}">
+  <input type="hidden" name="date" value="{{ date }}">
+  <input type="hidden" name="hand" value="{{ hand }}">
+  {% if session_number %}<input type="hidden" name="session_number" value="{{ session_number }}">{% endif %}
+  {% if sets_init %}<input type="hidden" name="sets" value="{{ sets_init }}">{% endif %}
+  <input type="hidden" name="step_index" value="{{ idx }}">
+  <button type="submit" class="btn play-primary-btn" hx-post="/session/rung-done" hx-include="closest form" hx-target="#play-root" hx-swap="innerHTML">Rung done</button>
+</form>
+{% endif %}

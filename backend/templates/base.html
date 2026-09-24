@@ -15,6 +15,8 @@
   <link rel="stylesheet" href="/static/app.css">
   <script src="/static/htmx.min.js" defer></script>
   <script src="/static/client-date.js" defer></script>
+  <script src="/static/steppers.js" defer></script>
+  <script src="/static/log-sheet.js" defer></script>
   {% if not webview_build %}
   <script src="/static/register-sw.js" defer></script>
   {% endif %}
@@ -22,6 +24,7 @@
 </head>
 <body>
   {% include "_topo_map.html" %}
+  {% if not hide_chrome %}
   <header class="app-header glass-bar">
     <h1 class="wordmark"><a href="/">GripTrack<span class="dot">.</span></a></h1>
     {% if user is defined and user and not webview_build %}
@@ -30,33 +33,41 @@
     </form>
     {% endif %}
   </header>
-  <main class="app-main">
+  {% endif %}
+  <main class="app-main{% if hide_chrome %} app-main-play{% endif %}{% if hide_tabbar %} app-main-no-tabbar{% endif %}">
     {% block content %}{% endblock %}
   </main>
-  {% if user is defined and user %}
+  {% if user is defined and user and not hide_chrome %}
+  {# The ＋ Log sheet's slot (#149): htmx swaps the sheet (or, after a save,
+     a toast) in here from any tab-bar page; `/?log=<tab>` renders it
+     server-side for the no-JS path. #}
+  <div id="log-sheet-slot" class="log-sheet-slot">
+    {%- if sheet is defined and sheet %}{% include "_log_sheet.html" %}{% endif -%}
+    {%- if toast is defined and toast %}{% include "_log_toast.html" %}{% endif -%}
+  </div>
+  {% if not hide_tabbar %}
   {% set path = request.url.path %}
-  <nav class="tabbar glass-bar">
-    <a href="/" {% if path == "/" %}class="active"{% endif %}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5V21h-6v-6h-6v6H3z"/></svg>
-      Home
+  <nav class="tabbar glass-bar tab-bar" aria-label="Main">
+    <a class="tab-item{% if path == "/" %} active{% endif %}" href="/"{% if path == "/" %} aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/></svg>
+      Today
     </a>
-    <a href="/session/new" {% if path.startswith("/session") %}class="active"{% endif %}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>
-      Session
+    {% set on_progress = path.startswith("/progress") or path.startswith("/max-tests") %}
+    <a class="tab-item{% if on_progress %} active{% endif %}" href="/progress"{% if on_progress %} aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19 10 12l4 4 6-8"/></svg>
+      Progress
     </a>
-    <a href="/dashboard" {% if path.startswith("/dashboard") %}class="active"{% endif %}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19 10 12l4 4 6-8"/><circle cx="10" cy="12" r="1.2"/><circle cx="14" cy="16" r="1.2"/></svg>
-      Trends
+    <a class="tab-item tabbar-log" href="/?log=climb" hx-get="/log/sheet?tab=climb" hx-target="#log-sheet-slot" hx-swap="innerHTML" aria-haspopup="dialog">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 6v12M6 12h12"/></svg>
+      Log
     </a>
-    <a href="/climbs" {% if path.startswith("/climbs") %}class="active"{% endif %}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 20 10 8l4 6 3-4 4 10H3z"/></svg>
-      Climbs
-    </a>
-    <a href="/profile" {% if path.startswith("/profile") or path.startswith("/plates") %}class="active"{% endif %}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></svg>
-      Profile
+    {% set on_settings = path.startswith("/settings") or path.startswith("/profile") or path.startswith("/plates") %}
+    <a class="tab-item{% if on_settings %} active{% endif %}" href="/settings"{% if on_settings %} aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+      Settings
     </a>
   </nav>
+  {% endif %}
   {% endif %}
 </body>
 </html>

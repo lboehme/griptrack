@@ -1,8 +1,15 @@
+"""The old Profile page's endpoints (#151: the page itself is now Settings).
+
+The POST URLs are unchanged -- Settings' forms post here -- and answer via
+`saved_response`: the "Saved ✓" toast for htmx autosave, else a 303 back
+to the matching settings page.
+"""
+
 from datetime import date as date_type
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from backend import archive, auth, training_log
 from backend.db import get_session
@@ -14,6 +21,7 @@ from backend.limits import (
     MAX_REP_MIN,
     MAX_REP_TARGET,
     MAX_REST_SECONDS,
+    MAX_ROW_ID,
     MAX_WEIGHT,
     MIN_MAX_SETS,
     MIN_REP_MAX,
@@ -21,114 +29,74 @@ from backend.limits import (
     MIN_REP_TARGET,
     MIN_REST_SECONDS,
 )
-from backend.models import (
-    VALID_PROGRESSION_PATHS,
-    BodyWeightLog,
-    GripType,
-    TrainingProtocol,
-    User,
-)
-from backend.templating import templates
+from backend.models import VALID_HAND_ORDER_PREFS, VALID_PROGRESSION_PATHS, User
+from backend.routers.settings import saved_response
 
 router = APIRouter()
 
 
 @router.get("/profile")
-def profile(
-    request: Request,
-    user: User = Depends(auth.current_user),
-    session: Session = Depends(get_session),
-):
-    all_settings = training_log.list_progression_settings(session, user)
-    combo_progressions = [
-        ps for ps in all_settings if ps.grip_type_id is not None and ps.edge_mm is not None
-    ]
-    return templates.TemplateResponse(
-        request,
-        "profile.html",
-        {
-            "user": user,
-            "protocol": training_log.get_protocol(session, user),
-            "current_bodyweight": training_log.bodyweight_at(session, user),
-            "today": date_type.today().isoformat(),
-            "default_progression": training_log.get_progression_settings(session, user),
-            "combo_progressions": combo_progressions,
-            "grip_types": session.exec(select(GripType).order_by(GripType.name)).all(),
-            "grip_names": training_log.grip_names(session),
-            "grip_dimension_names": training_log.grip_dimension_names(session),
-        },
-    )
+def profile(user: User = Depends(auth.current_user)):
+    """The old Profile page moved into Settings (#151)."""
+    return RedirectResponse("/settings", status_code=303)
 
 
 @router.post("/profile/bodyweight")
 def log_bodyweight(
+    request: Request,
     date: date_type = Form(),
     weight: float = Form(gt=0, le=MAX_WEIGHT),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
-    session.add(BodyWeightLog(user_id=user.id, date=date, weight=weight))
-    session.commit()
-    return RedirectResponse("/profile", status_code=303)
+    training_log.log_bodyweight(session, user, date, weight)
+    return saved_response(request, "bodyweight")
 
 
 @router.post("/profile/name")
 def update_name(
+    request: Request,
     name: str | None = Form(default=None, max_length=MAX_NAME_LENGTH),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
-    user.name = auth.normalize_name(name)
-    session.add(user)
-    session.commit()
-    return RedirectResponse("/profile", status_code=303)
+    auth.set_display_name(session, user, name)
+    return saved_response(request, "name")
 
 
 @router.post("/profile")
 def update_profile(
+    request: Request,
     hand_order_pref: str = Form(),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
-    if hand_order_pref not in ("alternating", "sequential"):
+    if hand_order_pref not in VALID_HAND_ORDER_PREFS:
         return HTMLResponse("Invalid hand order preference.", status_code=400)
-    user.hand_order_pref = hand_order_pref
-    session.add(user)
-    session.commit()
-    return RedirectResponse("/profile", status_code=303)
+    training_log.set_hand_order(session, user, hand_order_pref)
+    return saved_response(request, "training")
 
 
 @router.post("/profile/protocol")
 def update_protocol(
+    request: Request,
     base_work_set_reps: int = Form(ge=MIN_REP_TARGET, le=MAX_REP_TARGET),
     default_rest_seconds: int = Form(ge=MIN_REST_SECONDS, le=MAX_REST_SECONDS),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
-    protocol = session.exec(
-        select(TrainingProtocol).where(TrainingProtocol.user_id == user.id)
-    ).first()
-    if protocol is None:
-        protocol = TrainingProtocol(
-            user_id=user.id,
-            base_work_set_reps=base_work_set_reps,
-            default_rest_seconds=default_rest_seconds,
-        )
-    else:
-        protocol.base_work_set_reps = base_work_set_reps
-        protocol.default_rest_seconds = default_rest_seconds
-    session.add(protocol)
-    session.commit()
-    return RedirectResponse("/profile", status_code=303)
+    training_log.save_protocol(session, user, base_work_set_reps, default_rest_seconds)
+    return saved_response(request, "training")
 
 
 @router.post("/profile/progression")
 def update_progression(
+    request: Request,
     path: str = Form(default="weight"),
     rep_min: int = Form(ge=MIN_REP_MIN, le=MAX_REP_MIN),
     rep_max: int = Form(ge=MIN_REP_MAX, le=MAX_REP_MAX),
     max_sets: int = Form(ge=MIN_MAX_SETS, le=MAX_MAX_SETS),
-    grip_type_id: int | None = Form(default=None),
+    grip_type_id: int | None = Form(default=None, ge=1, le=MAX_ROW_ID),
     edge_mm: int | None = Form(default=None, gt=0, le=MAX_EDGE_MM),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
@@ -155,18 +123,19 @@ def update_progression(
         grip_type_id=grip_type_id,
         edge_mm=edge_mm,
     )
-    return RedirectResponse("/profile", status_code=303)
+    return saved_response(request, "override" if grip_type_id is not None else "progression")
 
 
 @router.post("/profile/progression/delete")
 def delete_progression(
-    grip_type_id: int = Form(),
+    request: Request,
+    grip_type_id: int = Form(ge=1, le=MAX_ROW_ID),
     edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
     training_log.delete_progression_settings(session, user, grip_type_id, edge_mm)
-    return RedirectResponse("/profile", status_code=303)
+    return saved_response(request, "override-removed")
 
 
 @router.get("/profile/export")
@@ -185,6 +154,7 @@ def export_data(
 
 @router.post("/profile/import")
 async def import_data(
+    request: Request,
     archive_file: UploadFile = File(..., alias="archive"),
     confirm: str | None = Form(default=None),
     user: User = Depends(auth.current_user),
@@ -206,4 +176,4 @@ async def import_data(
     except archive.ArchiveError as error:
         return HTMLResponse(str(error), status_code=400)
 
-    return RedirectResponse("/profile", status_code=303)
+    return saved_response(request, "restored")

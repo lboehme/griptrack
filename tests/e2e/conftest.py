@@ -85,6 +85,42 @@ def live_server():
     thread.join(timeout=5)
 
 
+def seed_max_tests(page, live_server, hands=("left", "right")):
+    """Log a 40 kg max test for each hand on half crimp / 20 mm, so
+    /session/play lands straight on the warmup rung step instead of the
+    untested-hand estimate cards."""
+    for hand in hands:
+        page.goto(f"{live_server}/progress/maxes")
+        form = page.locator('form[action="/max-tests"]')
+        form.locator(f'input[name="hand"][value="{hand}"]').check()
+        form.locator("select.grip-select").select_option(label=["Half crimp", "half crimp"])
+        form.locator('input[name="edge_mm"]').fill("20")
+        form.locator('input[name="weight"]').fill("40")
+        form.locator('button[type="submit"]').click()
+
+
+def start_session_play(page, live_server):
+    """Seed both hands' max tests and start a session from Today (#149 --
+    the plan defaults to the last-tested combo, half crimp / 20 mm),
+    landing on /session/play's first warmup rung step."""
+    seed_max_tests(page, live_server)
+    page.goto(f"{live_server}/")
+    page.get_by_role("button", name="Start session").click()
+    page.wait_for_url("**/session/play**")
+
+
+def advance_to_worksets(page, max_rungs=8):
+    """From a warmup rung step, click "Rung done" until the work-set step's
+    hand cards appear (session play, #146: no more "Continue to work sets"
+    link -- the ramp is entirely rung-by-rung)."""
+    for _ in range(max_rungs):
+        if page.locator(".hand-card").count() > 0:
+            return
+        page.get_by_role("button", name="Rung done").click()
+        page.wait_for_timeout(200)
+    assert page.locator(".hand-card").count() > 0, "Never reached the work-set step"
+
+
 @pytest.fixture
 def authenticated_page(live_server, page):
     """A Playwright `page` logged in as a freshly-registered user, sitting

@@ -4,7 +4,7 @@ import re
 
 from backend.models import VALID_PROGRESSION_PATHS, ProgressionSettings
 from tests.helpers import (
-    get_session_page,
+    complete_warmup,
     grip_type_id,
     log_max_test,
     register,
@@ -13,16 +13,14 @@ from tests.helpers import (
 
 
 def worksets_page(client, grip="half crimp", edge_mm=20, date="2026-07-04", hand=None, session_number=None):
-    params = {
-        "grip_type_id": grip_type_id(client, grip),
-        "edge_mm": edge_mm,
-        "date": date,
-    }
-    if hand is not None:
-        params["hand"] = hand
-    if session_number is not None:
-        params["session_number"] = session_number
-    return get_session_page(client, "/session/worksets", params)
+    """The work-set step for a combo/date, advancing through any unticked
+    warmup rungs first (session play, #146: /session/play always renders
+    whichever step is next, and a brand-new session's date starts on
+    warmup)."""
+    grip_id = grip_type_id(client, grip)
+    return complete_warmup(
+        client, grip_id, edge_mm, date=date, hand=hand, session_number=session_number
+    )
 
 
 def current_set_weight_input(page_text: str, hand: str) -> str | None:
@@ -90,15 +88,17 @@ def test_rpe_trigger_ready_when_two_sessions_hit_target_at_rpe_le_7(client):
     assert right_hint is not None
     assert "40.5" in right_hint
 
-    # Stepper values remain untouched at 40.0 (never pre-filled with suggestion)
-    assert current_set_weight_input(page.text, "left") == "40.0"
-    assert current_set_weight_input(page.text, "right") == "40.0"
+    # ADR-0011 amendment (PR #154 review D1): set 1 starts at Today's plan,
+    # which is the suggestion when it's ready.
+    assert current_set_weight_input(page.text, "left") == "40.5"
+    assert current_set_weight_input(page.text, "right") == "40.5"
 
 
 def test_rpe_trigger_hold_when_rpe_ge_9(client):
     """When any working set in last 2 sessions has RPE >= 9.0, suggestion is withheld (silent)."""
     register(client)
     log_max_test(client, "left", "half crimp", 20, "2026-06-01", "40.0")
+    log_max_test(client, "right", "half crimp", 20, "2026-06-01", "40.0")
 
     # Session 1: all RPE 7.0
     for s in range(1, 4):
@@ -118,6 +118,7 @@ def test_rpe_trigger_hold_when_below_target_reps(client):
     """When any working set misses the rep target, suggestion is withheld (silent)."""
     register(client)
     log_max_test(client, "left", "half crimp", 20, "2026-06-01", "40.0")
+    log_max_test(client, "right", "half crimp", 20, "2026-06-01", "40.0")
 
     # Session 1: all 5 reps @ 7.0
     for s in range(1, 4):
@@ -137,6 +138,7 @@ def test_rpe_trigger_ineligible_when_any_workset_missing_rpe(client):
     """When any working set is logged without RPE, session is ineligible (silent)."""
     register(client)
     log_max_test(client, "left", "half crimp", 20, "2026-06-01", "40.0")
+    log_max_test(client, "right", "half crimp", 20, "2026-06-01", "40.0")
 
     # Session 1: all RPE 7.0
     for s in range(1, 4):
@@ -156,6 +158,7 @@ def test_rpe_trigger_ineligible_with_fewer_than_two_sessions(client):
     """Only 1 prior session -> ineligible / silent."""
     register(client)
     log_max_test(client, "left", "half crimp", 20, "2026-06-01", "40.0")
+    log_max_test(client, "right", "half crimp", 20, "2026-06-01", "40.0")
 
     for s in range(1, 4):
         save_work_set(client, "left", s, "40.0", "5", rpe="7.0", date="2026-07-01")
@@ -188,6 +191,7 @@ def test_deload_sessions_are_excluded_from_two_session_window(client):
     """Deload sessions are excluded when determining the last 2 sessions."""
     register(client)
     log_max_test(client, "left", "half crimp", 20, "2026-06-01", "40.0")
+    log_max_test(client, "right", "half crimp", 20, "2026-06-01", "40.0")
 
     # Session 1 (2026-07-01): non-deload, 40kg x 5 @ 7.0
     for s in range(1, 4):
@@ -217,6 +221,7 @@ def test_multi_session_days_count_as_distinct_sessions(client):
     """Two same-day sessions count as two distinct sessions for the 2-session window."""
     register(client)
     log_max_test(client, "left", "half crimp", 20, "2026-06-01", "40.0")
+    log_max_test(client, "right", "half crimp", 20, "2026-06-01", "40.0")
 
     # Morning session (session_number=1) on 2026-07-01
     for s in range(1, 4):
@@ -238,6 +243,7 @@ def test_progression_settings_target_reps_override_respected(client):
     register(client)
     gid = grip_type_id(client, "half crimp")
     log_max_test(client, "left", "half crimp", 20, "2026-06-01", "40.0")
+    log_max_test(client, "right", "half crimp", 20, "2026-06-01", "40.0")
 
     # Set combo rep target to 8 reps
     client.post(
@@ -266,6 +272,7 @@ def test_custom_plate_inventory_increment_in_suggestion(client):
     """Suggestion computes increment according to user loadable ladder."""
     register(client)
     log_max_test(client, "left", "half crimp", 20, "2026-06-01", "20.0")
+    log_max_test(client, "right", "half crimp", 20, "2026-06-01", "20.0")
 
     # Clear small plates and set only 5.0kg plates
     client.post("/plates", data={"weight": "0.5", "count": 0})
@@ -292,6 +299,7 @@ def test_set_progression_add_set_under_cap(client):
     register(client)
     gid = grip_type_id(client, "half crimp")
     log_max_test(client, "left", "half crimp", 20, "2026-06-01", "40.0")
+    log_max_test(client, "right", "half crimp", 20, "2026-06-01", "40.0")
 
     client.post(
         "/profile/progression",
@@ -319,6 +327,7 @@ def test_set_progression_at_cap_suggests_add_weight_and_reset_no_autoswitch(clie
     register(client)
     gid = grip_type_id(client, "half crimp")
     log_max_test(client, "left", "half crimp", 20, "2026-06-01", "40.0")
+    log_max_test(client, "right", "half crimp", 20, "2026-06-01", "40.0")
 
     client.post(
         "/profile/progression",
@@ -339,10 +348,10 @@ def test_set_progression_at_cap_suggests_add_weight_and_reset_no_autoswitch(clie
     # Stepper values remain untouched at 40.0
     assert current_set_weight_input(page.text, "left") == "40.0"
 
-    # Verify no auto-switch: profile still shows path="set"
-    prof_resp = client.get("/profile")
+    # Verify no auto-switch: Settings → Progression still shows the combo on "set"
+    prof_resp = client.get("/settings/progression")
     assert prof_resp.status_code == 200
-    assert 'value="set"' in prof_resp.text
+    assert "Add a set · 5–5 reps" in prof_resp.text
 
 
 def test_double_progression_rep_build_increments(client):
@@ -350,6 +359,7 @@ def test_double_progression_rep_build_increments(client):
     register(client)
     gid = grip_type_id(client, "half crimp")
     log_max_test(client, "left", "half crimp", 20, "2026-06-01", "40.0")
+    log_max_test(client, "right", "half crimp", 20, "2026-06-01", "40.0")
 
     client.post(
         "/profile/progression",
@@ -391,6 +401,7 @@ def test_double_progression_advances_when_recent_sessions_differ(client):
     register(client)
     gid = grip_type_id(client, "half crimp")
     log_max_test(client, "left", "half crimp", 20, "2026-06-01", "40.0")
+    log_max_test(client, "right", "half crimp", 20, "2026-06-01", "40.0")
 
     client.post(
         "/profile/progression",
@@ -420,6 +431,7 @@ def test_double_progression_ceiling_transitions_to_weight_build(client):
     register(client)
     gid = grip_type_id(client, "half crimp")
     log_max_test(client, "left", "half crimp", 20, "2026-06-01", "40.0")
+    log_max_test(client, "right", "half crimp", 20, "2026-06-01", "40.0")
 
     client.post(
         "/profile/progression",
@@ -439,8 +451,8 @@ def test_double_progression_ceiling_transitions_to_weight_build(client):
     assert "40.5" in hint
     assert "+0.5" in hint
 
-    # Steppers remain untouched
-    assert current_set_weight_input(page.text, "left") == "40.0"
+    # Set 1 starts at Today's plan -- the suggestion (ADR-0011 amendment).
+    assert current_set_weight_input(page.text, "left") == "40.5"
 
 
 def test_double_progression_weight_build_continues_above_min(client):
@@ -449,6 +461,7 @@ def test_double_progression_weight_build_continues_above_min(client):
     register(client)
     gid = grip_type_id(client, "half crimp")
     log_max_test(client, "left", "half crimp", 20, "2026-06-01", "40.0")
+    log_max_test(client, "right", "half crimp", 20, "2026-06-01", "40.0")
 
     client.post(
         "/profile/progression",
@@ -493,6 +506,7 @@ def test_double_progression_reset_to_baseline_when_reps_fall_to_min(client):
     register(client)
     gid = grip_type_id(client, "half crimp")
     log_max_test(client, "left", "half crimp", 20, "2026-06-01", "40.0")
+    log_max_test(client, "right", "half crimp", 20, "2026-06-01", "40.0")
 
     client.post(
         "/profile/progression",
@@ -531,6 +545,7 @@ def test_double_progression_rpe_backstop_holds(client):
     register(client)
     gid = grip_type_id(client, "half crimp")
     log_max_test(client, "left", "half crimp", 20, "2026-06-01", "40.0")
+    log_max_test(client, "right", "half crimp", 20, "2026-06-01", "40.0")
 
     client.post(
         "/profile/progression",
@@ -585,6 +600,7 @@ def test_double_progression_derived_from_history_reflects_edits(client):
     register(client)
     gid = grip_type_id(client, "half crimp")
     log_max_test(client, "left", "half crimp", 20, "2026-06-01", "40.0")
+    log_max_test(client, "right", "half crimp", 20, "2026-06-01", "40.0")
 
     client.post(
         "/profile/progression",

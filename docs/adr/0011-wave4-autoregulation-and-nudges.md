@@ -103,3 +103,20 @@ dismissal state), and never mutates the user's entered values or CurrentMax.**
   `backend/analytics.py`, tunable without touching call sites.
 - Rest-gap analytics remain deferred: `TrainingSession.started_at` still exists
   for that future, but no per-set rest duration is stored yet.
+
+## Amendment (2026-09-24): set 1 starts at Today's plan
+
+Owner decision D1 in the PR #154 review amends user story 12 ("a suggestion
+never pre-fills my stepper") and the "never pre-fills the stepper" line above.
+Since the redesign (PRD #142), Today shows a plan whose per-hand weight is the
+autoregulation suggestion when it's ready (else the last session's top
+weight, else CurrentMax, with Go lighter's 85% round-down), and the user
+starts the session from that card. **Tapping Start counts as accepting the
+plan**: when a hand has no saved set in the session yet, session play
+pre-fills set 1 with exactly the weight and reps Today showed. It's one
+derivation (`backend.plan.combo_plan`) read by both screens, seeded
+server-side so a resume or reload gets the same numbers. Carry-down from the
+previous set still wins for sets 2+, the steppers stay adjustable, and the
+inline hint on the work-set card stays text only. The system still never
+changes a logged value or CurrentMax, and still never suggests a lower
+weight on its own: the only reduction is Go lighter, which the user taps.

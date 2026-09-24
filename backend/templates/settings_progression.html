@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Progression — GripTrack{% endblock %}
+{% block content %}
+{% with heading="Progression", sub="What the next-step suggestion adds once a combo feels easy (RPE 7 or less, two sessions running)." %}{% include "_settings_head.html" %}{% endwith %}
+{% set d = view.default %}
+{% macro path_options(selected) %}
+  {% for value, label in [
+    ("weight", "Add weight — the next loadable step"),
+    ("set", "Add a set — up to your set cap"),
+    ("double", "Reps, then weight — across your rep range"),
+  ] %}
+  <option value="{{ value }}"{% if value == selected %} selected{% endif %}>{{ label }}</option>
+  {% endfor %}
+{% endmacro %}
+
+<form class="card settings-form" method="post" action="/profile/progression"
+      hx-post="/profile/progression" hx-trigger="change, submit" hx-target="#log-sheet-slot" hx-swap="innerHTML">
+  <p class="overline">Default for every combo</p>
+  <label>Progression path
+    <select name="path">{{ path_options(d.path) }}</select>
+  </label>
+  <div class="form-row form-row-3">
+    <label>Rep min
+      <input type="number" name="rep_min" value="{{ d.rep_min }}" min="1" max="30" inputmode="numeric" required>
+    </label>
+    <label>Rep max
+      <input type="number" name="rep_max" value="{{ d.rep_max }}" min="1" max="30" inputmode="numeric" required>
+    </label>
+    <label>Max sets
+      <input type="number" name="max_sets" value="{{ d.max_sets }}" min="1" max="30" inputmode="numeric" required>
+    </label>
+  </div>
+  <noscript><button type="submit" class="btn-secondary">Save default progression</button></noscript>
+</form>
+
+<section class="settings-group" aria-labelledby="overrides-heading">
+  <p class="overline" id="overrides-heading">Per-combo overrides</p>
+  {% if view.overrides %}
+  <ul class="plain card settings-rows combo-progressions">
+    {% for o in view.overrides %}
+    <li class="settings-row combo-progression" data-grip-type-id="{{ o.grip_type_id }}" data-edge-mm="{{ o.edge_mm }}">
+      <span class="settings-label"><strong>{{ o.grip_name|display_name }} · {{ o.edge_mm }} mm</strong>
+        <small>{{ o.path }} · {{ o.rep_min }}–{{ o.rep_max }} reps · up to {{ o.max_sets }} sets</small></span>
+      <form method="post" action="/profile/progression/delete" class="settings-inline-form">
+        <input type="hidden" name="grip_type_id" value="{{ o.grip_type_id }}">
+        <input type="hidden" name="edge_mm" value="{{ o.edge_mm }}">
+        <button type="submit" class="btn-secondary settings-small-btn" aria-label="Remove override for {{ o.grip_name|display_name }} {{ o.edge_mm }} mm">Remove</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted settings-note">No overrides — every combo uses the default above.</p>
+  {% endif %}
+
+  <details class="card settings-add">
+    <summary>＋ Add an override</summary>
+    <form method="post" action="/profile/progression" class="settings-add-form">
+      <div class="form-row">
+        <label>Grip
+          <select name="grip_type_id" required class="grip-select">
+            {% for g in view.grip_types %}
+            <option value="{{ g.id }}" data-dimension-name="{{ g.dimension_name }}">{{ g.name|display_name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Edge / width (mm)
+          <input type="number" name="edge_mm" min="1" max="1000" placeholder="20" inputmode="numeric" required>
+        </label>
+      </div>
+      <label>Progression path
+        <select name="path">{{ path_options(none) }}</select>
+      </label>
+      <div class="form-row form-row-3">
+        <label>Rep min
+          <input type="number" name="rep_min" value="5" min="1" max="30" inputmode="numeric" required>
+        </label>
+        <label>Rep max
+          <input type="number" name="rep_max" value="5" min="1" max="30" inputmode="numeric" required>
+        </label>
+        <label>Max sets
+          <input type="number" name="max_sets" value="6" min="1" max="30" inputmode="numeric" required>
+        </label>
+      </div>
+      <button type="submit" class="btn-secondary">Save override</button>
+    </form>
+  </details>
+</section>
+{% endblock %}

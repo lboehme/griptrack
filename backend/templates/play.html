@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}{{ step.title }} — GripTrack{% endblock %}
+{% block content %}
+<div id="play-root"
+     data-grip-type-id="{{ grip.id }}"
+     data-edge-mm="{{ edge_mm }}"
+     data-date="{{ date }}"
+     data-hand="{{ hand }}"
+     data-session-number="{{ session_number or '' }}">
+{% include "_play_fragment.html" %}
+</div>
+{% endblock %}

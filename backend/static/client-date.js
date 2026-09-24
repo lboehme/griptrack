@@ -19,19 +19,39 @@
 
   window.GripTrackClientDate = { localISODate: localISODate };
 
-  document.addEventListener("DOMContentLoaded", function () {
+  function apply(root) {
     var today = localISODate();
 
-    document.querySelectorAll("input[type=date].local-date-default").forEach(
-      function (input) {
-        input.value = today;
-      }
-    );
+    // Visible date inputs and hidden ones (Today's Start form, the ＋ Log
+    // sheet) alike -- but only while still pristine: once filled (or edited
+    // by the user) an input is marked, so a later unrelated htmx swap never
+    // resets a date the user picked (PR #154 review).
+    root.querySelectorAll("input.local-date-default").forEach(function (input) {
+      if (input.dataset.localDateSet) return;
+      input.value = today;
+      input.dataset.localDateSet = "1";
+    });
 
-    document.querySelectorAll("[data-session-date]").forEach(function (el) {
+    root.querySelectorAll("[data-session-date]").forEach(function (el) {
       if (el.dataset.sessionDate < today) {
         el.hidden = false;
       }
     });
+  }
+
+  document.addEventListener("input", function (e) {
+    var input = e.target;
+    if (input.classList && input.classList.contains("local-date-default")) {
+      input.dataset.localDateSet = "1";
+    }
+  });
+
+  document.addEventListener("DOMContentLoaded", function () {
+    apply(document);
+  });
+  // htmx-swapped fragments (the ＋ Log sheet, Today re-rendering in place,
+  // #149) need the same correction as a fresh page load.
+  document.addEventListener("htmx:afterSettle", function () {
+    apply(document);
   });
 })();

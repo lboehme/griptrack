@@ -70,3 +70,16 @@ def webview_client(monkeypatch, client_factory):
     monkeypatch.setenv("GRIPTRACK_DEVICE_TOKEN", WEBVIEW_DEVICE_TOKEN)
     with client_factory() as test_client:
         yield test_client
+
+
+@pytest.fixture
+def session_date_is_today(monkeypatch):
+    """Pins the server's "today" to 2026-07-04, the fixed session date most
+    HTTP-seam tests log against, for tests about live-session behaviour
+    (the rest step) rather than retro-logging: a set committed on a past
+    date never starts a rest (PR #154 review)."""
+    from datetime import date
+
+    from backend import training_log
+
+    monkeypatch.setattr(training_log, "server_today", lambda: date(2026, 7, 4))

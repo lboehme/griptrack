@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}Settings — GripTrack{% endblock %}
+{% block content %}
+{# Settings (#151): grouped glass list rows (V7 "List row"). Each row opens
+   a small detail page; only the rest-sound switch and the export download
+   act in place. Replaced the old Profile and Plates pages. #}
+{% set chevron %}<svg class="settings-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>{% endset %}
+<div id="settings-root" class="settings"
+     hx-get="/settings" hx-trigger="griptrack-logged from:body"
+     hx-select="#settings-root" hx-target="this" hx-swap="outerHTML" hx-disinherit="*">
+  <header class="today-head">
+    <p class="overline">{{ user.name or "Your setup" }}</p>
+    <h2 class="today-headline">Settings</h2>
+    <p class="today-sub">Changes save as you make them.</p>
+  </header>
+
+  <section class="settings-group" aria-labelledby="settings-you">
+    <p class="overline" id="settings-you">You</p>
+    <ul class="plain card settings-rows">
+      <li>
+        <a class="settings-row" href="/settings/name">
+          <span class="settings-label">Name</span>
+          <span class="settings-value">{{ user.name or "Not set" }}</span>
+          {{ chevron }}
+        </a>
+      </li>
+      <li>
+        <a class="settings-row" href="/?log=bodyweight" hx-get="/log/sheet?tab=bodyweight" hx-target="#log-sheet-slot" hx-swap="innerHTML" aria-haspopup="dialog">
+          <span class="settings-label">Bodyweight</span>
+          <span class="settings-value">{% if view.bodyweight %}<span class="current-bodyweight">{{ view.bodyweight.weight }}</span> {{ user.unit_pref }} · {{ view.bodyweight.date|human_date }}{% else %}Log it{% endif %}</span>
+          {{ chevron }}
+        </a>
+      </li>
+      {% if not webview_build %}
+      <li>
+        <div class="settings-row">
+          <span class="settings-label">Signed in as</span>
+          <span class="settings-value settings-email">{{ user.email }}</span>
+        </div>
+      </li>
+      {% endif %}
+    </ul>
+  </section>
+
+  <section class="settings-group" aria-labelledby="settings-training">
+    <p class="overline" id="settings-training">Training</p>
+    <ul class="plain card settings-rows">
+      <li>
+        <a class="settings-row" href="/settings/training">
+          <span class="settings-label">Hand order</span>
+          <span class="settings-value" data-hand-order="{{ user.hand_order_pref }}">{{ view.hand_order }}</span>
+          {{ chevron }}
+        </a>
+      </li>
+      <li>
+        <a class="settings-row" href="/settings/training">
+          <span class="settings-label">Reps and rest</span>
+          <span class="settings-value">{{ view.protocol.base_work_set_reps }} reps · {{ view.protocol.default_rest_seconds // 60 }}:{{ "%02d"|format(view.protocol.default_rest_seconds % 60) }} rest</span>
+          {{ chevron }}
+        </a>
+      </li>
+      <li>
+        <a class="settings-row" href="/settings/progression">
+          <span class="settings-label">Progression</span>
+          <span class="settings-value">{{ view.progression }}{% if view.override_count %} · {{ view.override_count }} override{{ "s" if view.override_count != 1 }}{% endif %}</span>
+          {{ chevron }}
+        </a>
+      </li>
+    </ul>
+  </section>
+
+  <section class="settings-group" aria-labelledby="settings-equipment">
+    <p class="overline" id="settings-equipment">Equipment</p>
+    <ul class="plain card settings-rows">
+      <li>
+        <a class="settings-row" href="/settings/plates">
+          <span class="settings-label">Plates</span>
+          <span class="settings-value">{{ view.plate_count }} plate{{ "s" if view.plate_count != 1 }} · up to {{ view.max_load|num_trim }} {{ user.unit_pref }}</span>
+          {{ chevron }}
+        </a>
+      </li>
+      <li>
+        <div class="settings-row">
+          <span class="settings-label">Units</span>
+          <span class="settings-value"><span class="unit-pref">{{ user.unit_pref }}</span> · fixed</span>
+        </div>
+      </li>
+    </ul>
+  </section>
+
+  <section class="settings-group" aria-labelledby="settings-rest">
+    <p class="overline" id="settings-rest">Rest alerts</p>
+    <div class="card settings-rows">
+      {% include "_settings_sound.html" %}
+    </div>
+  </section>
+
+  <section class="settings-group" aria-labelledby="settings-data">
+    <p class="overline" id="settings-data">Your data</p>
+    <ul class="plain card settings-rows">
+      <li>
+        <a class="settings-row" href="/profile/export" download>
+          <span class="settings-label">Export backup</span>
+          <span class="settings-value">.zip</span>
+          <svg class="settings-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></svg>
+        </a>
+      </li>
+      <li>
+        <a class="settings-row" href="/settings/restore">
+          <span class="settings-label">Restore from backup</span>
+          <span class="settings-value">Empty account only</span>
+          {{ chevron }}
+        </a>
+      </li>
+      <li>
+        <a class="settings-row" href="/settings/about">
+          <span class="settings-label">About these numbers</span>
+          <span class="settings-value">Volume, %BW, load</span>
+          {{ chevron }}
+        </a>
+      </li>
+    </ul>
+  </section>
+
+  {% if user.is_admin and not webview_build %}
+  <section class="settings-group" aria-labelledby="settings-admin">
+    <p class="overline" id="settings-admin">Admin</p>
+    <ul class="plain card settings-rows">
+      <li>
+        <a class="settings-row" href="/settings/admin">
+          <span class="settings-label">Invites, grip types, password reset</span>
+          {{ chevron }}
+        </a>
+      </li>
+    </ul>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

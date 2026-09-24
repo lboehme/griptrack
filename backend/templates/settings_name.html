@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Name — GripTrack{% endblock %}
+{% block content %}
+{% with heading="Name", sub="How Today greets you. Leave it blank to go without." %}{% include "_settings_head.html" %}{% endwith %}
+<form class="card settings-form" method="post" action="/profile/name"
+      hx-post="/profile/name" hx-trigger="change, submit" hx-target="#log-sheet-slot" hx-swap="innerHTML">
+  <label>Display name
+    <input type="text" name="name" value="{{ user.name or "" }}" maxlength="60" autocomplete="nickname"
+           placeholder="{{ "Your name" if webview_build else user.email.split("@")[0] }}">
+  </label>
+  <noscript><button type="submit" class="btn-secondary">Save</button></noscript>
+</form>
+{% endblock %}

@@ -2,21 +2,23 @@
 
 [![CI](https://github.com/lboehme/griptrack/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/lboehme/griptrack/actions/workflows/ci.yml)
 ![Python 3.12](https://img.shields.io/badge/python-3.12-blue)
-![Tests](https://img.shields.io/badge/tests-170+%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-700+%20passing-brightgreen)
 ![FastAPI + htmx](https://img.shields.io/badge/stack-FastAPI%20%2B%20htmx-009688)
 
-A mobile-first PWA for data-driven finger-strength training in climbing.
+A mobile-first Android app for data-driven finger-strength training in climbing.
 It tracks block-pull (no-hang) training per hand, grip and edge size,
 computes plate-accurate loading suggestions from your tested max, and
 tells you whether the training actually shows up in your climbing.
 
 <p align="center">
-  <img src="docs/screenshots/warmup.png" width="30%" alt="Warmup page: computed ramp with left/right columns and plate-rounded weights">
+  <img src="docs/screenshots/ui-review-2026-09/prototype-today.jpg" width="30%" alt="Today: the plan for today's session, with per-hand weights and the reason for each">
   &nbsp;
-  <img src="docs/screenshots/worksets.png" width="30%" alt="Work sets page: autosaving set table with weight, reps and RPE">
+  <img src="docs/screenshots/ui-review-2026-09/prototype-workset.jpg" width="30%" alt="Session play, work set step: left and right hand cards with steppers and one Set done button">
   &nbsp;
-  <img src="docs/screenshots/trend-spike.png" width="30%" alt="Trend card with an overtraining warning: volume spike after a short rest">
+  <img src="docs/screenshots/ui-review-2026-09/prototype-progress.jpg" width="30%" alt="Progress: story sentences over a strength-as-%-of-bodyweight chart with boulder sends">
 </p>
+<p align="center"><sub>Screens from the 2026-09 redesign prototype, which the app now follows
+(<a href="docs/ui-review-2026-09.md">docs/ui-review-2026-09.md</a>).</sub></p>
 
 Finger strength isn't one number. Pulling on a 20&nbsp;mm edge in half
 crimp is a different capacity than a 10&nbsp;mm edge in open hand, and
@@ -31,9 +33,15 @@ blended "finger strength" score.
   fixed warmup, then single attempts where an effort rating
   (effortless → hard) drives the next weight jump. Abandoning mid-test
   records nothing; only the final "that's enough" writes a result.
-- **Session logging without a submit button** — a warmup checklist and a
-  work-set table, both saving on every interaction. Getting interrupted
-  at the gym loses nothing.
+- **Today as a coach** — the home screen proposes today's session (combo,
+  sets × reps, each hand's weight and why), suggests a rest day when you've
+  trained two days running, and offers "Go lighter" after a tweak.
+- **A session that runs itself** — one full-screen page steps you through
+  warmup rungs, one work set at a time (left and right hand cards, one
+  "Set done"), a rest ring that survives the app being killed, and a
+  summary where you rate the session. Every step is saved as you go, so
+  getting interrupted at the gym loses nothing. On the phone, the rest end
+  vibrates even with the screen locked.
 - **Plate-aware loading** — you tell it which plates you own once; every
   suggested weight is rounded down to a total your pin can actually
   hold. No more "load 33.7&nbsp;kg".
@@ -42,9 +50,14 @@ blended "finger strength" score.
 - **Strength ↔ grade correlation** — does the finger strength show up on
   the wall? Best pull as % of bodyweight, rank-correlated against your
   boulder sends.
-- **The usual rest**: bodyweight and climb logging (Font and V grades),
-  session notes, deload marking, pain reports per hand, full history,
-  CSV export of everything, and PWA install with an offline fallback.
+- **Progress that tells a story** — a few plain sentences ("left hand up
+  4% of bodyweight"), one headline chart, and detail pages for volume,
+  left/right balance, strength vs grade, maxes and a week-by-week timeline.
+- **The usual rest**: a ＋ Log sheet for climbs (Font and V grades),
+  bodyweight and tweaks; session notes, deload marking and pain reports per
+  hand; and a Settings tab with tap-to-count plates, training defaults,
+  progression paths, a backup export and restore, and a plain-language
+  "About these numbers" page.
 
 GripTrack runs as a personal instrument for a handful of climbers, so
 registration is invite-only rather than open signup. If you'd like to
@@ -71,7 +84,7 @@ legitimate way to progress. Sessions marked as deloads are excluded.
   (deliberate reset after time off or injury).
 - **Plateau**: flagged when the last four sessions never exceeded the
   best volume of the sessions before them. Deliberately dumb and
-  transparent — you can recompute it from the table under the chart.
+  transparent — you can recompute it from the data under the chart.
 - **Overtraining warning**: fires only when the latest session is *both*
   a volume spike (≥ 1.25× the trailing average) *and* came after a
   shorter-than-typical rest gap. Either signal alone is normal training;
@@ -101,7 +114,7 @@ process worth stealing:
   canonical terms) and [`docs/adr/`](docs/adr/) (records of every
   decision with a real trade-off). Slices are then filed as GitHub
   issues small enough for one agent run.
-- **Test-first, at one seam.** All 173 tests drive the app through HTTP
+- **Test-first, at one seam.** All ~700 tests drive the app through HTTP
   with a fresh in-memory database per test — no mocks, no unit tests
   coupled to internals. Refactoring under the tests is cheap because
   they only pin observable behavior.
@@ -142,14 +155,15 @@ The organizing idea is a few deep modules behind small interfaces, with
 routers kept deliberately shallow: parse the request, call one module
 function, render a template. Some choices that raise eyebrows, and why:
 
-- **htmx instead of React.** The UI is forms and tables with per-field
-  autosave. htmx does that in a few attributes with zero build step; a
-  SPA would add a toolchain and a client state model to keep in sync
-  with the server for no visible gain on a phone at the gym.
+- **htmx instead of React.** The UI is server-rendered screens and
+  autosaving forms; even the training session is a sequence of
+  server-derived steps swapped in by htmx. That takes a few attributes and
+  zero build step; a SPA would add a toolchain and a client state model to
+  keep in sync with the server for no visible gain on a phone at the gym.
 - **Client-side charts with uPlot, vendored as a plain static file.**
-  The server ships the ordered `(date, volume)` series into the
-  dashboard DOM as JSON, and a small vanilla-JS module draws one chart
-  per (hand, grip_type, edge_mm) combo — no build step, no CDN, and it
+  The server ships each ordered series (strength as % of bodyweight,
+  volume per combo) into the Progress pages as JSON, and small vanilla-JS
+  modules draw them — no build step, no CDN, and it
   shrank the dependency footprint by dropping matplotlib/pandas (#87–#89).
 - **SQLite, WAL mode, one file.** A handful of users, one process, one
   volume — a database server would be operational overhead with no
@@ -163,7 +177,7 @@ function, render a template. Some choices that raise eyebrows, and why:
   2.5&nbsp;kg. ([ADR 0002](docs/adr/0002-real-plate-inventory-for-rounding.md))
 
 Security follows from the personal-instrument scope but isn't skipped:
-bcrypt, invite-only registration, per-IP rate limiting with
+PBKDF2 password hashing, invite-only registration, per-IP rate limiting with
 timing-equalized login, session revocation on password reset,
 SameSite + Origin-check CSRF defense, a strict security-header set, and
 upper bounds on every numeric input.
@@ -179,8 +193,8 @@ uvicorn backend.main:app --reload
 ```
 
 Open http://127.0.0.1:8000/register — the first account needs no invite
-and becomes the admin, who can then generate invite codes from the
-profile page. To try it on your phone, run with `--host 0.0.0.0` and use
+and becomes the admin, who can then generate invite codes from
+Settings → Admin. To try it on your phone, run with `--host 0.0.0.0` and use
 your machine's LAN address.
 
 Tests and gates:
@@ -201,10 +215,10 @@ first-run migrations — see [`android/`](android/) and the Android pivot in
 ## Status
 
 Actively used and developed. Current work is tracked in the issues;
-the open roadmap lives in [`CLAUDE.md`](CLAUDE.md). Bigger items on the
-list: left/right asymmetry analytics, and — once enough pain-report and
-deload data has accumulated — a per-grip injury-risk guardian that the
-current overtraining warning is a crude prototype of.
+the open roadmap lives in [`CLAUDE.md`](CLAUDE.md). The bigger item left
+on the list: once enough pain-report, session-load and deload data has
+accumulated, a per-grip injury-risk guardian that the current overtraining
+warning is a crude prototype of.
 
 ---
 

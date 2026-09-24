@@ -12,7 +12,7 @@ def test_max_tests_page_shows_block_width_for_pinch_and_edge_depth_for_crimp(cli
     log_max_test(client, "left", "pinch", 30, "2026-07-01", "20")
     log_max_test(client, "left", "half crimp", 20, "2026-07-01", "40")
 
-    page = client.get("/max-tests").text
+    page = client.get("/progress/maxes").text
 
     assert "block width" in page
     assert "edge depth" in page

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Plates — GripTrack{% endblock %}
+{% block content %}
+{% with heading="Plates", sub="Tap a plate to count it. Every weight GripTrack suggests is one you can load." %}{% include "_settings_head.html" %}{% endwith %}
+{% include "_plate_rack.html" %}
+
+<details class="card settings-add">
+  <summary>＋ Add another plate size</summary>
+  <form method="post" action="/plates" class="settings-add-form">
+    <div class="form-row">
+      <label>Plate ({{ user.unit_pref }})
+        <input type="number" name="weight" step="0.25" min="0.25" max="1000" inputmode="decimal" required>
+      </label>
+      <label>How many
+        <input type="number" name="count" step="1" min="1" max="100" inputmode="numeric" required>
+      </label>
+    </div>
+    <button type="submit" class="btn-secondary">Add plate</button>
+  </form>
+</details>
+{% endblock %}

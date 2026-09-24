@@ -1,10 +1,17 @@
+from dataclasses import dataclass
 from datetime import date as date_type
+from datetime import datetime, timedelta
 
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from backend import plates
-from backend.limits import MAX_REPS, MAX_WEIGHT
+from backend.limits import (
+    MAX_REPS,
+    MAX_REST_EXTENSION_SECONDS,
+    MAX_REST_SECONDS,
+    MAX_WEIGHT,
+)
 from backend.models import (
     BodyWeightLog,
     GripType,
@@ -148,8 +155,7 @@ def _seed_for_hand(
     hand: str,
     current_set_number: int,
     saved: dict,
-    current_max: dict,
-    default_reps: int,
+    plan_seed: dict,
 ) -> dict:
     """The Focus screen's in-progress values for one hand.
 
@@ -159,8 +165,11 @@ def _seed_for_hand(
     that row's own values win, RPE included — reloading the page must not
     forget what was just saved. Otherwise this is a genuinely new set:
     weight/reps and RPE carry down from the most recently committed set for
-    this hand, else the usual CurrentMax/default-reps prefill and RPE starts
-    blank (nullable) if there is no prior set or the prior set had no RPE."""
+    this hand, else -- set 1 of the session for this hand -- exactly
+    Today's plan (backend.plan.combo_plan: suggestion, last session's top
+    weight or CurrentMax, Go lighter's 85% included; PR #154 review D1),
+    and RPE starts blank (nullable) if there is no prior set or the prior
+    set had no RPE."""
     existing = saved.get((hand, current_set_number))
     if existing is not None:
         return {"weight": existing.weight, "reps": existing.reps, "rpe": existing.rpe}
@@ -168,7 +177,7 @@ def _seed_for_hand(
         prior = saved.get((hand, n))
         if prior is not None:
             return {"weight": prior.weight, "reps": prior.reps, "rpe": prior.rpe}
-    return {"weight": current_max.get(hand), "reps": default_reps, "rpe": None}
+    return {"weight": plan_seed["weight"], "reps": plan_seed["reps"], "rpe": None}
 
 
 def worksets_view(
@@ -216,11 +225,25 @@ def worksets_view(
     }
     highest_saved = max((n for _, n in saved), default=0)
     needed_rows = max(protocol.default_work_sets, highest_saved)
-    row_count = max(needed_rows, sets_hint or 0)
+    persisted = persisted_planned_sets(training_session, grip_type_id, edge_mm)
+    # A `sets=` URL hint (Today's "+1 set") is only a one-time initialiser:
+    # once the session has a planned count for this combo it's ignored,
+    # and until then every play form carries it (`sets_init`) so the first
+    # POST on the combo persists it (PR #154 review, D2).
+    sets_init = sets_hint if persisted is None else None
+    row_count = max(needed_rows, persisted or sets_init or 0)
     current_set_number = _current_set_number(hands, saved, row_count)
+    # Function-local: plan (and analytics) import training_log, so a
+    # module-level import here would be circular.
+    from backend import plan as plan_module
+
+    combo_plan = plan_module.combo_plan(
+        session, user, date, grip_type_id, edge_mm, training_session, session_number
+    )
     resume_seed = {
         h: _seed_for_hand(
-            h, current_set_number, saved, current_max, protocol.base_work_set_reps
+            h, current_set_number, saved,
+            {"weight": combo_plan.hand(h).weight, "reps": combo_plan.reps},
         )
         for h in hands
     }
@@ -246,6 +269,13 @@ def worksets_view(
         }
     else:
         seed = resume_seed
+    # The hand cards the form renders. Edit mode edits a saved set, so only
+    # the hands that logged it (PR #154 review MUST-FIX 5: after a
+    # sequential -> alternating switch, the other hand may have no row --
+    # and no max -- for that set, and must not render an empty card).
+    card_hands = (
+        [h for h in hands if (h, edit_set) in saved] if editing else list(hands)
+    )
     saved_json: dict[int, dict[str, dict]] = {}
     for (h, n), ws in saved.items():
         saved_json.setdefault(n, {})[h] = {
@@ -259,16 +289,9 @@ def worksets_view(
     nudge = analytics.session_start_nudge(
         session, user, grip_type_id, edge_mm, date, hands
     )
-    autoreg_suggestions = analytics.autoregulation_suggestions(
-        session,
-        user,
-        grip_type_id,
-        edge_mm,
-        date,
-        hands,
-        training_session=training_session,
-        session_number=session_number,
-    )
+    # The plan already evaluated the autoregulation suggestions for both
+    # hands with this same session context.
+    autoreg_suggestions = {h: combo_plan.suggestions.get(h) for h in hands}
     return {
         "grip": session.get(GripType, grip_type_id),
         "edge_mm": edge_mm,
@@ -283,6 +306,7 @@ def worksets_view(
         "default_reps": protocol.base_work_set_reps,
         "default_rest_seconds": protocol.default_rest_seconds,
         "more_sets": row_count + 1,
+        "sets_init": sets_init,
         # Extra empty rows (from "add another set") can be dismissed again.
         "removable_to": row_count - 1 if row_count > needed_rows else None,
         "training_session": training_session,
@@ -295,6 +319,7 @@ def worksets_view(
         "seed": seed,
         "ladder": plates.loadable_ladder(inventory),
         "editing": editing,
+        "card_hands": card_hands,
         "display_set_number": display_set_number,
         "resume_seed": resume_seed,
         "saved_json": saved_json,
@@ -336,7 +361,12 @@ def delete_set_and_renumber(
 ) -> dict[str, dict]:
     """Delete all in-play hands' WorkSets for the given set_number and
     renumber any higher sets down by 1 in a single transaction, keeping the
-    1..N sequence contiguous with no gaps. Returns the deleted hands' data."""
+    1..N sequence contiguous with no gaps. Returns the deleted hands' data.
+
+    Session play (#146): also clears any pending rest_ends_at -- deleting a
+    set invalidates whatever "rest before set N" plan was in flight, and
+    the play step must land back on the work-set step (with its undo
+    banner) rather than a stale rest countdown."""
     deleted_rows = session.exec(
         select(WorkSet)
         .where(WorkSet.training_session_id == training_session.id)
@@ -355,6 +385,10 @@ def delete_set_and_renumber(
 
     for ws in deleted_rows:
         session.delete(ws)
+
+    if training_session.rest_ends_at is not None:
+        training_session.rest_ends_at = None
+        session.add(training_session)
 
     # Shift higher sets down by 1
     higher_rows = session.exec(
@@ -455,6 +489,142 @@ def parse_hands_payload(
     return hands_payload
 
 
+def planned_set_count(
+    session: Session,
+    user: User,
+    grip_type_id: int,
+    edge_mm: int,
+    date: date_type,
+    session_number: int | None,
+    sets_hint: int | None,
+) -> int:
+    """The row_count (denominator) worksets_view/play_view render: at least
+    TrainingProtocol.default_work_sets, extended by whichever is bigger of
+    the highest already-saved set_number or the session's persisted
+    planned_sets for this combo (else the one-time `sets` initialiser)."""
+    protocol = get_protocol(session, user)
+    saved_numbers = {
+        ws.set_number
+        for ws in worksets_for_combo(
+            session, user, grip_type_id, edge_mm, date, session_number
+        )
+    }
+    highest_saved = max(saved_numbers, default=0)
+    needed_rows = max(protocol.default_work_sets, highest_saved)
+    persisted = persisted_planned_sets(
+        find_session(session, user, date, session_number), grip_type_id, edge_mm
+    )
+    return max(needed_rows, persisted or sets_hint or 0)
+
+
+def is_play_combo(
+    training_session: TrainingSession, grip_type_id: int, edge_mm: int
+) -> bool:
+    """Whether (grip, edge) is the combo play is running in this session.
+    An unstamped session (legacy rows, sets saved through the old per-hand
+    endpoint) matches every combo, as before the stamp existed."""
+    if training_session.play_grip_type_id is None:
+        return True
+    return (
+        training_session.play_grip_type_id == grip_type_id
+        and training_session.play_edge_mm == edge_mm
+    )
+
+
+def persisted_planned_sets(
+    training_session: TrainingSession | None, grip_type_id: int, edge_mm: int
+) -> int | None:
+    """The session's planned set count, if it belongs to this combo."""
+    if training_session is None or training_session.play_grip_type_id is None:
+        return None
+    if not is_play_combo(training_session, grip_type_id, edge_mm):
+        return None
+    return training_session.planned_sets
+
+
+def stamp_play_combo(
+    session: Session,
+    training_session: TrainingSession,
+    grip_type_id: int,
+    edge_mm: int,
+    sets_init: int | None = None,
+    commit: bool = True,
+) -> None:
+    """Record that play has actually started on this combo (a rung-done, a
+    warmup tick, an estimate or a Set commit -- never a GET), so Today's
+    Resume reopens it (PR #154 review, D2). Moving to a different combo
+    starts that combo's own plan: its planned count is the page's one-time
+    `sets` initialiser (or the default), and a pending rest -- which
+    belonged to the previous combo -- is dropped."""
+    same = (
+        training_session.play_grip_type_id == grip_type_id
+        and training_session.play_edge_mm == edge_mm
+    )
+    # Session load / duration run from the first real activity, not from a
+    # row created early by Go lighter or a morning tweak (PR #154 review).
+    if training_session.started_at is None:
+        training_session.started_at = utcnow()
+    if not same:
+        training_session.play_grip_type_id = grip_type_id
+        training_session.play_edge_mm = edge_mm
+        training_session.planned_sets = sets_init
+        training_session.rest_ends_at = None
+    elif training_session.planned_sets is None and sets_init is not None:
+        training_session.planned_sets = sets_init
+    session.add(training_session)
+    if commit:
+        session.commit()
+        session.refresh(training_session)
+
+
+def start_play_on_combo(
+    session: Session,
+    user: User,
+    grip_type_id: int,
+    edge_mm: int,
+    date: date_type,
+    session_number: int | None,
+    sets_init: int | None = None,
+) -> TrainingSession:
+    """The session a play action on this combo writes to (created on first
+    use, like every session-page interaction), stamped as the combo play
+    is running. Raises UnknownGripTypeError for an unknown grip -- an
+    orphan grip id would otherwise break re-import of the user's export."""
+    require_grip_type(session, grip_type_id)
+    training_session = start_or_get_session(session, user, date, session_number)
+    stamp_play_combo(session, training_session, grip_type_id, edge_mm, sets_init)
+    return training_session
+
+
+def set_planned_sets(
+    session: Session,
+    user: User,
+    grip_type_id: int,
+    edge_mm: int,
+    date: date_type,
+    session_number: int | None,
+    sets: int,
+) -> TrainingSession:
+    """The ⋯ menu's "＋ Add a set" / "－ Remove empty set": persist the
+    combo's planned set count. The derivation never renders fewer rows
+    than are already logged (or the protocol default), so a too-small
+    count simply has no effect. Adding a set to a Finished session reopens
+    it for that set -- Finish is stamped again from the new summary."""
+    require_grip_type(session, grip_type_id)
+    training_session = start_or_get_session(session, user, date, session_number)
+    before = planned_set_count(
+        session, user, grip_type_id, edge_mm, date, session_number, None
+    )
+    stamp_play_combo(session, training_session, grip_type_id, edge_mm, commit=False)
+    training_session.planned_sets = sets
+    if sets > before:
+        training_session.finished_at = None
+    session.add(training_session)
+    session.commit()
+    session.refresh(training_session)
+    return training_session
+
+
 def commit_focus_set(
     session: Session,
     user: User,
@@ -464,14 +634,27 @@ def commit_focus_set(
     set_number: int,
     session_number: int | None,
     hands_payload: dict[str, tuple[float, int, float | None]],
+    editing: bool = False,
+    sets_hint: int | None = None,
 ) -> TrainingSession:
     """Set commit (docs/adr/0007-set-commit-over-per-cell-autosave.md):
     writes both hands' WorkSets for one set_number in a single atomic
     transaction. Validates grip type, finds/starts session, stages both hands
     with record_work_set(commit=False), commits atomically, and returns the
-    training session."""
+    training session.
+
+    Session play (#146, docs/adr/0014, orchestrator decision 1): a normal
+    (non-editing) commit that isn't the last planned set starts the rest
+    step by stamping rest_ends_at = now + TrainingProtocol.default_rest_seconds;
+    a normal commit of the final planned set, or any edit-mode Save, leaves
+    rest_ends_at untouched (an edit-mode Save must never (re)start a rest the
+    user wasn't actually taking)."""
     require_grip_type(session, grip_type_id)
     training_session = start_or_get_session(session, user, date, session_number)
+    if not editing:
+        stamp_play_combo(
+            session, training_session, grip_type_id, edge_mm, sets_hint, commit=False
+        )
     for hand, (weight, reps, rpe) in hands_payload.items():
         record_work_set(
             session,
@@ -486,7 +669,313 @@ def commit_focus_set(
             commit=False,
         )
     session.commit()
+    session.refresh(training_session)
+    if not editing:
+        total_sets = planned_set_count(
+            session, user, grip_type_id, edge_mm, date, session_number, sets_hint
+        )
+        # Retro-logging a past session (PR #154 review) never starts a real
+        # rest -- and so never schedules a native alarm.
+        if set_number < total_sets and not is_past_date(date):
+            protocol = get_protocol(session, user)
+            training_session.rest_ends_at = utcnow() + timedelta(
+                seconds=protocol.default_rest_seconds
+            )
+        else:
+            training_session.rest_ends_at = None
+        session.add(training_session)
+        session.commit()
+        session.refresh(training_session)
     return training_session
+
+
+def _aware(dt: datetime | None) -> datetime | None:
+    """Normalize a possibly-naive datetime (SQLite drops tzinfo on
+    round-trip) to UTC-aware, so rest_ends_at comparisons against utcnow()
+    are always apples-to-apples."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        from datetime import timezone
+
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def duration_minutes(start: datetime | None, end: datetime | None) -> float | None:
+    """Minutes from `start` to `end` (fractional), or None if either is
+    missing. Naive and aware datetimes are both read as UTC (SQLite drops
+    tzinfo on the round trip), and a negative span (clock skew) clamps to
+    0 rather than producing a negative duration."""
+    start_aware, end_aware = _aware(start), _aware(end)
+    if start_aware is None or end_aware is None:
+        return None
+    return max(0.0, (end_aware - start_aware).total_seconds() / 60)
+
+
+def set_session_rpe(
+    session: Session, training_session: TrainingSession, session_rpe: int
+) -> None:
+    """Session RPE (#147): the summary's whole-session effort chip. The
+    router has already bounded the value (limits.MIN/MAX_SESSION_RPE);
+    re-tapping another chip just overwrites it."""
+    training_session.session_rpe = session_rpe
+    session.add(training_session)
+    session.commit()
+
+
+def finish_session(session: Session, training_session: TrainingSession) -> None:
+    """Finish (#147): stamp finished_at once. Idempotent -- a second tap (or
+    a replayed POST) never moves an already-set finished_at, so session
+    duration and session load stay anchored to the first Finish."""
+    if training_session.finished_at is None:
+        training_session.finished_at = utcnow()
+        session.add(training_session)
+        session.commit()
+
+
+def summary_view(ws: dict, hands: list[str]) -> dict:
+    """The Summary step's readouts (#147), computed from the worksets_view
+    data play_view already loaded: TrainingVolume (Σ weight × reps) for
+    this combo in this session, sets per hand, the mean of the logged set
+    RPEs, the duration so far (to finished_at, or to now while unfinished),
+    and the current tweak (PainReport) per hand."""
+    saved = [w for (h, _n), w in ws["saved"].items() if h in hands]
+    volume = sum(w.weight * w.reps for w in saved)
+    per_hand = {h: sum(1 for w in saved if w.hand == h) for h in hands}
+    counts = [c for c in per_hand.values() if c]
+    rpes = [w.rpe for w in saved if w.rpe is not None]
+    training_session = ws["training_session"]
+    minutes = None
+    if training_session is not None:
+        minutes = duration_minutes(
+            training_session.started_at, training_session.finished_at or utcnow()
+        )
+    tweaks = {r.hand: r for r in ws["pain_reports"] if r.hand in ("left", "right")}
+    return {
+        "volume": volume,
+        # 1,405 / 212.5 -- thousands separator, and no ".0" on whole numbers.
+        "volume_display": f"{volume:,.1f}".removesuffix(".0"),
+        "sets_per_hand": per_hand,
+        "sets_per_hand_uniform": counts[0] if counts and len(set(counts)) == 1 else None,
+        "avg_rpe": round(sum(rpes) / len(rpes), 1) if rpes else None,
+        "duration_minutes": int(minutes) if minutes is not None else None,
+        "session_rpe": training_session.session_rpe if training_session else None,
+        "finished": bool(training_session and training_session.finished_at),
+        "tweaks": tweaks,
+        "severities": SEVERITY_CHOICES,
+        "tweak_hand": next((h for h in ("left", "right") if h in tweaks), "none"),
+    }
+
+
+def extend_rest(training_session: TrainingSession, session: Session, seconds: int = 30) -> None:
+    """The "+30 s" action: push rest_ends_at later. If rest had already been
+    cleared (or never started) there's nothing to extend -- a stale/duplicate
+    tap is a no-op rather than starting a fresh rest."""
+    current = _aware(training_session.rest_ends_at)
+    if current is None:
+        return
+    # Bounded (PR #154 review MUST-FIX 7): never more than
+    # MAX_REST_SECONDS + MAX_REST_EXTENSION_SECONDS ahead of now.
+    latest = utcnow() + timedelta(seconds=MAX_REST_SECONDS + MAX_REST_EXTENSION_SECONDS)
+    training_session.rest_ends_at = min(current + timedelta(seconds=seconds), latest)
+    session.add(training_session)
+    session.commit()
+
+
+def clear_rest(training_session: TrainingSession, session: Session) -> None:
+    """Skip rest / Start set N: both end the rest step immediately."""
+    if training_session.rest_ends_at is not None:
+        training_session.rest_ends_at = None
+        session.add(training_session)
+        session.commit()
+
+
+def set_rest_sound(session: Session, user: User, on: bool) -> None:
+    """The per-user Rest sound setting (#148, docs/adr/0015): whether the
+    native rest-over alert also plays a sound. Never touches a pending
+    rest."""
+    user.rest_sound = on
+    session.add(user)
+    session.commit()
+
+
+def rest_bridge_payload(
+    user: User, ws: dict, rest_ends_at: datetime | None
+) -> dict | None:
+    """What the rest step hands `window.GripTrackNative.startRest(...)`
+    (#148, docs/adr/0015): the rest end as epoch milliseconds plus the
+    lock-screen notification's lines -- the countdown title, the next set's
+    loads (hands in play order, native unit), and the rest-over line. None
+    when no rest is pending."""
+    if rest_ends_at is None:
+        return None
+    next_set = ws["current_set_number"]
+    weights = [ws["seed"][h]["weight"] for h in ws["hands"]]
+    loads = " / ".join("–" if w is None else f"{w:g}" for w in weights)
+    return {
+        "ends_at_ms": int(rest_ends_at.timestamp() * 1000),
+        "title": f"Rest · set {next_set} of {ws['total_sets']} next",
+        "detail": f"{loads} {user.unit_pref}",
+        "ready": f"Pull. Set {next_set} is ready",
+        "sound": bool(user.rest_sound),
+    }
+
+
+@dataclass
+class PlayStep:
+    """The one thing /session/play's step derivation hands the router: what
+    to render, and the top bar's k/N counter. Everything else the step's
+    template needs is read straight off the warmup_view/worksets_view dicts
+    play_view returns alongside this."""
+
+    kind: str  # "warmup" | "workset" | "rest" | "summary"
+    step_number: int  # 1-based position in the combined rung+set sequence
+    total_steps: int
+    title: str
+
+
+def play_view(
+    session: Session,
+    user: User,
+    grip_type_id: int,
+    edge_mm: int,
+    date: date_type,
+    hand: str | None,
+    session_number: int | None,
+    sets_hint: int | None = None,
+    edit_set: int | None = None,
+) -> dict:
+    """Everything /session/play renders for the current step, in one call
+    (see CLAUDE.md orchestrator decision 9): derives which step (warmup rung,
+    work set, rest, summary) the session is on purely from persisted state
+    (docs/adr/0014) and hands back both that derivation (as `step`) and the
+    full warmup/worksets view data the step templates read from."""
+    w = warmup_view(session, user, grip_type_id, edge_mm, date, hand, session_number)
+    ws = worksets_view(
+        session, user, grip_type_id, edge_mm, date, hand, sets_hint,
+        session_number, edit_set,
+    )
+    inventory = plates.inventory_for(session, user)
+    total_rungs = len(w["steps"])
+    total_sets = ws["total_sets"]
+    total_steps = total_rungs + total_sets
+    training_session = ws["training_session"]
+    # A pending rest belongs to the combo play is running (D2): another
+    # combo opened in the same session never lands on its rest step.
+    rest_ends_at = (
+        _aware(training_session.rest_ends_at)
+        if training_session is not None
+        and is_play_combo(training_session, grip_type_id, edge_mm)
+        else None
+    )
+
+    # warmup_view's own current_step is a *display* pill that caps at
+    # total_rungs even once every rung is ticked (it never reads "5 of 4"),
+    # so completeness has to be checked directly against the ticks rather
+    # than by comparing current_step to total_rungs. Once any work set is
+    # already committed for this combo/session, warmup is never shown again
+    # even with unticked rungs -- logging a set is itself strong evidence
+    # training has moved on (retro-logging, an import, a set saved by some
+    # other path), and a stale warmup gate must never trap a session with
+    # real data on it.
+    warmup_complete = bool(w["steps"]) and all(
+        (h, s["index"]) in w["checks"] for h in w["planned_hands"] for s in w["steps"]
+    )
+    has_any_workset = bool(ws["saved"])
+    warmup_incomplete = bool(w["untested_hands"]) or (
+        not has_any_workset and not warmup_complete
+    )
+
+    # Finish (#147) pins the session to its summary on resume -- even if a
+    # set is later deleted -- as long as this view's hand(s) actually
+    # logged something. Two deliberate escape hatches: a not-yet-persisted
+    # sets= initialiser (⋯ "＋ Add a set" itself un-finishes the session,
+    # see set_planned_sets), and a sequential-order
+    # other hand with nothing logged yet (its "Start {other} hand" link
+    # still runs that hand's warmup/sets normally).
+    finished = training_session is not None and training_session.finished_at is not None
+    view_has_sets = any(h in ws["hands"] for (h, _n) in ws["saved"])
+
+    if ws["editing"]:
+        kind = "workset"
+        step_number = total_rungs + ws["display_set_number"]
+    elif finished and view_has_sets and ws["sets_init"] is None:
+        kind = "summary"
+        step_number = total_steps
+    elif warmup_incomplete:
+        kind = "warmup"
+        step_number = w["current_step"] if w["steps"] else 1
+    elif rest_ends_at is not None:
+        kind = "rest"
+        step_number = total_rungs + min(ws["current_set_number"], total_sets or 1)
+    elif ws["current_set_number"] > total_sets:
+        kind = "summary"
+        step_number = total_steps
+    else:
+        kind = "workset"
+        step_number = total_rungs + ws["display_set_number"]
+
+    workset_title = (
+        f"Editing set {ws['display_set_number']}"
+        if ws["editing"]
+        else f"Work set {ws['display_set_number']} of {total_sets}"
+    )
+    titles = {
+        "warmup": "Warmup",
+        "workset": workset_title,
+        "rest": "Rest",
+        "summary": "Session",
+    }
+    step = PlayStep(
+        kind=kind,
+        step_number=max(step_number, 1),
+        total_steps=max(total_steps, 1),
+        title=titles[kind],
+    )
+    remaining_seconds = None
+    if rest_ends_at is not None:
+        remaining_seconds = max(0, int((rest_ends_at - utcnow()).total_seconds()))
+
+    other_hand = (
+        ("right" if w["hands"][0] == "left" else "left")
+        if len(w["hands"]) == 1
+        else None
+    )
+    # Sequential order: the other hand is still "left to do" until it has
+    # logged every planned set -- only then does Finish become the summary's
+    # primary action instead of "Start {other} hand".
+    other_hand_pending = other_hand is not None and (
+        sum(1 for (h, _n) in ws["saved"] if h == other_hand) < total_sets
+    )
+
+    return {
+        "warmup": w,
+        "worksets": ws,
+        "step": step,
+        "rest_ends_at": rest_ends_at,
+        "rest_remaining_seconds": remaining_seconds,
+        "rest_bridge": rest_bridge_payload(user, ws, rest_ends_at),
+        "grip": w["grip"],
+        "edge_mm": edge_mm,
+        "date": date,
+        "hands": w["hands"],
+        # A single scalar for the hidden `hand` field every play form
+        # carries: the sequential-mode active hand, or "" in alternating
+        # mode (mirrors the pre-#146 warmup/worksets combo_redirect usage).
+        "hand": w["hands"][0] if len(w["hands"]) == 1 else "",
+        # Sequential HandOrderPreference runs one hand's whole flow at a
+        # time; the other hand is where the "Switch to"/"Start" links go.
+        "other_hand": other_hand,
+        "other_hand_pending": other_hand_pending,
+        # Session-level readouts: both hands' sets for this combo, even
+        # on a sequential-order hand's summary.
+        "summary": summary_view(ws, ["left", "right"]) if kind == "summary" else None,
+        "session_number": w["session_number"],
+        "training_session": training_session,
+        "sets_init": ws["sets_init"],
+        "inventory": inventory,
+    }
 
 
 def restore_focus_set(
@@ -586,6 +1075,26 @@ def record_work_set(
         session.commit()
         session.refresh(work_set)
     return work_set
+
+
+def create_idle_session(
+    session: Session,
+    user: User,
+    date: date_type,
+    session_number: int | None = None,
+) -> TrainingSession:
+    """start_or_get_session for a write that isn't training (Go lighter, a
+    tweak logged before training): a row it creates has no started_at
+    yet -- the first rung-done / tick / estimate / Set commit stamps it
+    (stamp_play_combo), so Session load's duration isn't inflated."""
+    existed = find_session(session, user, date, session_number) is not None
+    training_session = start_or_get_session(session, user, date, session_number)
+    if not existed:
+        training_session.started_at = None
+        session.add(training_session)
+        session.commit()
+        session.refresh(training_session)
+    return training_session
 
 
 def start_or_get_session(
@@ -690,7 +1199,25 @@ def is_past_date(date: date_type, today: date_type | None = None) -> bool:
     creation). The client-local "today" used for the on-page warning
     banner is a separate, JS-side comparison; this one only needs to be
     right to the day, not the client's timezone."""
-    return date < (today if today is not None else date_type.today())
+    return date < (today if today is not None else server_today())
+
+
+# A client-local date can run up to a day ahead of the server's (time
+# zones); anything later is a future date no session write accepts.
+FUTURE_DATE_TOLERANCE_DAYS = 1
+
+
+def is_future_date(date: date_type) -> bool:
+    """Whether `date` is past the server's today plus the time-zone
+    tolerance -- Go lighter and a tweak must never create a future-dated
+    session (PR #154 review)."""
+    return date > server_today() + timedelta(days=FUTURE_DATE_TOLERANCE_DAYS)
+
+
+def server_today() -> date_type:
+    """The server's own date -- the one clock is_past_date reads (a seam
+    tests pin when a fixed session date must count as "today")."""
+    return date_type.today()
 
 
 def toggle_warmup_check(
@@ -731,6 +1258,37 @@ def warmup_checks(
     }
 
 
+def complete_warmup_rung(
+    session: Session,
+    training_session: TrainingSession,
+    hands: list[str],
+    step_index: int,
+) -> None:
+    """The play warmup step's "Rung done" button: ticks every in-play hand's
+    tile for this rung that isn't already checked (an already-ticked tile is
+    left alone, so a rung ticked by hand first and then "Rung done" doesn't
+    accidentally untoggle it -- unlike toggle_warmup_check, this never
+    removes a check)."""
+    existing = {
+        (check.hand, check.step_index)
+        for check in session.exec(
+            select(WarmupStepCheck)
+            .where(WarmupStepCheck.training_session_id == training_session.id)
+            .where(WarmupStepCheck.step_index == step_index)
+        )
+    }
+    for hand in hands:
+        if (hand, step_index) not in existing:
+            session.add(
+                WarmupStepCheck(
+                    training_session_id=training_session.id,
+                    hand=hand,
+                    step_index=step_index,
+                )
+            )
+    session.commit()
+
+
 def get_protocol(session: Session, user: User) -> TrainingProtocol:
     """The user's TrainingProtocol, falling back to the global default row."""
     protocol = session.exec(
@@ -741,6 +1299,32 @@ def get_protocol(session: Session, user: User) -> TrainingProtocol:
             select(TrainingProtocol).where(TrainingProtocol.user_id == None)  # noqa: E711
         ).one()
     return protocol
+
+
+def save_protocol(
+    session: Session, user: User, base_work_set_reps: int, default_rest_seconds: int
+) -> TrainingProtocol:
+    """Upsert the user's own TrainingProtocol row (Settings → Training):
+    the rep target and default rest. The global default row is never
+    touched; the ramp percentages stay global (ADR-0005)."""
+    protocol = session.exec(
+        select(TrainingProtocol).where(TrainingProtocol.user_id == user.id)
+    ).first()
+    if protocol is None:
+        protocol = TrainingProtocol(user_id=user.id)
+    protocol.base_work_set_reps = base_work_set_reps
+    protocol.default_rest_seconds = default_rest_seconds
+    session.add(protocol)
+    session.commit()
+    return protocol
+
+
+def set_hand_order(session: Session, user: User, hand_order_pref: str) -> None:
+    """Settings → Training: the user's HandOrderPreference. Callers
+    validate against VALID_HAND_ORDER_PREFS first."""
+    user.hand_order_pref = hand_order_pref
+    session.add(user)
+    session.commit()
 
 
 def compute_ramp_plan(
@@ -1193,3 +1777,66 @@ def delete_progression_settings(
         session.commit()
         return True
     return False
+
+
+PAIN_REPORT_HANDS = ("left", "right", "both")
+
+# (severity, label, description): the one severity vocabulary -- the ＋ Log
+# sheet's Tweak chips, Today's Go lighter card and the summary's tweak
+# chips all read it (PR #154 review).
+SEVERITY_CHOICES = (
+    (1, "Niggle", "Noticeable, but pulling feels normal"),
+    (2, "Tweak", "Pulling hurts, so I backed off"),
+    (3, "Injury", "Sharp pain, I had to stop"),
+)
+SEVERITY_LABELS = {severity: label for severity, label, _ in SEVERITY_CHOICES}
+
+
+def clear_pain_reports(session: Session, training_session: TrainingSession) -> None:
+    """The summary's "Any tweaks? None": the session had no tweak after
+    all, so every PainReport on it goes (and stops offering Go lighter)."""
+    for report in session.exec(
+        select(PainReport).where(PainReport.training_session_id == training_session.id)
+    ).all():
+        session.delete(report)
+    session.commit()
+
+
+def record_pain_report(
+    session: Session,
+    training_session: TrainingSession,
+    hand: str,
+    severity: int,
+    note: str | None,
+) -> PainReport:
+    """Upsert one PainReport (see CONTEXT.md: PainReport) -- at most one row
+    per (session, hand). The play "How did it feel?" disclosure autosaves its
+    severity and note independently, so this must update in place rather
+    than always inserting; the Today ＋ Log sheet's Tweak tab (#149) shares
+    the same write."""
+    report = session.exec(
+        select(PainReport)
+        .where(PainReport.training_session_id == training_session.id)
+        .where(PainReport.hand == hand)
+    ).first()
+    if report is None:
+        report = PainReport(training_session_id=training_session.id, hand=hand)
+    report.severity = severity
+    report.note = note
+    session.add(report)
+    session.commit()
+    session.refresh(report)
+    return report
+
+
+def log_bodyweight(
+    session: Session, user: User, date: date_type, weight: float
+) -> BodyWeightLog:
+    """Append one BodyWeightLog entry (a time series, never a mutable profile
+    field -- ADR-0001). Shared by the profile form and the ＋ Log sheet's
+    Bodyweight tab (#149)."""
+    entry = BodyWeightLog(user_id=user.id, date=date, weight=weight)
+    session.add(entry)
+    session.commit()
+    session.refresh(entry)
+    return entry

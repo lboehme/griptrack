@@ -1,0 +1,47 @@
+{# The whole play screen below the app shell: top bar + current step. Every
+   play action's response (whether htmx fragment or the no-JS 303's full
+   page) renders exactly this, so the top bar (title/counter/progress bar)
+   is always in sync with the step body underneath it (docs/adr/0014). #}
+<header class="play-topbar">
+  <a class="play-pause" href="/" aria-label="Pause and exit">✕</a>
+  <div class="play-topbar-mid">
+    <span class="play-overline" data-step-title="{{ step.title }}">{{ step.title }}</span>
+    <h2 class="play-combo-title">{{ grip.name|display_name }} · {{ edge_mm }} mm {{ grip.dimension_name }}</h2>
+  </div>
+  <span class="play-step-counter">{{ step.step_number }}/{{ step.total_steps }}</span>
+  <details class="play-menu-wrap">
+    <summary aria-label="More">⋯</summary>
+    <div class="play-menu">
+      {# PR #154 review (D2): the planned set count is persisted on the
+         session by a POST, never carried as a GET sets= hint. #}
+      {% for label, target in [("＋ Add a set", worksets.more_sets), ("－ Remove empty set", worksets.removable_to)] if target %}
+      <form method="post" action="/session/sets">
+        <input type="hidden" name="grip_type_id" value="{{ grip.id }}">
+        <input type="hidden" name="edge_mm" value="{{ edge_mm }}">
+        <input type="hidden" name="date" value="{{ date }}">
+        <input type="hidden" name="hand" value="{{ hand }}">
+        {% if session_number %}<input type="hidden" name="session_number" value="{{ session_number }}">{% endif %}
+        <input type="hidden" name="sets" value="{{ target }}">
+        <button type="submit" hx-post="/session/sets" hx-include="closest form" hx-target="#play-root" hx-swap="innerHTML">{{ label }}</button>
+      </form>
+      {% endfor %}
+    </div>
+  </details>
+</header>
+<div class="focus-progress-bar" data-total-steps="{{ step.total_steps }}">
+  {% for i in range(step.total_steps) %}
+  <span class="progress-segment {% if i + 1 < step.step_number %}segment-filled{% elif i + 1 == step.step_number %}segment-current{% else %}segment-remaining{% endif %}"></span>
+  {% endfor %}
+</div>
+
+<div id="play-step" data-step="{{ step.kind }}">
+{% if step.kind == "warmup" %}
+{% include "_play_warmup.html" %}
+{% elif step.kind == "rest" %}
+{% include "_play_rest.html" %}
+{% elif step.kind == "summary" %}
+{% include "_play_summary.html" %}
+{% else %}
+{% include "_play_workset.html" %}
+{% endif %}
+</div>

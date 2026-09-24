@@ -6,7 +6,7 @@ from sqlmodel import Session
 
 from backend import auth, guided_max_test, plates, training_log
 from backend.db import get_session
-from backend.limits import MAX_EDGE_MM, MAX_SET_NUMBER, MAX_WEIGHT
+from backend.limits import MAX_EDGE_MM, MAX_ROW_ID, MAX_SET_NUMBER, MAX_WEIGHT
 from backend.models import GripType, User
 from backend.templating import templates
 
@@ -21,7 +21,7 @@ def require_grip_type(session: Session, grip_type_id: int) -> None:
 @router.get("/max-tests/guided")
 def guided_test_form(
     request: Request,
-    grip_type_id: int = Query(),
+    grip_type_id: int = Query(ge=1, le=MAX_ROW_ID),
     edge_mm: int = Query(gt=0, le=MAX_EDGE_MM),
     date: date_type = Query(),
     hand: str | None = Query(default=None),
@@ -62,7 +62,7 @@ def guided_test_form(
 @router.post("/max-tests/guided")
 def start_guided_test(
     request: Request,
-    grip_type_id: int = Form(),
+    grip_type_id: int = Form(ge=1, le=MAX_ROW_ID),
     edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
     date: date_type = Form(),
     hand: str = Form(),
@@ -97,7 +97,7 @@ def start_guided_test(
 @router.post("/max-tests/guided/both")
 def start_guided_test_both(
     request: Request,
-    grip_type_id: int = Form(),
+    grip_type_id: int = Form(ge=1, le=MAX_ROW_ID),
     edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
     date: date_type = Form(),
     left_estimate: float = Form(gt=0, le=MAX_WEIGHT),
@@ -123,7 +123,7 @@ def start_guided_test_both(
 @router.post("/max-tests/guided/step")
 def advance_guided_test(
     request: Request,
-    grip_type_id: int = Form(),
+    grip_type_id: int = Form(ge=1, le=MAX_ROW_ID),
     edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
     date: date_type = Form(),
     hand: str = Form(),

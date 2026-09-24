@@ -5,17 +5,8 @@ from typing import Any
 from fastapi.templating import Jinja2Templates
 
 from backend.analytics import parse_boulder_grade
-
-# V-scale floor for each gym-circuit grade colour band (V2 of
-# docs/ui-review-2026-09.md): 6A/6A+ = V3 ... 7B and up = V8+. Below V3
-# (below 6A) has no band in the spec, so it renders with no colour.
-_GRADE_COLOR_BANDS: list[tuple[float, str]] = [
-    (8.0, "var(--grade-7b)"),
-    (6.0, "var(--grade-7a)"),
-    (5.0, "var(--grade-6c)"),
-    (4.0, "var(--grade-6b)"),
-    (3.0, "var(--grade-6a)"),
-]
+from backend.climbing import grade_color_token
+from backend.plates import plate_breakdown
 
 _WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 _MONTHS = [
@@ -82,14 +73,10 @@ def display_name(val: Any) -> str:
 def grade_color(grade: Any) -> str:
     """CSS var() reference for a boulder grade's gym-circuit colour band
     (V2), or "" when the grade doesn't parse or falls below the lowest
-    banded grade (6A) — callers treat "" as "no colour"."""
-    v = parse_boulder_grade(str(grade)) if grade is not None else None
-    if v is None:
-        return ""
-    for floor, color in _GRADE_COLOR_BANDS:
-        if v >= floor:
-            return color
-    return ""
+    banded grade (6A) — callers treat "" as "no colour". The bands live in
+    backend.climbing so the Progress chart's send dots use the same ones."""
+    token = grade_color_token(grade)
+    return f"var({token})" if token else ""
 
 
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
@@ -102,3 +89,6 @@ templates.env.filters["human_date"] = human_date
 templates.env.globals["display_name"] = display_name
 templates.env.filters["display_name"] = display_name
 templates.env.filters["grade_color"] = grade_color
+templates.env.globals["plate_breakdown"] = plate_breakdown
+# A missing number renders as nothing, never "None".
+templates.env.filters["num_trim"] = lambda v: "" if v is None else f"{v:g}"

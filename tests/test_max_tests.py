@@ -45,7 +45,7 @@ def test_max_tests_are_scoped_to_the_logged_in_user(client):
 def test_starter_grip_types_are_offered(client):
     register(client)
 
-    page = client.get("/max-tests")
+    page = client.get("/progress/maxes")
 
     assert page.status_code == 200
     for name in ("half crimp", "full crimp", "open hand", "three finger drag", "pinch"):
@@ -55,7 +55,7 @@ def test_starter_grip_types_are_offered(client):
 def test_max_tests_page_offers_a_run_guided_test_action(client):
     register(client)
 
-    page = client.get("/max-tests")
+    page = client.get("/progress/maxes")
 
     assert page.status_code == 200
     assert 'action="/max-tests/guided"' in page.text
@@ -66,7 +66,7 @@ def test_max_test_date_defaults_to_today(client):
 
     register(client)
 
-    page = client.get("/max-tests")
+    page = client.get("/progress/maxes")
 
     assert f'name="date" value="{date.today().isoformat()}"' in page.text
 
@@ -78,14 +78,14 @@ def test_admin_can_add_a_grip_type_but_non_admin_cannot(client):
         "/grip-types", data={"name": "mono pocket"}, follow_redirects=True
     )
     assert response.status_code == 200
-    assert "mono pocket" in client.get("/max-tests").text.lower()
+    assert "mono pocket" in client.get("/progress/maxes").text.lower()
 
     register_second_user(client)  # logged in as non-admin friend now
     response = client.post(
         "/grip-types", data={"name": "sloper"}, follow_redirects=False
     )
     assert response.status_code == 403
-    assert "sloper" not in client.get("/max-tests").text
+    assert "sloper" not in client.get("/progress/maxes").text
 
 
 def test_user_can_void_their_own_max_test(client):
@@ -97,7 +97,7 @@ def test_user_can_void_their_own_max_test(client):
     assert current_maxes(client) == {("left", "half crimp", 20): 80.0}
 
     # Extract the test ID from the page
-    page = client.get("/max-tests")
+    page = client.get("/progress/maxes")
     # Using a simple substring search for the void action endpoint
     # The UI should have a form or button that posts to /max-tests/{id}/void
     match = re.search(r'action="/max-tests/(\d+)/void"', page.text)
@@ -116,7 +116,7 @@ def test_user_cannot_void_someone_elses_max_test(client):
     register(client)
     log_max_test(client, "left", "half crimp", 20, "2026-07-01", "40")
     
-    page = client.get("/max-tests")
+    page = client.get("/progress/maxes")
     test_id = re.search(r'action="/max-tests/(\d+)/void"', page.text).group(1)
 
     register_second_user(client)
@@ -127,7 +127,7 @@ def test_user_cannot_void_someone_elses_max_test(client):
 
 def test_max_tests_page_uses_segmented_radio_group_for_hand(client):
     register(client)
-    page = client.get("/max-tests").text
+    page = client.get("/progress/maxes").text
 
     # No native hand dropdown
     assert 'select name="hand"' not in page
@@ -169,11 +169,11 @@ def test_max_test_with_invalid_hand_or_unknown_grip_is_rejected(client):
 
 def test_adding_a_grip_type_with_an_empty_name_is_ignored(client):
     register(client)  # founder = admin
-    before = client.get("/max-tests").text
+    before = client.get("/progress/maxes").text
 
     response = client.post("/grip-types", data={"name": "   "}, follow_redirects=True)
     assert response.status_code == 200
-    assert client.get("/max-tests").text == before
+    assert client.get("/progress/maxes").text == before
 
 
 def _extract_voidable_test_ids(html: str) -> list[int]:
@@ -200,7 +200,7 @@ def test_voiding_the_newest_test_resurfaces_an_older_one_and_reinstates_supersed
     # Void the day 3 retest: CurrentMax falls back to 85 kg because
     # the 80 kg day 1 test resurfaces and the 85 kg day 2 work set logged after
     # its date supersedes it.
-    newest_id = max(_extract_voidable_test_ids(client.get("/max-tests").text))
+    newest_id = max(_extract_voidable_test_ids(client.get("/progress/maxes").text))
     client.post(f"/max-tests/{newest_id}/void", follow_redirects=True)
     assert current_maxes(client)[("left", "half crimp", 20)] == 85.0
 
@@ -215,26 +215,27 @@ def test_voided_test_drops_out_of_the_strength_grade_correlation(client):
     stat = correlation_stat(client)
     assert stat is not None and stat[1] == 8
 
-    earliest_id = min(_extract_voidable_test_ids(client.get("/max-tests").text))
+    earliest_id = min(_extract_voidable_test_ids(client.get("/progress/maxes").text))
     client.post(f"/max-tests/{earliest_id}/void", follow_redirects=True)
 
     assert correlation_stat(client) is None
 
 
 def test_voided_test_no_longer_counts_as_the_last_used_combination(client):
-    """last_used_combination filters voided tests: the session-start form
-    default falls back to the previously used combo."""
+    """last_used_combination filters voided tests: the session-start
+    default (Today's Change picker since #149) falls back to the previously
+    used combo."""
     register(client)
     log_max_test(client, "left", "half crimp", 20, "2026-07-01", "42.5")
     log_max_test(client, "left", "open hand", 10, "2026-07-02", "35")
 
-    page = client.get("/session/new").text
+    page = client.get("/today/change").text
     assert f'value="{grip_type_id(client, "open hand")}" selected' in page
 
-    newest_id = max(_extract_voidable_test_ids(client.get("/max-tests").text))
+    newest_id = max(_extract_voidable_test_ids(client.get("/progress/maxes").text))
     client.post(f"/max-tests/{newest_id}/void", follow_redirects=True)
 
-    page = client.get("/session/new").text
+    page = client.get("/today/change").text
     assert f'value="{grip_type_id(client, "half crimp")}" selected' in page
 
 
@@ -242,10 +243,10 @@ def test_voided_test_row_is_struck_through_and_not_voidable_again(client):
     register(client)
     log_max_test(client, "left", "half crimp", 20, "2026-07-01", "40")
 
-    test_id = _extract_voidable_test_ids(client.get("/max-tests").text)[0]
+    test_id = _extract_voidable_test_ids(client.get("/progress/maxes").text)[0]
     client.post(f"/max-tests/{test_id}/void", follow_redirects=True)
 
-    page = client.get("/max-tests").text
+    page = client.get("/progress/maxes").text
     assert "line-through" in page
     assert ">Voided<" in page
     assert _extract_voidable_test_ids(page) == []  # no second Void button

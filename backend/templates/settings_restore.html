@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Restore — GripTrack{% endblock %}
+{% block content %}
+{% with heading="Restore from backup", sub="Loads an exported backup (.zip) into this account." %}{% include "_settings_head.html" %}{% endwith %}
+<div class="card settings-danger">
+  <p class="settings-note">Only works on an empty account — no sessions, climbs, max tests or bodyweight logged yet. It's for moving to a fresh install, and it can't be undone.</p>
+  <form method="post" action="/profile/import" enctype="multipart/form-data">
+    <label>Backup file (.zip)
+      <input type="file" name="archive" accept=".zip" required>
+    </label>
+    <label class="settings-check">
+      <input type="checkbox" name="confirm" value="yes" required>
+      <span>I understand this restores the backup into this account.</span>
+    </label>
+    <button type="submit" class="btn-secondary btn-danger">Restore from backup</button>
+  </form>
+</div>
+{% endblock %}

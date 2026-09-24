@@ -6,35 +6,15 @@ leak) on the on-device Android WebView, which has no such access."""
 
 from urllib.parse import urlparse
 
-from playwright.sync_api import expect
-
-
-def _seed_session_and_worksets(page, live_server):
-    """Mirrors tests/e2e/test_ui_viewport_360.py's fixture: logs a max test
-    for both hands, then starts a session and lands on /session/worksets
-    (with the grip/edge/date query string a bare route can't guess)."""
-    for hand in ("left", "right"):
-        page.goto(f"{live_server}/max-tests")
-        form = page.locator('form[action="/max-tests"]')
-        form.locator(f'input[name="hand"][value="{hand}"]').check()
-        form.locator("select.grip-select").select_option(label=["Half crimp", "half crimp"])
-        form.locator('input[name="edge_mm"]').fill("20")
-        form.locator('input[name="weight"]').fill("40")
-        form.locator('button[type="submit"]').click()
-
-    page.goto(f"{live_server}/session/new")
-    page.locator(".grip-select").select_option(label=["Half crimp", "half crimp"])
-    page.locator('input[name="edge_mm"]').fill("20")
-    page.get_by_role("button", name="Start warmup").click()
-    warmup_url = page.url
-    page.get_by_role("link", name="Continue to work sets").click()
-    expect(page.locator(".focus-pill")).to_be_visible()
-    return warmup_url, page.url
+from tests.e2e.conftest import advance_to_worksets, start_session_play
 
 
 def test_main_pages_make_no_requests_outside_localhost(live_server, authenticated_page):
     page = authenticated_page
-    warmup_url, worksets_url = _seed_session_and_worksets(page, live_server)
+    start_session_play(page, live_server)
+    warmup_url = page.url
+    advance_to_worksets(page)
+    worksets_url = page.url
 
     external_requests = []
 
@@ -49,12 +29,16 @@ def test_main_pages_make_no_requests_outside_localhost(live_server, authenticate
         f"{live_server}/",
         warmup_url,
         worksets_url,
-        f"{live_server}/dashboard",
+        f"{live_server}/progress",
+        f"{live_server}/progress/volume",
         f"{live_server}/climbs",
-        f"{live_server}/history",
-        f"{live_server}/max-tests",
-        f"{live_server}/profile",
-        f"{live_server}/plates",
+        f"{live_server}/progress/timeline",
+        f"{live_server}/progress/maxes",
+        f"{live_server}/settings",
+        f"{live_server}/settings/training",
+        f"{live_server}/settings/progression",
+        f"{live_server}/settings/plates",
+        f"{live_server}/settings/about",
     ]
     for url in routes:
         page.goto(url)

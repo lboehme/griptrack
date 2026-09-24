@@ -11,7 +11,7 @@ from tests.helpers import (
 def test_unit_preference_is_chosen_at_registration(client):
     register(client, "lifter@example.com", "test-pw-1234", unit_pref="lbs")
 
-    profile = client.get("/profile")
+    profile = client.get("/settings")
 
     assert profile.status_code == 200
     assert "lbs" in profile.text
@@ -20,15 +20,15 @@ def test_unit_preference_is_chosen_at_registration(client):
 def test_unit_preference_defaults_to_kg(client):
     register(client, "lifter@example.com", "test-pw-1234")
 
-    profile = client.get("/profile")
+    profile = client.get("/settings")
 
     assert "kg" in profile.text
 
 
-def test_profile_page_links_to_data_export(client):
+def test_settings_page_links_to_data_export(client):
     register(client, "lifter@example.com", "test-pw-1234")
 
-    profile = client.get("/profile")
+    profile = client.get("/settings")
 
     assert 'href="/profile/export"' in profile.text
 
@@ -37,7 +37,7 @@ def current_bodyweight(client):
     import re
 
     match = re.search(
-        r'class="current-bodyweight">([^<]+)<', client.get("/profile").text
+        r'class="current-bodyweight">([^<]+)<', client.get("/settings").text
     )
     return match.group(1) if match else None
 
@@ -82,14 +82,14 @@ def test_unit_preference_cannot_be_changed_after_signup(client):
         follow_redirects=True,
     )
 
-    profile = client.get("/profile")
+    profile = client.get("/settings")
     assert '<span class="unit-pref">kg</span>' in profile.text
 
 
 def test_hand_order_preference_defaults_and_is_editable(client):
     register(client, "lifter@example.com", "test-pw-1234")
 
-    assert "alternating" in client.get("/profile").text
+    assert "alternating" in client.get("/settings").text
 
     response = client.post(
         "/profile",
@@ -98,7 +98,7 @@ def test_hand_order_preference_defaults_and_is_editable(client):
     )
 
     assert response.status_code == 200
-    assert "sequential" in client.get("/profile").text
+    assert "sequential" in client.get("/settings").text
 
 
 def test_profile_update_with_invalid_hand_order_pref_is_rejected(client):
@@ -379,13 +379,13 @@ def test_unauthenticated_export_is_rejected(client):
     assert response.status_code == 401
 
 
-def test_training_protocol_defaults_on_profile_page(client):
+def test_training_protocol_defaults_on_settings_training_page(client):
     register(client, "lifter@example.com", "test-pw-1234")
 
-    profile = client.get("/profile")
+    profile = client.get("/settings/training")
 
     assert profile.status_code == 200
-    assert "Configure training sessions" in profile.text
+    assert 'action="/profile/protocol"' in profile.text
     assert 'name="base_work_set_reps"' in profile.text
     assert 'value="5"' in profile.text
     assert 'name="default_rest_seconds"' in profile.text
@@ -429,7 +429,7 @@ def test_training_protocol_per_user_isolation(client):
     register_second_user(client, "friend@example.com", "test-pw-1234")
 
     # Friend still sees the global defaults
-    friend_profile = client.get("/profile")
+    friend_profile = client.get("/settings/training")
     assert 'value="5"' in friend_profile.text
     assert 'value="180"' in friend_profile.text
 
@@ -439,20 +439,20 @@ def test_training_protocol_per_user_isolation(client):
         data={"base_work_set_reps": "4", "default_rest_seconds": "60"},
         follow_redirects=True,
     )
-    friend_profile2 = client.get("/profile")
+    friend_profile2 = client.get("/settings/training")
     assert 'value="4"' in friend_profile2.text
     assert 'value="60"' in friend_profile2.text
 
     # Founder's protocol is untouched
     client.post("/logout")
     login(client, "founder@example.com", "test-pw-1234")
-    founder_profile = client.get("/profile")
+    founder_profile = client.get("/settings/training")
     assert 'value="8"' in founder_profile.text
     assert 'value="240"' in founder_profile.text
 
 
 def test_worksets_view_reflects_user_protocol_rep_target(client):
-    from tests.helpers import current_set_field, get_session_page
+    from tests.helpers import complete_warmup, current_set_field
 
     register(client, "lifter@example.com", "test-pw-1234")
     log_max_test(client, "left", "half crimp", 20, "2026-07-01", "40")
@@ -464,11 +464,7 @@ def test_worksets_view_reflects_user_protocol_rep_target(client):
     )
 
     gid = grip_type_id(client, "half crimp")
-    worksets = get_session_page(
-        client,
-        "/session/worksets",
-        params={"grip_type_id": gid, "edge_mm": 20, "date": "2026-07-04"},
-    )
+    worksets = complete_warmup(client, gid, 20, date="2026-07-04")
     assert worksets.status_code == 200
     assert current_set_field(worksets.text, "left", "reps") == "8"
     assert current_set_field(worksets.text, "right", "reps") == "8"
@@ -477,14 +473,14 @@ def test_worksets_view_reflects_user_protocol_rep_target(client):
 
 
 
-def test_default_progression_settings_on_profile_page(client):
+def test_default_progression_settings_on_settings_progression_page(client):
     register(client, "lifter@example.com", "test-pw-1234")
 
-    profile = client.get("/profile")
+    profile = client.get("/settings/progression")
 
     assert profile.status_code == 200
     assert "Progression" in profile.text or "progression" in profile.text
-    assert "weight" in profile.text
+    assert '<option value="weight" selected>' in profile.text
 
 
 def test_update_user_default_progression_settings(client):
@@ -496,7 +492,7 @@ def test_update_user_default_progression_settings(client):
         follow_redirects=True,
     )
     assert response.status_code == 200
-    assert "double" in response.text
+    assert '<option value="double" selected>' in response.text
 
 
 def test_per_combo_progression_settings_override(client):
@@ -532,9 +528,9 @@ def test_progression_settings_per_user_isolation(client):
     )
 
     register_second_user(client, "friend@example.com", "test-pw-1234")
-    friend_profile = client.get("/profile")
+    friend_profile = client.get("/settings/progression")
     # Friend still has default weight progression
-    assert "double" not in friend_profile.text or "weight" in friend_profile.text
+    assert '<option value="weight" selected>' in friend_profile.text
 
     # Friend configures their own progression
     client.post(
@@ -546,5 +542,5 @@ def test_progression_settings_per_user_isolation(client):
     # Founder profile is untouched
     client.post("/logout")
     login(client, "founder@example.com", "test-pw-1234")
-    founder_profile = client.get("/profile")
-    assert "double" in founder_profile.text
+    founder_profile = client.get("/settings/progression")
+    assert '<option value="double" selected>' in founder_profile.text
