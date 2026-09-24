@@ -145,7 +145,7 @@ def test_keep_screen_on_is_released_on_the_summary(live_server, authenticated_pa
         page.locator(".set-done-btn").click()
         if set_number < 3:
             page.get_by_role("button", name="Skip rest").click()
-    expect(page.get_by_text("All sets done")).to_be_visible()
+    expect(page.locator("#play-step[data-step=\"summary\"]")).to_be_visible()
 
     keep_on = [c for c in calls(page) if c[0] == "setKeepScreenOn"]
     assert keep_on[-1] == ["setKeepScreenOn", False]
