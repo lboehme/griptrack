@@ -139,13 +139,15 @@ class NavigationLifecycleTest {
         assertFalse(SessionLifecycleHelper.isHomePage("http://127.0.0.1:8000/dashboard"))
         assertFalse(SessionLifecycleHelper.isHomePage("http://127.0.0.1:8000/session/new"))
 
-        // Tab roots (#149: Today, Progress, Settings; Progress/Settings
-        // redirect to /dashboard and /profile for now)
+        // Tab roots (#149: Today, Progress, Settings; Progress is its own
+        // page since #150, Settings still redirects to /profile for now)
         assertTrue(SessionLifecycleHelper.isTabRoot("http://127.0.0.1:8000/"))
         assertTrue(SessionLifecycleHelper.isTabRoot("http://127.0.0.1:8000/progress"))
+        assertTrue(SessionLifecycleHelper.isTabRoot("http://127.0.0.1:8000/progress?range=3m"))
         assertTrue(SessionLifecycleHelper.isTabRoot("http://127.0.0.1:8000/settings"))
-        assertTrue(SessionLifecycleHelper.isTabRoot("http://127.0.0.1:8000/dashboard"))
         assertTrue(SessionLifecycleHelper.isTabRoot("http://127.0.0.1:8000/profile"))
+        // /dashboard only 303s to /progress now -- not a root of its own.
+        assertFalse(SessionLifecycleHelper.isTabRoot("http://127.0.0.1:8000/dashboard"))
         // The ＋ Log sheet opens over Today (/?log=...), still the home root.
         assertTrue(SessionLifecycleHelper.isTabRoot("http://127.0.0.1:8000/?log=climb"))
         assertTrue(SessionLifecycleHelper.isHomePage("http://127.0.0.1:8000/?log=climb"))
@@ -160,5 +162,8 @@ class NavigationLifecycleTest {
         assertFalse(SessionLifecycleHelper.isTabRoot("http://127.0.0.1:8000/register"))
         assertFalse(SessionLifecycleHelper.isTabRoot("http://127.0.0.1:8000/plates"))
         assertFalse(SessionLifecycleHelper.isTabRoot("http://127.0.0.1:8000/history"))
+        // Progress detail pages sit one level down: Back returns to /progress.
+        assertFalse(SessionLifecycleHelper.isTabRoot("http://127.0.0.1:8000/progress/timeline"))
+        assertFalse(SessionLifecycleHelper.isTabRoot("http://127.0.0.1:8000/progress/maxes"))
     }
 }

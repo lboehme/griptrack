@@ -2649,8 +2649,8 @@ code.invite-code {
 
 .progress-deeper { margin-top: 1.2rem; }
 
-.progress-rows,
-.timeline-list { padding: .2rem 1rem; }
+ul.plain.progress-rows,
+ul.plain.timeline-list { padding: .2rem 1rem; }
 
 .progress-rows li + li,
 .timeline-list > li + li { border-top: 1px solid var(--line); }
@@ -2703,5 +2703,11 @@ code.invite-code {
   font-weight: 600;
   cursor: pointer;
 }
+
+.show-data > summary::-webkit-details-marker { display: none; }
+
+.show-data > summary::before { content: "▸"; width: 1em; }
+
+.show-data[open] > summary::before { content: "▾"; }
 
 .timeline-list .show-data { margin: -.4rem 0 .4rem; }
