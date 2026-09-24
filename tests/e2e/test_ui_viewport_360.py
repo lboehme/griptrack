@@ -2,23 +2,12 @@
 
 from playwright.sync_api import expect
 
+from tests.e2e.conftest import advance_to_worksets, start_session_play
+
 
 def _seed_session_and_worksets(page, live_server):
-    for hand in ("left", "right"):
-        page.goto(f"{live_server}/max-tests")
-        form = page.locator('form[action="/max-tests"]')
-        form.locator(f'input[name="hand"][value="{hand}"]').check()
-        form.locator("select.grip-select").select_option(label=["Half crimp", "half crimp"])
-        form.locator('input[name="edge_mm"]').fill("20")
-        form.locator('input[name="weight"]').fill("40")
-        form.locator('button[type="submit"]').click()
-
-    page.goto(f"{live_server}/session/new")
-    page.locator(".grip-select").select_option(label=["Half crimp", "half crimp"])
-    page.locator('input[name="edge_mm"]').fill("20")
-    page.get_by_role("button", name="Start warmup").click()
-    page.get_by_role("link", name="Continue to work sets").click()
-    expect(page.locator(".focus-pill")).to_be_visible()
+    start_session_play(page, live_server)
+    advance_to_worksets(page)
 
 
 def test_main_pages_have_no_horizontal_overflow_at_360px(live_server, authenticated_page):
@@ -77,18 +66,23 @@ def test_worksets_card_elements_and_set_done_within_360x740(live_server, authent
             f"> card right {card_box['x'] + card_box['width']}"
         )
 
-    # 3. 'Set done' button is above the tabbar fold on 360x740 viewport
+    # 3. 'Set done' button is above the fold on a 360x740 viewport -- session
+    # play has no tab bar (V5: full screen, no chrome during a session), so
+    # this checks against the viewport itself rather than a .tabbar element.
     btn = page.locator(".set-done-btn")
     expect(btn).to_be_visible()
     btn_box = btn.bounding_box()
-    tabbar_box = page.locator(".tabbar").bounding_box()
-    assert btn_box is not None and tabbar_box is not None
-    assert btn_box["y"] + btn_box["height"] <= tabbar_box["y"], (
-        f"Set done button bottom {btn_box['y'] + btn_box['height']} is below tab bar top {tabbar_box['y']}"
+    assert btn_box is not None
+    assert btn_box["y"] + btn_box["height"] <= 740, (
+        f"Set done button bottom {btn_box['y'] + btn_box['height']} is below the 740px viewport"
     )
+    assert page.locator(".tabbar").count() == 0, "No tab bar during a session (V5)"
 
-    # 4. Check completed-set checkmark SVG size after logging a set
+    # 4. Check completed-set checkmark SVG size after logging a set -- a
+    # non-final commit lands on the rest step first (session play, #146),
+    # so skip rest to get back to the work-set step's completed list.
     btn.click()
+    page.get_by_role("button", name="Skip rest").click()
     completed_row = page.locator('.completed-row[data-set="1"]')
     expect(completed_row).to_be_visible()
     svg = page.locator(".completed-check svg").first

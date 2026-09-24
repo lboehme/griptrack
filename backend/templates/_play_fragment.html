@@ -1,0 +1,38 @@
+{# The whole play screen below the app shell: top bar + current step. Every
+   play action's response (whether htmx fragment or the no-JS 303's full
+   page) renders exactly this, so the top bar (title/counter/progress bar)
+   is always in sync with the step body underneath it (docs/adr/0014). #}
+<header class="play-topbar">
+  <a class="play-pause" href="/" aria-label="Pause and exit">✕</a>
+  <div class="play-topbar-mid">
+    <span class="play-overline" data-step-title="{{ step.title }}">{{ step.title }}</span>
+    <h2 class="play-combo-title">{{ grip.name|display_name }} · {{ edge_mm }} mm {{ grip.dimension_name }}</h2>
+  </div>
+  <span class="play-step-counter">{{ step.step_number }}/{{ step.total_steps }}</span>
+  <details class="play-menu-wrap">
+    <summary aria-label="More">⋯</summary>
+    <div class="play-menu">
+      <a href="/session/play?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}{% if hand %}&amp;hand={{ hand }}{% endif %}{% if session_number %}&amp;session_number={{ session_number }}{% endif %}&amp;sets={{ worksets.more_sets }}">＋ Add a set</a>
+      {% if worksets.removable_to %}
+      <a href="/session/play?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}{% if hand %}&amp;hand={{ hand }}{% endif %}{% if session_number %}&amp;session_number={{ session_number }}{% endif %}&amp;sets={{ worksets.removable_to }}">－ Remove empty set</a>
+      {% endif %}
+    </div>
+  </details>
+</header>
+<div class="focus-progress-bar" data-total-steps="{{ step.total_steps }}">
+  {% for i in range(step.total_steps) %}
+  <span class="progress-segment {% if i + 1 < step.step_number %}segment-filled{% elif i + 1 == step.step_number %}segment-current{% else %}segment-remaining{% endif %}"></span>
+  {% endfor %}
+</div>
+
+<div id="play-step" data-step="{{ step.kind }}">
+{% if step.kind == "warmup" %}
+{% include "_play_warmup.html" %}
+{% elif step.kind == "rest" %}
+{% include "_play_rest.html" %}
+{% elif step.kind == "summary" %}
+{% include "_play_summary.html" %}
+{% else %}
+{% include "_play_workset.html" %}
+{% endif %}
+</div>

@@ -4,7 +4,7 @@
 <h2>Start a session</h2>
 <p class="page-sub">Pick your grip and edge — warmup weights come from your current max.</p>
 <div class="card">
-  <form method="get" action="/session/warmup">
+  <form method="get" action="/session/play">
     <label>Grip type
       <select name="grip_type_id" class="grip-select">
         {% for grip in grip_types %}
@@ -18,7 +18,7 @@
       </label>
       <label>Date <input type="date" name="date" value="{{ today }}" class="local-date-default" required></label>
     </div>
-    <button type="submit">Start warmup →</button>
+    <button type="submit">Start session →</button>
     {% if next_session_number_today %}
     <button type="submit" name="session_number" value="{{ next_session_number_today }}" class="btn-secondary start-second-session">Start a second session today →</button>
     {% endif %}

@@ -1589,3 +1589,294 @@ code.invite-code {
 }
 
 .muted { color: var(--mu); }
+
+/* ============================================================
+   Session play (#146, docs/adr/0014). One full-screen page, no tab bar
+   (V5/V8) — the whole session runs as a stack of server-rendered steps
+   (warmup rung, work set, rest, summary) swapped in by htmx. Reuses the
+   focus-header / hand-card / stepper / completed-row vocabulary above
+   wherever a step's shape matches; only genuinely new shapes (the rung
+   readout, the rest ring, the top-bar pause/overflow) get new classes.
+   ============================================================ */
+
+.app-main-play {
+  padding-top: calc(.5rem + env(safe-area-inset-top));
+  padding-bottom: 1.8rem;
+}
+
+.play-topbar {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  margin-bottom: .5rem;
+}
+
+.play-pause {
+  flex: none;
+  width: 2.75rem;
+  height: 2.75rem;
+  min-height: 2.75rem;
+  display: grid;
+  place-content: center;
+  padding: 0;
+  border-radius: 999px;
+  background: var(--field-fill);
+  border: 1.5px solid color-mix(in srgb, var(--tx) 16%, transparent);
+  color: var(--tx);
+  text-decoration: none;
+  font-size: 1.05rem;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.play-topbar-mid { flex: 1 1 auto; min-width: 0; }
+
+.play-overline {
+  display: block;
+  font-family: var(--font-body);
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--mu);
+  font-size: .7rem;
+}
+
+.play-combo-title {
+  margin: .1rem 0 0;
+  font-family: var(--font-condensed);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--tx);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.play-step-counter {
+  flex: none;
+  font-family: var(--font-condensed);
+  font-weight: 700;
+  color: var(--mu);
+  font-size: .95rem;
+}
+
+.play-menu-wrap { flex: none; position: relative; }
+
+.play-menu-wrap > summary {
+  list-style: none;
+  width: 2.75rem;
+  height: 2.75rem;
+  display: grid;
+  place-content: center;
+  cursor: pointer;
+  color: var(--mu);
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.play-menu-wrap > summary::-webkit-details-marker { display: none; }
+.play-menu-wrap[open] > summary { color: var(--tx); }
+
+.play-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + .3rem);
+  z-index: 20;
+  background: var(--s1);
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--tx) 14%, transparent);
+  min-width: 11rem;
+  padding: .35rem;
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
+  box-shadow: 0 10px 30px -12px color-mix(in srgb, var(--shade) 60%, transparent);
+}
+
+.play-menu a {
+  width: auto;
+  min-height: 2.5rem;
+  justify-content: flex-start;
+  background: transparent;
+  box-shadow: none;
+  color: var(--tx);
+  font-family: var(--font-body);
+  font-size: .92rem;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: normal;
+  padding: .4rem .6rem;
+  border-radius: 10px;
+}
+
+@media (hover: hover) {
+  .play-menu a:hover { background: var(--s2); }
+}
+
+/* ---- warmup rung step ---- */
+
+.rung-percent {
+  font-family: var(--font-condensed);
+  font-weight: 700;
+  font-size: clamp(3.2rem, 20vw, 4.6rem);
+  line-height: 1;
+  text-align: center;
+  color: var(--acc);
+  margin: .8rem 0 0;
+}
+
+.rung-caption {
+  text-align: center;
+  font-size: .72rem;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  margin: .35rem 0 1.2rem;
+}
+
+.rung-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .7rem;
+}
+
+.rung-tiles-single { grid-template-columns: 1fr; }
+
+.rung-tile { border-radius: var(--radius-card); padding: .85rem .9rem; }
+
+.rung-tile-top { display: flex; align-items: center; justify-content: space-between; }
+
+.rung-tick input[type="checkbox"] { width: 1.9rem; height: 1.9rem; margin: 0; }
+
+.rung-tile-weight {
+  font-family: var(--font-condensed);
+  font-weight: 700;
+  font-size: clamp(1.5rem, 7vw, 1.9rem);
+  margin-top: .5rem;
+}
+
+.rung-tile-plates {
+  font-size: .72rem;
+  margin-top: .2rem;
+}
+
+.rung-unit {
+  font-family: var(--font-body);
+  font-size: .68rem;
+  font-weight: 650;
+  color: var(--mu);
+  margin-left: .2rem;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.rung-next-list {
+  display: flex;
+  justify-content: space-between;
+  gap: .5rem;
+  margin: 1.1rem 0 1.3rem;
+  font-size: .82rem;
+}
+
+.play-primary-form { margin: 0; }
+
+/* ---- rest step: ring countdown ---- */
+
+.rest-ring-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .3rem;
+  margin: 1.6rem 0 1rem;
+}
+
+.rest-ring { width: min(260px, 66vw); height: min(260px, 66vw); }
+
+.rest-ring-track { fill: none; stroke: var(--s2); stroke-width: 10; }
+
+.rest-ring-progress {
+  fill: none;
+  stroke: var(--acc);
+  stroke-width: 10;
+  stroke-linecap: round;
+  transform-origin: 50% 50%;
+  transform: rotate(-90deg);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .rest-ring-progress { transition: stroke-dashoffset .9s linear; }
+}
+
+.rest-ring-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: .2rem;
+}
+
+.rest-ring-svg-wrap { position: relative; display: grid; place-content: center; }
+
+.rest-ring-label {
+  font-size: .74rem;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--mu);
+}
+
+.rest-ring-time {
+  font-family: var(--font-condensed);
+  font-weight: 700;
+  font-size: clamp(2.2rem, 12vw, 2.9rem);
+  font-variant-numeric: tabular-nums;
+}
+
+.rest-ring-time.rest-pull { color: var(--acc); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .rest-pull-pulse { animation: rest-pull-pulse 1.4s ease-in-out infinite; }
+}
+
+@keyframes rest-pull-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .55; }
+}
+
+.rest-next-line {
+  text-align: center;
+  color: var(--mu);
+  font-size: .9rem;
+  margin: .3rem 0 0;
+}
+
+.rest-actions { display: flex; gap: .7rem; margin-top: 1.6rem; }
+
+.rest-extend-btn { flex: none; width: 6.5rem; }
+
+.rest-actions .rest-skip-btn,
+.rest-actions .rest-start-btn { flex: 1 1 auto; width: auto; min-height: var(--touch); }
+
+/* ---- undo-after-delete banner (session play, #146 review item 2) ---- */
+
+.undo-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+}
+
+.undo-form { margin: 0; flex: none; }
+
+.undo-form .undo-btn {
+  width: auto;
+  min-height: 2.4rem;
+  padding: .3rem .9rem;
+  font-size: .85rem;
+}
+
+/* ---- summary placeholder (S2b builds the real screen, #147) ---- */
+
+.play-summary-card { text-align: center; }

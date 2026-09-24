@@ -1,0 +1,14 @@
+{# Minimal "all sets done" placeholder — the real summary (session RPE,
+   notes, deload, finished_at) is S2b, issue #147; out of scope here. #}
+<div class="card play-summary-card">
+  <h2 class="focus-title">All sets done</h2>
+  <p class="page-sub">Nice work — every planned set for {{ grip.name|display_name }} · {{ edge_mm }} mm {{ grip.dimension_name }} is logged.</p>
+  {% if other_hand %}
+  <div class="flow-next">
+    <a class="btn" href="/session/play?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}&amp;hand={{ other_hand }}{% if session_number %}&amp;session_number={{ session_number }}{% endif %}">Start {{ other_hand|display_name }} hand</a>
+    <a class="btn btn-secondary" href="/">Done — back home</a>
+  </div>
+  {% else %}
+  <a class="btn" href="/">Done — back home</a>
+  {% endif %}
+</div>

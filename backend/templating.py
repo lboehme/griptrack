@@ -5,6 +5,7 @@ from typing import Any
 from fastapi.templating import Jinja2Templates
 
 from backend.analytics import parse_boulder_grade
+from backend.plates import plate_breakdown
 
 # V-scale floor for each gym-circuit grade colour band (V2 of
 # docs/ui-review-2026-09.md): 6A/6A+ = V3 ... 7B and up = V8+. Below V3
@@ -102,3 +103,5 @@ templates.env.filters["human_date"] = human_date
 templates.env.globals["display_name"] = display_name
 templates.env.filters["display_name"] = display_name
 templates.env.filters["grade_color"] = grade_color
+templates.env.globals["plate_breakdown"] = plate_breakdown
+templates.env.filters["num_trim"] = lambda v: f"{v:g}"

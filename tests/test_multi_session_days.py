@@ -186,7 +186,7 @@ def test_past_date_with_no_session_shows_confirm_prompt_and_creates_nothing(clie
 
     assert page.status_code == 200
     assert "session-confirm-card" in page.text
-    assert 'class="ramp-weight"' not in page.text
+    assert "play-topbar" not in page.text
 
     # Still nothing in history for that date.
     history = client.get("/history").text
@@ -213,7 +213,7 @@ def test_past_date_confirmation_creates_the_session_then_proceeds(client):
         params={"grip_type_id": grip_id, "edge_mm": 20, "date": past_date},
     )
     assert "session-confirm-card" not in page.text
-    assert 'class="ramp-weight"' in page.text
+    assert "play-topbar" in page.text
 
 
 def test_past_date_worksets_page_also_gates_creation(client):
@@ -227,7 +227,7 @@ def test_past_date_worksets_page_also_gates_creation(client):
     )
 
     assert "session-confirm-card" in page.text
-    assert 'class="workset-cell"' not in page.text
+    assert "play-topbar" not in page.text
 
 
 def test_today_still_creates_implicitly_with_no_confirmation_needed(client):
@@ -241,7 +241,7 @@ def test_today_still_creates_implicitly_with_no_confirmation_needed(client):
     )
 
     assert "session-confirm-card" not in page.text
-    assert 'class="ramp-weight"' in page.text
+    assert "play-topbar" in page.text
 
 
 def test_yesterday_with_a_recent_session_needs_no_confirmation(client):
@@ -258,7 +258,7 @@ def test_yesterday_with_a_recent_session_needs_no_confirmation(client):
         params={"grip_type_id": grip_id, "edge_mm": 20, "date": yesterday},
     )
     assert "session-confirm-card" not in page.text
-    assert 'class="ramp-weight"' in page.text
+    assert "play-topbar" in page.text
 
 
 def test_warmup_page_pins_a_concrete_session_number_before_any_session_exists(client):

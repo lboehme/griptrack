@@ -19,26 +19,77 @@ def seed_default_inventory(session: Session, user: User) -> None:
     session.commit()
 
 
+def _achievable_totals_with_parents(
+    inventory: list[PlateInventoryItem],
+) -> tuple[set[int], dict[int, tuple[int, float]]]:
+    """The single bounded subset-sum search behind both loadable_ladder and
+    plate_breakdown (session play #146, issue-review item 3: "reuse the
+    existing search rather than writing a second one"). Works in integer
+    hundredths and caps the walk at MAX_WEIGHT, same DoS bound as before.
+
+    Returns every achievable total (in cents), plus a `parent` map recording,
+    for each total other than 0, one edge (previous_total, plate_weight)
+    that first reached it -- enough to walk back and reconstruct one
+    concrete combination of plates for any achievable total.
+    """
+    cap = int(round(MAX_WEIGHT * 100))
+    achievable = {0}
+    parent: dict[int, tuple[int, float]] = {}
+    # Largest denomination first: loadable_ladder's achievable *set* doesn't
+    # care about item order, but plate_breakdown's reconstructed combination
+    # does -- biggest-plates-first is the one a person actually loading a
+    # pin would reach for, and keeps the "Pin + 20 + 1.25" readout to a
+    # handful of plates instead of a pile of the smallest ones.
+    for item in sorted(inventory, key=lambda i: -i.weight):
+        step = int(round(item.weight * 100))
+        if step <= 0:
+            continue
+        for _ in range(item.count):
+            newly_reached = {
+                total + step: total
+                for total in achievable
+                if total + step <= cap and total + step not in achievable
+            }
+            for reached, prev in newly_reached.items():
+                parent[reached] = (prev, item.weight)
+            achievable |= newly_reached.keys()
+    return achievable, parent
+
+
 def loadable_ladder(inventory: list[PlateInventoryItem]) -> list[float]:
     """Every total weight the user's plates can actually make on the single
     pin (ADR-0002), ascending and deduped -- the "loadable ladder".
 
-    Bounded subset-sum: work in integer hundredths to avoid float drift,
-    track every achievable total, and cap the walk at MAX_WEIGHT (not at a
-    per-call target) so the achievable set can never grow past a fixed size
-    regardless of how large the inventory is -- this is the DoS-sensitive
-    path (backend.limits). An empty inventory still makes 0 (nothing
-    loaded), so the ladder is never empty -- [0.0] is the defined fallback.
+    An empty inventory still makes 0 (nothing loaded), so the ladder is
+    never empty -- [0.0] is the defined fallback.
     """
-    cap = int(round(MAX_WEIGHT * 100))
-    achievable = {0}
-    for item in inventory:
-        step = int(round(item.weight * 100))
-        for _ in range(item.count):
-            achievable |= {
-                total + step for total in achievable if total + step <= cap
-            }
+    achievable, _ = _achievable_totals_with_parents(inventory)
     return sorted(total / 100 for total in achievable)
+
+
+def plate_breakdown(
+    weight: float, inventory: list[PlateInventoryItem]
+) -> list[float] | None:
+    """One concrete combination of plates (descending) that makes exactly
+    `weight` on the single pin, for the "Pin + 20 + 2.5" style readout on
+    the warmup rung and work-set cards (session play, #146). None when
+    `weight` isn't itself on the loadable ladder (off-ladder history, a
+    raw free-entry value, or simply 0) -- callers show nothing in that case,
+    never a wrong or partial breakdown."""
+    target = int(round(weight * 100))
+    if target <= 0:
+        return None
+    achievable, parent = _achievable_totals_with_parents(inventory)
+    if target not in achievable:
+        return None
+    plates: list[float] = []
+    node = target
+    while node != 0:
+        prev, plate_weight = parent[node]
+        plates.append(plate_weight)
+        node = prev
+    plates.sort(reverse=True)
+    return plates
 
 
 def round_down_to_loadable(

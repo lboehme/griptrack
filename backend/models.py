@@ -138,6 +138,13 @@ class TrainingSession(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow)
     # Descriptive only — not identity-bearing (see class docstring).
     started_at: datetime | None = Field(default_factory=utcnow)
+    # Session play (#146, docs/adr/0014): set to now + TrainingProtocol
+    # .default_rest_seconds on a normal (non-final, non-edit) Set commit made
+    # from /session/play; cleared by +30s exhaustion-independent Skip/Start.
+    # The play step is "rest" whenever this is not None and the next set
+    # hasn't been committed yet — even once it's in the past, the rest step
+    # just shows "Pull" / "Start set N" until the user acts.
+    rest_ends_at: datetime | None = Field(default=None)
 
 
 class PainReport(SQLModel, table=True):

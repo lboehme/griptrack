@@ -1,4 +1,7 @@
-"""Browser-smoke spec for Focus stepper hold-to-repeat (issue #141).
+"""Browser-smoke spec for the work-set stepper hold-to-repeat (issue #141),
+retargeted at /session/play (issue #146): the stepper JS moved into
+backend/static/steppers.js and binds by event delegation so it keeps
+working across htmx step swaps.
 
 Verifies that:
 1. A single tap/click advances a stepper by exactly one step (no double-step).
@@ -8,25 +11,13 @@ Verifies that:
 
 from playwright.sync_api import expect
 
+from tests.e2e.conftest import advance_to_worksets, start_session_play
+
 
 def test_stepper_single_click_and_hold_to_repeat(live_server, authenticated_page):
     page = authenticated_page
-
-    # Seed max test so warmup and worksets are active
-    for hand in ("left", "right"):
-        page.goto(f"{live_server}/max-tests")
-        form = page.locator('form[action="/max-tests"]')
-        form.locator(f'input[name="hand"][value="{hand}"]').check()
-        form.locator("select.grip-select").select_option(label="Half crimp")
-        form.locator('input[name="edge_mm"]').fill("20")
-        form.locator('input[name="weight"]').fill("40")
-        form.locator('button[type="submit"]').click()
-
-    page.goto(f"{live_server}/session/new")
-    page.locator(".grip-select").select_option(label="Half crimp")
-    page.locator('input[name="edge_mm"]').fill("20")
-    page.get_by_role("button", name="Start warmup").click()
-    page.get_by_role("link", name="Continue to work sets").click()
+    start_session_play(page, live_server)
+    advance_to_worksets(page)
 
     # 1. Verify single click on reps stepper performs exactly one step
     reps_display = page.locator('[data-role="reps-display"][data-hand="left"]')
@@ -44,7 +35,7 @@ def test_stepper_single_click_and_hold_to_repeat(live_server, authenticated_page
     expect(reps_input).to_have_value(str(initial_reps))
 
     # 2. Verify hold-to-repeat on weight stepper advances several steps along the ladder
-    weight_display = page.locator('.weight-value[data-hand="left"]')
+    weight_display = page.locator('[data-role="weight-display"][data-hand="left"]')
     weight_input = page.locator('[data-role="weight-input"][data-hand="left"]')
     start_weight = float(weight_display.inner_text())
 
@@ -58,7 +49,6 @@ def test_stepper_single_click_and_hold_to_repeat(live_server, authenticated_page
     page.mouse.up()
 
     end_weight = float(weight_display.inner_text())
-    # Started at e.g. 32.5 or 34, after >1s holding it should have stepped 5+ times along the ladder
     assert end_weight > start_weight + 2.0, (
         f"Hold-to-repeat should have moved several ladder steps, but went from {start_weight} to {end_weight}"
     )
@@ -74,8 +64,6 @@ def test_stepper_single_click_and_hold_to_repeat(live_server, authenticated_page
     page.mouse.up()
 
     weight_after_leave = float(weight_display.inner_text())
-    # Should only have stepped once (from initial press) before pointer left
-    # With ladder steps >= 0.5, a single step changes by one ladder increment, not 4-5 increments
     step_diff = round(weight_after_leave - weight_before_leave, 2)
     assert 0 < step_diff <= 1.5, (
         f"Expected single step before pointerleave, but changed by {step_diff}"
