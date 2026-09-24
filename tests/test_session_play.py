@@ -1106,7 +1106,7 @@ def test_alternating_summary_has_no_other_hand_button(client):
 def test_no_new_write_route_is_added_beyond_play_and_its_actions(client):
     """Pins the /session/* route surface after #146 -- every write still
     goes through an endpoint that existed before, plus the new play-step
-    actions this issue adds."""
+    actions this issue adds (and #148's Rest sound toggle)."""
     from backend.main import create_app
 
     def all_paths(routes):
@@ -1136,6 +1136,8 @@ def test_no_new_write_route_is_added_beyond_play_and_its_actions(client):
         "/session/rung-done",
         "/session/rest/extend",
         "/session/rest/end",
+        # #148 (native rest bridge): the Rest sound toggle on the rest step.
+        "/session/rest/sound",
         "/session/update",
         "/session/pain-report",
     }

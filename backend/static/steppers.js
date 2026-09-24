@@ -1,9 +1,9 @@
 /* Session play (#146, docs/adr/0014) client JS: work-set steppers with
  * hold-to-repeat (moved here from the old worksets.html Focus screen,
  * issue #141), the rest ring countdown (always computed from the stored
- * rest_ends_at, never a decrementing counter), and feature-detected no-op
- * hooks for the S3 native bridge (docs/adr/0015). Vanilla, ES5-ish, no
- * build step.
+ * rest_ends_at, never a decrementing counter), and the feature-detected
+ * S3 native rest bridge calls with a Screen Wake Lock fallback
+ * (docs/adr/0015, #148). Vanilla, ES5-ish, no build step.
  *
  * Every /session/play action round-trips through the server and htmx swaps
  * #play-root's contents in (a fresh DOM each time), so this file never
@@ -206,12 +206,10 @@
       if (endBtn && endBtn.dataset.startLabel) {
         endBtn.textContent = endBtn.dataset.startLabel;
       }
+      // Deliberately *not* stopRest here: the native alarm (docs/adr/0015)
+      // is the source of truth for the rest-over alert, and cancelling it as
+      // the in-app ring reaches zero would race it and swallow the vibration.
       stopRestTimer();
-      if (window.GripTrackNative && window.GripTrackNative.stopRest) {
-        try {
-          window.GripTrackNative.stopRest();
-        } catch (e) {}
-      }
     } else {
       timeEl.textContent = formatRestTime(remaining);
       timeEl.classList.remove("rest-pull", "rest-pull-pulse");
@@ -235,31 +233,114 @@
       renderRest(endsAt, totalSeconds);
     }, 1000);
 
-    if (window.GripTrackNative && window.GripTrackNative.startRest) {
+    startNativeRest(step);
+  }
+
+  // ---- S3 native rest bridge (#148, docs/adr/0015). The Android shell
+  // injects window.GripTrackNative; the plain browser build has none, so
+  // every call is feature-detected and wrapped (a bridge error must never
+  // break the play screen). JS -> Kotlin @JavascriptInterface calls only
+  // carry primitives, hence positional args rather than an object. ----
+  function nativeCall(name) {
+    var bridge = window.GripTrackNative;
+    if (!bridge || typeof bridge[name] !== "function") return;
+    var args = Array.prototype.slice.call(arguments, 1);
+    try {
+      bridge[name].apply(bridge, args);
+    } catch (e) {}
+  }
+
+  // startRest(endsAtEpochMs, title, detail, sound, readyTitle): posts or
+  // updates the lock-screen countdown and (re)schedules the rest-over
+  // alarm. Re-called on every render of the rest step, so +30 s and the
+  // sound toggle simply reschedule. An end already in the past is left
+  // alone -- the rest is over and the alarm has (or will have) fired.
+  function startNativeRest(step) {
+    var endsAtMs = parseInt(step.dataset.restEndsAtMs, 10);
+    if (!endsAtMs || endsAtMs <= Date.now()) return;
+    nativeCall(
+      "startRest",
+      endsAtMs,
+      step.dataset.restTitle || "",
+      step.dataset.restDetail || "",
+      step.dataset.restSound === "true",
+      step.dataset.restReady || ""
+    );
+  }
+
+  // Keep the screen on for the whole play session except the summary
+  // (the session is over there), off everywhere else.
+  function wantsScreenOn() {
+    if (!document.getElementById("play-root")) return false;
+    var stepEl = document.getElementById("play-step");
+    return !(stepEl && stepEl.dataset.step === "summary");
+  }
+
+  // ---- Browser fallback: the Screen Wake Lock API, used only when there's
+  // no native bridge (WebView support for it is unreliable, hence the
+  // bridge). Released locks are dropped by the browser whenever the page
+  // is hidden, so it's re-acquired on visibilitychange. ----
+  var wakeLock = null;
+
+  function hasBridge() {
+    return !!window.GripTrackNative;
+  }
+
+  function acquireWakeLock() {
+    if (hasBridge() || wakeLock || !("wakeLock" in navigator)) return;
+    if (document.visibilityState !== "visible") return;
+    try {
+      navigator.wakeLock
+        .request("screen")
+        .then(function (lock) {
+          wakeLock = lock;
+          if (lock && lock.addEventListener) {
+            lock.addEventListener("release", function () {
+              if (wakeLock === lock) wakeLock = null;
+            });
+          }
+          if (!wantsScreenOn()) releaseWakeLock();
+        })
+        .catch(function () {});
+    } catch (e) {}
+  }
+
+  function releaseWakeLock() {
+    var lock = wakeLock;
+    wakeLock = null;
+    if (lock) {
       try {
-        window.GripTrackNative.startRest({
-          endsAt: endsAtRaw,
-          nextSetNumber: parseInt(step.dataset.nextSetNumber, 10),
-          totalSets: parseInt(step.dataset.totalSets, 10),
-        });
+        var p = lock.release();
+        if (p && p.catch) p.catch(function () {});
       } catch (e) {}
     }
   }
 
-  // ---- keep-screen-on: on for the whole play session, off once it's left
-  // (S3 native bridge, docs/adr/0015 -- a browser build has no such hook,
-  // so this is a no-op there). ----
   function updateKeepScreenOn() {
-    if (!window.GripTrackNative || !window.GripTrackNative.setKeepScreenOn) return;
-    try {
-      window.GripTrackNative.setKeepScreenOn(!!document.getElementById("play-root"));
-    } catch (e) {}
+    var on = wantsScreenOn();
+    if (hasBridge()) {
+      nativeCall("setKeepScreenOn", on);
+    } else if (on) {
+      acquireWakeLock();
+    } else {
+      releaseWakeLock();
+    }
   }
 
   function onSettle() {
     startRestCountdown();
+    // Any play step other than rest (Skip rest / Start set N / the next
+    // set / the summary) means no rest is pending: cancel the notification
+    // and alarm.
+    if (document.getElementById("play-root") && !document.getElementById("rest-step")) {
+      nativeCall("stopRest");
+    }
     updateKeepScreenOn();
   }
+
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible" && wantsScreenOn()) acquireWakeLock();
+  });
 
   document.addEventListener("DOMContentLoaded", onSettle);
   document.body.addEventListener("htmx:afterSettle", onSettle);
@@ -323,14 +404,13 @@
     }
   });
 
+  // Leaving the page (pause ✕, Back, any navigation away): screen may sleep
+  // again and the rest alarm is cancelled. Reopening play on the rest step
+  // re-arms it from the stored rest_ends_at.
   window.addEventListener("pagehide", function () {
-    if (window.GripTrackNative) {
-      try {
-        if (window.GripTrackNative.setKeepScreenOn) window.GripTrackNative.setKeepScreenOn(false);
-      } catch (e) {}
-      try {
-        if (window.GripTrackNative.stopRest) window.GripTrackNative.stopRest();
-      } catch (e) {}
-    }
+    if (!document.getElementById("play-root")) return;
+    nativeCall("setKeepScreenOn", false);
+    nativeCall("stopRest");
+    releaseWakeLock();
   });
 })();

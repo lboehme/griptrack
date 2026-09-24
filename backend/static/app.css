@@ -1859,6 +1859,23 @@ code.invite-code {
 .rest-actions .rest-skip-btn,
 .rest-actions .rest-start-btn { flex: 1 1 auto; width: auto; min-height: var(--touch); }
 
+/* Rest sound toggle (#148, docs/adr/0015) -- a quiet text toggle under the
+   rest actions until S6 moves it to Settings. */
+.rest-sound-form { display: flex; justify-content: center; margin-top: .9rem; }
+
+.rest-sound-btn {
+  background: none;
+  border: 0;
+  color: var(--mu);
+  font: inherit;
+  font-size: .85rem;
+  min-height: var(--touch);
+  padding: 0 1rem;
+  cursor: pointer;
+}
+
+.rest-sound-btn[aria-pressed="true"] { color: inherit; }
+
 /* ---- undo-after-delete banner (session play, #146 review item 2) ---- */
 
 .undo-banner {
