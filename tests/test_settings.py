@@ -182,7 +182,7 @@ def test_combo_override_add_and_remove_land_on_progression(client):
     )
     assert added.headers["location"] == "/settings/progression?saved=override"
     page = client.get("/settings/progression").text
-    assert 'data-grip-type-id="%s" data-edge-mm="20"' % gid in page
+    assert f'data-grip-type-id="{gid}" data-edge-mm="20"' in page
 
     removed = client.post(
         "/profile/progression/delete",
@@ -229,7 +229,7 @@ def test_about_page_explains_the_numbers_in_plain_language(client):
 def test_progress_detail_pages_link_to_about_instead_of_jargon(client):
     register(client)
 
-    for section, anchor in (("volume", "volume"), ("grade", "correlation")):
+    for section in ("volume", "balance", "grade"):
         page = client.get(f"/progress/{section}").text
         assert "Spearman" not in page
         assert "TrainingVolume" not in page

@@ -1,6 +1,7 @@
 #!/bin/sh
 # Static-analysis gates: ruff (lint), mypy (types), pip-audit (dependency
-# vulnerabilities). Uses the griptrack conda env when present (local dev);
+# vulnerabilities), check-dead-css (unused CSS classes, templates, static
+# files -- #151). Uses the griptrack conda env when present (local dev);
 # falls back to the tools on PATH (CI). Same script both places, so local
 # and CI can't drift.
 set -e
@@ -20,5 +21,8 @@ run mypy backend
 
 echo "gate 3: pip-audit"
 run pip-audit --progress-spinner off -r requirements.txt -r requirements-dev.txt
+
+echo "gate 4: dead CSS / templates / static files"
+run python scripts/check-dead-css --quiet
 
 echo "lint OK"

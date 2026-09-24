@@ -108,6 +108,6 @@ def progression_view(session: Session, user: User) -> dict:
     return {
         "default": training_log.get_progression_settings(session, user),
         "overrides": overrides,
-        "grip_types": session.exec(select(GripType).order_by(GripType.name)).all(),  # type: ignore[arg-type]
+        "grip_types": session.exec(select(GripType).order_by(GripType.name)).all(),
         "labels": PROGRESSION_LABELS,
     }

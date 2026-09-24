@@ -15,14 +15,12 @@ object SessionLifecycleHelper {
 
     const val HOME_PATH = "/"
 
-    // Tab bar (#149): Today (/), Progress, Settings. Progress is a real page
-    // since #150 (/dashboard and /history only 303 into it now, so they're
-    // no longer roots). /settings still 303s to /profile until S6 ships, so
-    // the WebView lands on that path -- both spellings count as the root.
+    // Tab bar (#149): Today (/), Progress, Settings. Progress (#150) and
+    // Settings (#151) are real pages; /dashboard, /history, /profile and
+    // /plates only 303 into them now, so they're no longer roots.
     val TAB_ROOTS = setOf(
         "/progress",
-        "/settings",
-        "/profile"
+        "/settings"
     )
 
     val NON_RESTORABLE_SESSION_PATHS = setOf(
