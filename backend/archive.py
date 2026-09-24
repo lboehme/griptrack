@@ -85,6 +85,11 @@ class ArchiveMember:
     # trimmed to (id, name): dimension_name is fixed seed data, not
     # something a restore needs to carry.
     fields: tuple[str, ...] | None = None
+    # Columns added after FORMAT_VERSION 1 shipped. An older archive that
+    # simply lacks them still imports (the model default, None, applies);
+    # any other header mismatch -- an unknown extra column, a missing
+    # required one, a reordering -- is still rejected.
+    optional_fields: tuple[str, ...] = ()
 
     @property
     def filename(self) -> str:
@@ -146,7 +151,13 @@ ARCHIVE_MEMBERS: tuple[ArchiveMember, ...] = (
     ArchiveMember(BodyWeightLog, scope=Scope.USER, weight_cols=("weight",)),
     ArchiveMember(Climb, scope=Scope.USER),
     ArchiveMember(MaxWeightTest, scope=Scope.USER, weight_cols=("weight",)),
-    ArchiveMember(TrainingSession, scope=Scope.USER),
+    ArchiveMember(
+        TrainingSession,
+        scope=Scope.USER,
+        # rest_ends_at arrived with session play (#146), session_rpe and
+        # finished_at with its summary step (#147).
+        optional_fields=("rest_ends_at", "session_rpe", "finished_at"),
+    ),
     ArchiveMember(PainReport, scope=Scope.TRAINING_SESSION),
     ArchiveMember(WarmupStepCheck, scope=Scope.TRAINING_SESSION),
     ArchiveMember(SessionMaxEstimate, scope=Scope.TRAINING_SESSION, weight_cols=("weight",)),
@@ -439,7 +450,13 @@ def _read_member_rows(
     renames = member.renames(unit)
     expected_header = member.header(unit)
     reader = csv.DictReader(io.StringIO(text))
-    if reader.fieldnames != expected_header:
+    optional_headers = {renames.get(f, f) for f in member.optional_fields}
+    actual_header = list(reader.fieldnames or [])
+    # Exactly the expected header, minus any subset of the optional
+    # (later-added) columns, in the same order.
+    if actual_header != [
+        h for h in expected_header if h in actual_header or h not in optional_headers
+    ]:
         raise ArchiveError(
             f"{member.filename}: unexpected columns -- archive doesn't match "
             "this format version."

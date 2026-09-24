@@ -33,12 +33,23 @@ whether a rest is pending — and renders it as an htmx fragment (a full page
 without htmx, or after a plain form POST). The step names are: **Warmup
 rung** (one ramp rung at a time, with tick targets and a "Rung done"
 button), **Work set** (the hand cards and steppers, unchanged Set commit —
-the "How did it feel?" disclosure and its plate-breakdown readout live
-here too, see below), **Rest** (a ring countdown computed from the stored
-`rest_ends_at`, never a decrementing counter — see below), and **Summary**
-(a minimal "all sets done" placeholder pending the real screen, issue
-#147). The page always opens on the right step after a pause, reload, or
-Android killing the app. Replaced the two separate `/session/warmup` and
+with its plate-breakdown readout), **Rest** (a ring countdown computed from
+the stored `rest_ends_at`, never a decrementing counter — see below), and
+**Summary** (issue #147): "Session done." with the date, the duration so
+far and the combo; stat tiles for this session's TrainingVolume, sets per
+hand and the average of the logged set RPEs; the **Session RPE** chips;
+**tweaks** (None / Left / Right, then a severity 1–3 and note — the
+existing PainReport, at most one per hand); the session **notes** and the
+**Deload** toggle (all of these autosave per interaction — they moved here
+from the old "How did it feel?" card on the work-set step, which is gone);
+and **Finish**, which stamps `finished_at` once (idempotent) and goes home.
+In sequential HandOrderPreference, while the other hand still has sets to
+do, "Start {other} hand" is the summary's primary button and Finish the
+secondary one. Once `finished_at` is set, the session always resumes on its
+(still editable) Summary — even if a set is later deleted — except for an
+explicit ⋯ "Add a set" (which shows that one extra work set) and a
+sequential other hand that hasn't logged anything yet. The page always
+opens on the right step after a pause, reload, or Android killing the app. Replaced the two separate `/session/warmup` and
 `/session/worksets` pages, which now redirect to it. The Work set step
 also carries a server-rendered **undo-after-delete** banner right after a
 `/session/set/delete`: the deleted set's values ride along as query
@@ -48,6 +59,25 @@ with no server-side undo state of its own — it shows once, on that one
 response, never on a later unrelated visit.
 _Avoid_: warmup page, worksets page (as separate screens — they're steps of
 one page now)
+
+**Session RPE**:
+A whole-session effort rating (`session_rpe`, a nullable integer bounded
+1–10), asked once on the Summary step as five chips — Easy 3 · Moderate 5
+· Hard 7 · Very hard 9 · Max 10 — and autosaved on tap (re-tapping another
+chip overwrites it). Distinct from a WorkSet's per-set RPE: the Summary's
+"average RPE" tile is the mean of those per-set values, Session RPE is the
+user's single rating of the whole session. Exported/imported with the
+TrainingSession row (older archives without it still import).
+_Avoid_: sRPE (in UI copy), session difficulty, feel
+
+**Session load**:
+Session RPE × duration in minutes, where duration runs from `started_at` to
+`finished_at` (the Summary's Finish). Derived, never stored
+(`analytics.session_load`); `None` whenever Session RPE or either timestamp
+is missing, so an unfinished session has no load. Nothing consumes it yet —
+it's the standard load signal meant for the OvertrainingWarning and the
+injury guardian (#28), per docs/adr/0014.
+_Avoid_: Training load (ambiguous with TrainingVolume), tonnage
 
 **rest_ends_at**:
 A nullable `datetime` on `TrainingSession`: when set, the play step is
