@@ -414,6 +414,35 @@ def test_a_finished_session_shows_the_recap_and_log_a_climb(client):
     assert "today-start-form" not in page
 
 
+def test_finishing_early_counts_as_done(client):
+    """Finish on the summary (#147) ends the session even with planned sets
+    left: Today shows the recap, not "Resume"."""
+    tested_user(client)
+    today = TODAY.isoformat()
+    save_focus_set(client, 1, date=today, left=("40", "5", "8"), right=("40", "5", "8"))
+    assert state(today_page(client)) == "resume"
+
+    gid = grip_type_id(client, "half crimp")
+    client.post("/session/finish", data={"grip_type_id": gid, "edge_mm": 20, "date": today})
+
+    assert state(today_page(client)) == "done"
+
+
+def test_the_recap_shows_session_rpe_once_rated(client):
+    tested_user(client)
+    today = TODAY.isoformat()
+    full_session(client, today)
+    assert "data-recap-rpe" not in today_page(client)
+
+    gid = grip_type_id(client, "half crimp")
+    client.post(
+        "/session/rpe",
+        data={"grip_type_id": gid, "edge_mm": 20, "date": today, "session_rpe": "7"},
+    )
+
+    assert 'data-recap-rpe="7"' in today_page(client)
+
+
 def test_training_again_after_done_plans_a_second_session(client):
     tested_user(client)
     full_session(client, TODAY.isoformat())

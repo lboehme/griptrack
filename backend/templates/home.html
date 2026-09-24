@@ -39,7 +39,12 @@
         <span class="today-stat-num" data-recap-sets="{{ view.recap.sets }}">{{ view.recap.sets }}</span>
         <span class="today-stat-label">set{{ "s" if view.recap.sets != 1 }}</span>
       </div>
-      {# TODO(#147): session_rpe #}
+      {% if view.recap.session_rpe is not none %}
+      <div class="today-stat">
+        <span class="today-stat-num" data-recap-rpe="{{ view.recap.session_rpe }}">{{ view.recap.session_rpe }}</span>
+        <span class="today-stat-label">session RPE</span>
+      </div>
+      {% endif %}
     </div>
     <p class="today-again"><a href="/?change=1" hx-get="/today/change" hx-target="#today-picker-slot" hx-swap="innerHTML">Train again today</a></p>
   </section>

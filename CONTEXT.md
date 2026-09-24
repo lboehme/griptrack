@@ -94,8 +94,9 @@ reason ("+0.5 kg: last session felt easy (RPE 7)"). **Go lighter** is offered
 or OvertrainingWarning flag is on for the combo: tapping it marks today's
 TrainingSession `is_deload` and scales every weight to 85%, rounded *down* to
 the Loadable ladder; tapping again restores the plan. Today's states, in
-precedence order: **done** (every planned set of today's latest session is
-committed — shows a recap and "Log a climb"), **resume** (today's session has a
+precedence order: **done** (today's latest session was Finished on its Summary
+step, or every planned set of it is committed — shows a recap with Session RPE
+once rated, and "Log a climb"), **resume** (today's session has a
 warmup tick, estimate or work set but isn't done — "Resume · set N of M"),
 **no data yet** (nothing tested or trained — prompts the guided max test),
 **rest day** (see Rest-day suggestion), and **plan**. An empty session row (from

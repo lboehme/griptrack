@@ -115,8 +115,8 @@ class SessionRecap:
     volume: float
     sets: int
     unit: str
-    # TODO(#147): populate from TrainingSession.session_rpe once it exists.
-    session_rpe: float | None = None
+    # The Summary's whole-session rating (#147); None until rated.
+    session_rpe: int | None = None
 
 
 @dataclass
@@ -241,11 +241,12 @@ def _set_progress(
 def _session_is_done(
     session: Session, user: User, training_session: TrainingSession
 ) -> bool:
-    """Today's "done" rule: every planned set of the session's combo is
-    committed (current_set_number has run past total_sets for every in-play
-    hand).
-
-    TODO(#147): also treat finished_at as done."""
+    """Today's "done" rule: the session was Finished on its Summary step
+    (#147, `finished_at` set, even with planned sets left), or every planned
+    set of the session's combo is committed (current_set_number has run past
+    total_sets for every in-play hand)."""
+    if training_session.finished_at is not None:
+        return True
     combo = _session_combo(session, training_session)
     if combo is None:
         return False
@@ -286,7 +287,7 @@ def _recap(
         volume=sum(ws.weight * ws.reps for ws in worksets),
         sets=len({(ws.grip_type_id, ws.edge_mm, ws.set_number) for ws in worksets}),
         unit=user.unit_pref,
-        session_rpe=None,  # TODO(#147): training_session.session_rpe
+        session_rpe=training_session.session_rpe,
     )
 
 
