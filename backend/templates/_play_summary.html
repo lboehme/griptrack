@@ -46,14 +46,22 @@
 
   <h3 class="summary-overline">Any tweaks?</h3>
   <div class="summary-tweaks">
-    <div class="segmented-group" role="radiogroup" aria-label="Tweaked hand">
-      {% for opt in ["none", "left", "right"] %}
-      <label class="segmented-option">
-        <input type="radio" id="tweak-hand-{{ opt }}" name="tweak_hand" value="{{ opt }}" class="segmented-radio"{% if s.tweak_hand == opt %} checked{% endif %}>
-        <span class="segmented-label">{{ opt|capitalize }}</span>
-      </label>
-      {% endfor %}
-    </div>
+    <form id="tweak-clear-form" method="post" action="/session/pain-report/clear">
+      <input type="hidden" name="grip_type_id" value="{{ grip.id }}">
+      <input type="hidden" name="edge_mm" value="{{ edge_mm }}">
+      <input type="hidden" name="date" value="{{ date }}">
+      <input type="hidden" name="play_hand" value="{{ hand }}">
+      {% if session_number %}<input type="hidden" name="session_number" value="{{ session_number }}">{% endif %}
+      <div class="segmented-group" role="radiogroup" aria-label="Tweaked hand">
+        {% for opt in ["none", "left", "right"] %}
+        <label class="segmented-option">
+          <input type="radio" id="tweak-hand-{{ opt }}" name="tweak_hand" value="{{ opt }}" class="segmented-radio"{% if s.tweak_hand == opt %} checked{% endif %}>
+          <span class="segmented-label">{{ opt|capitalize }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      <noscript><button type="submit" class="btn btn-secondary">Save</button></noscript>
+    </form>
     {% for h in ["left", "right"] %}
     {% set report = s.tweaks.get(h) %}
     <form class="tweak-form pain-report-form" id="tweak-form-{{ h }}" data-hand="{{ h }}" method="post" action="/session/pain-report">
@@ -66,7 +74,7 @@
       <fieldset class="segmented-field">
         <legend class="segmented-legend">{{ h|capitalize }} hand · how bad?</legend>
         <div class="segmented-group" role="radiogroup" aria-label="{{ h|capitalize }} hand severity">
-          {% for sev, sev_label in [(1, "Niggle"), (2, "Sore"), (3, "Painful")] %}
+          {% for sev, sev_label, _sev_help in s.severities %}
           <label class="segmented-option">
             <input type="radio" id="tweak-{{ h }}-severity-{{ sev }}" name="severity" value="{{ sev }}" class="segmented-radio"{% if report and report.severity == sev %} checked{% endif %}>
             <span class="segmented-label">{{ sev }} · {{ sev_label }}</span>

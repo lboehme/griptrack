@@ -668,6 +668,29 @@ def add_pain_report(
     return summary_redirect(grip_type_id, edge_mm, date, play_hand, session_number)
 
 
+@router.post("/session/pain-report/clear")
+def clear_pain_reports(
+    request: Request,
+    date: date_type = Form(),
+    tweak_hand: str = Form(max_length=8),
+    session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
+    grip_type_id: int | None = Form(default=None, ge=1, le=MAX_ROW_ID),
+    edge_mm: int | None = Form(default=None, gt=0, le=MAX_EDGE_MM),
+    play_hand: str | None = Form(default=None),
+    user: User = Depends(auth.current_user),
+    session: Session = Depends(get_session),
+):
+    """The summary's "Any tweaks?" picker (PR #154 review): choosing None
+    clears the session's tweaks. Picking a hand only reveals that hand's
+    severity form, so it writes nothing here."""
+    training_session = training_log.find_session(session, user, date, session_number)
+    if tweak_hand == "none" and training_session is not None:
+        training_log.clear_pain_reports(session, training_session)
+    if request.headers.get("HX-Request"):
+        return Response(status_code=204)
+    return summary_redirect(grip_type_id, edge_mm, date, play_hand, session_number)
+
+
 @router.get("/session/new")
 def new_session_form(user: User = Depends(auth.current_user)):
     """Replaced by Today's plan + Change picker (#149)."""

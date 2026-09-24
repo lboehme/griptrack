@@ -1688,7 +1688,8 @@ code.invite-code {
 
 .summary-tweaks { margin-bottom: 1.1rem; }
 
-.summary-tweaks > .segmented-group { margin-bottom: .8rem; }
+#tweak-clear-form { margin: 0; }
+#tweak-clear-form > .segmented-group { margin-bottom: .8rem; }
 
 /* A tweak's severity + note only show for the chosen hand -- pure CSS
    (:has), so the reveal works without JS; "None" hides both. */

@@ -763,6 +763,7 @@ def summary_view(ws: dict, hands: list[str]) -> dict:
         "session_rpe": training_session.session_rpe if training_session else None,
         "finished": bool(training_session and training_session.finished_at),
         "tweaks": tweaks,
+        "severities": SEVERITY_CHOICES,
         "tweak_hand": next((h for h in ("left", "right") if h in tweaks), "none"),
     }
 
@@ -1767,6 +1768,26 @@ def delete_progression_settings(
 
 
 PAIN_REPORT_HANDS = ("left", "right", "both")
+
+# (severity, label, description): the one severity vocabulary -- the ＋ Log
+# sheet's Tweak chips, Today's Go lighter card and the summary's tweak
+# chips all read it (PR #154 review).
+SEVERITY_CHOICES = (
+    (1, "Niggle", "Noticeable, but pulling feels normal"),
+    (2, "Tweak", "Pulling hurts, so I backed off"),
+    (3, "Injury", "Sharp pain, I had to stop"),
+)
+SEVERITY_LABELS = {severity: label for severity, label, _ in SEVERITY_CHOICES}
+
+
+def clear_pain_reports(session: Session, training_session: TrainingSession) -> None:
+    """The summary's "Any tweaks? None": the session had no tweak after
+    all, so every PainReport on it goes (and stops offering Go lighter)."""
+    for report in session.exec(
+        select(PainReport).where(PainReport.training_session_id == training_session.id)
+    ).all():
+        session.delete(report)
+    session.commit()
 
 
 def record_pain_report(

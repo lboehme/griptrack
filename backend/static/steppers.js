@@ -393,6 +393,14 @@
       return;
     }
 
+    // "Any tweaks? None" clears the session's tweaks (PR #154 review);
+    // picking a hand just reveals its severity form (CSS :has).
+    var clearForm = e.target.closest("#tweak-clear-form");
+    if (clearForm) {
+      if (e.target.value === "none") postForm(clearForm);
+      return;
+    }
+
     // A tweak is one PainReport per (session, hand): nothing to save until
     // a severity is picked; after that, severity and note both autosave.
     var tweakForm = e.target.closest(".tweak-form");

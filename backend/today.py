@@ -63,14 +63,10 @@ DEFAULT_STYLE = "flash"
 
 WHEN_CHOICES = ("today", "yesterday", "date")
 
-# (severity, label, description) -- the Tweak tab's chips and the Go lighter
-# card's wording for a recent pain report.
-SEVERITY_CHOICES = (
-    (1, "Niggle", "Noticeable, but pulling feels normal"),
-    (2, "Tweak", "Pulling hurts, so I backed off"),
-    (3, "Injury", "Sharp pain, I had to stop"),
-)
-SEVERITY_LABELS = {severity: label for severity, label, _ in SEVERITY_CHOICES}
+# Severity wording (Niggle / Tweak / Injury) lives with the PainReport logic
+# in training_log -- one vocabulary for the ＋ sheet, Today and the summary.
+SEVERITY_CHOICES = training_log.SEVERITY_CHOICES
+SEVERITY_LABELS = training_log.SEVERITY_LABELS
 
 DEFAULT_BODYWEIGHT = {"kg": 70.0, "lbs": 155.0}
 

@@ -1162,6 +1162,8 @@ def test_no_new_write_route_is_added_beyond_play_and_its_actions(client):
         "/session/finish",
         # ⋯ Add a set / Remove empty set persist planned_sets (PR #154 review).
         "/session/sets",
+        # The summary's "Any tweaks? None" (PR #154 review).
+        "/session/pain-report/clear",
     }
 
 

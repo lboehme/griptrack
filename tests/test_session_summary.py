@@ -580,3 +580,57 @@ def test_session_load_mixes_naive_and_aware_datetimes_as_utc():
     ts2 = _ts(rpe=4, started=START, finished=(START + timedelta(minutes=20)).replace(tzinfo=None))
     assert analytics.session_load(ts2) == pytest.approx(80.0)
 
+
+
+# ---------- clearing a tweak, one severity vocabulary (PR #154 review) ----------
+
+
+def pain_rows(client):
+    with zipfile.ZipFile(io.BytesIO(export_archive(client))) as z:
+        return list(csv.DictReader(io.StringIO(z.read("PainReport.csv").decode())))
+
+
+def test_choosing_none_on_the_summary_clears_the_tweak(client):
+    setup_tested_user(client)
+    finish_sets(client, left=(30, 5, 7), right=(28, 5, 7))
+    c = combo(client)
+    client.post("/session/pain-report", data={**c, "hand": "left", "severity": "2"})
+    assert len(pain_rows(client)) == 1
+
+    page = play(client).text
+    form = re.search(r'<form[^>]*id="tweak-clear-form".*?</form>', page, re.DOTALL).group(0)
+    assert 'action="/session/pain-report/clear"' in form
+
+    response = client.post(
+        "/session/pain-report/clear", data={**c, "tweak_hand": "none"}, follow_redirects=False
+    )
+    assert response.status_code == 303
+    assert response.headers["location"].startswith("/session/play?")
+    assert pain_rows(client) == []
+    assert re.search(r'id="tweak-hand-none"[^>]*checked', play(client).text)
+
+
+def test_clearing_only_happens_for_none_and_only_for_the_callers_session(client):
+    setup_tested_user(client)
+    finish_sets(client, left=(30, 5, 7), right=(28, 5, 7))
+    c = combo(client)
+    client.post("/session/pain-report", data={**c, "hand": "right", "severity": "1"})
+
+    # Picking a hand (the no-JS submit of the same form) clears nothing.
+    client.post("/session/pain-report/clear", data={**c, "tweak_hand": "right"})
+    assert len(pain_rows(client)) == 1
+
+    register_second_user(client)
+    client.post("/session/pain-report/clear", data={**c, "tweak_hand": "none"})
+    login(client, "lifter@example.com", "test-pw-1234")
+    assert len(pain_rows(client)) == 1
+
+
+def test_severity_wording_is_the_same_on_the_summary_the_sheet_and_today(client):
+    setup_tested_user(client)
+    summary = finish_sets(client, left=(30, 5, 7), right=(28, 5, 7)).text
+    sheet = client.get("/log/sheet", params={"tab": "tweak"}).text
+    for label in ("Niggle", "Tweak", "Injury"):
+        assert label in summary
+        assert label in sheet
+    assert "Sore" not in summary and "Painful" not in summary
