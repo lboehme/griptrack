@@ -18,7 +18,8 @@ from datetime import timedelta
 
 from sqlmodel import Session, select
 
-from backend import analytics, auth, climbing, plates, training_log
+from backend import analytics, auth, climbing, training_log
+from backend.plan import GO_LIGHTER_FACTOR, HandPlan, combo_plan
 from backend.models import (
     Climb,
     GripType,
@@ -31,7 +32,8 @@ from backend.models import (
 )
 
 # ---- tunables (see CONTEXT.md: Today plan / Rest-day suggestion) ----
-GO_LIGHTER_FACTOR = 0.85
+# GO_LIGHTER_FACTOR and the plan's weights live in backend.plan -- one
+# derivation shared with session play's set-1 prefill (PR #154 review, D1).
 PAIN_LOOKBACK_DAYS = 7
 BODYWEIGHT_STALE_DAYS = 28
 REST_DAY_STREAK_DAYS = 2
@@ -78,14 +80,6 @@ class LogDateError(ValueError):
 
 
 # ---------------------------------------------------------------- data shapes
-
-
-@dataclass
-class HandPlan:
-    hand: str
-    weight: float | None
-    # "suggestion" (autoregulation), "last" (last session), "max" (CurrentMax)
-    source: str | None
 
 
 @dataclass
@@ -169,10 +163,6 @@ def greeting_name(user: User) -> str | None:
     if user.email == auth.DEVICE_USER_EMAIL:
         return None
     return user.email.split("@")[0]
-
-
-def _fmt(weight: float) -> str:
-    return f"{weight:g}"
 
 
 def _session_worksets(session: Session, training_session: TrainingSession) -> list[WorkSet]:
@@ -331,39 +321,6 @@ def _sessions_in_range(session: Session, user: User, start: date_type, end: date
     return len(rows)
 
 
-def _last_session_worksets(
-    session: Session,
-    user: User,
-    hand: str,
-    grip_type_id: int,
-    edge_mm: int,
-    exclude_session_id: int | None,
-) -> list[WorkSet]:
-    """This hand's WorkSets from the most recent session on the combo,
-    other than today's (deloads included -- this is "what you did last",
-    not a trend signal)."""
-    query = (
-        select(TrainingSession, WorkSet)
-        .join(WorkSet, WorkSet.training_session_id == TrainingSession.id)  # type: ignore[arg-type]
-        .where(TrainingSession.user_id == user.id)
-        .where(WorkSet.hand == hand)
-        .where(WorkSet.grip_type_id == grip_type_id)
-        .where(WorkSet.edge_mm == edge_mm)
-        .order_by(
-            TrainingSession.date.desc(),
-            TrainingSession.session_number.desc(),
-            WorkSet.set_number,  # type: ignore[arg-type]
-        )
-    )
-    if exclude_session_id is not None:
-        query = query.where(TrainingSession.id != exclude_session_id)
-    rows = session.exec(query).all()
-    if not rows:
-        return []
-    latest_id = rows[0][0].id
-    return [ws for ts, ws in rows if ts.id == latest_id]
-
-
 def _recent_pain(session: Session, user: User, today: date_type) -> tuple[PainReport, date_type] | None:
     row = session.exec(
         select(PainReport, TrainingSession.date)
@@ -392,26 +349,7 @@ def _combo_flags(
     return plateau, overtraining
 
 
-def go_lighter_weight(weight: float, ladder: list[float]) -> float:
-    """GO_LIGHTER_FACTOR of a planned weight, rounded DOWN to the loadable
-    ladder (never up -- a deload must never come out heavier than 85%)."""
-    target = int(round(weight * GO_LIGHTER_FACTOR * 100))
-    below = [rung for rung in ladder if int(round(rung * 100)) <= target]
-    return max(below) if below else 0.0
-
-
 # ---------------------------------------------------------------- the plan
-
-
-def _reason_phrase(suggestion: dict, unit: str, rpe: float | None) -> str:
-    feel = "last session felt easy" + (f" (RPE {_fmt(rpe)})" if rpe is not None else "")
-    if "suggested_weight" in suggestion:
-        return f"+{_fmt(suggestion['increment'])} {unit}: {feel}"
-    if "suggested_reps" in suggestion:
-        return f"+1 rep: {feel}"
-    if suggestion.get("path") == "set" and suggestion["current_sets"] < suggestion["max_sets"]:
-        return f"+1 set: {feel}"
-    return f"Ready for more weight: {feel}"
 
 
 def build_plan(
@@ -421,83 +359,19 @@ def build_plan(
     grip_type_id: int,
     edge_mm: int,
     today_session: TrainingSession | None,
+    session_number: int | None = None,
 ) -> TodayPlan:
-    """Today plan (CONTEXT.md): sets × reps from the TrainingProtocol and
-    the combo's ProgressionPath; per-hand weight from the autoregulation
-    suggestion (ADR-0011/0012), else the last session's top weight, else
-    CurrentMax. Go lighter (today's session is_deload) scales every weight
-    to 85%, rounded down to the loadable ladder."""
+    """Today plan (CONTEXT.md): backend.plan.combo_plan's sets × reps,
+    per-hand weights and one-line reason for the session Start would open
+    -- the same derivation session play seeds set 1 from (D1)."""
     grip = training_log.require_grip_type(session, grip_type_id)
-    protocol = training_log.get_protocol(session, user)
-    progression = training_log.get_progression_settings(session, user, grip_type_id, edge_mm)
-    suggestions = analytics.autoregulation_suggestions(
-        session, user, grip_type_id, edge_mm, today, ["left", "right"],
-        training_session=today_session,
+    basis = combo_plan(
+        session, user, today, grip_type_id, edge_mm, today_session, session_number
     )
-    exclude_id = today_session.id if today_session is not None else None
-    deload = bool(today_session is not None and today_session.is_deload)
-    ladder = plates.loadable_ladder(plates.inventory_for(session, user))
-
-    lasts = {
-        hand: _last_session_worksets(session, user, hand, grip_type_id, edge_mm, exclude_id)
-        for hand in ("left", "right")
-    }
-    had_last = any(lasts.values())
-
-    # Sets × reps: the protocol's set count (or, on Set progression, what
-    # the last session did) and the path's rep target (Double: the last
-    # session's reps within the range).
-    sets = protocol.default_work_sets
-    if progression.path == "set" and had_last:
-        sets = max(len({ws.set_number for ws in last}) for last in lasts.values())
-    reps = progression.rep_max
-    if progression.path == "double":
-        last_reps = [min(ws.reps for ws in last) for last in lasts.values() if last]
-        reps = min(last_reps) if last_reps else progression.rep_min
-
-    hands: list[HandPlan] = []
-    reasons: dict[str, str] = {}
-    for hand in ("left", "right"):
-        last = lasts[hand]
-        suggestion = suggestions.get(hand)
-        weight: float | None
-        source: str | None
-        if suggestion is not None and "suggested_weight" in suggestion:
-            weight, source = suggestion["suggested_weight"], "suggestion"
-        elif last:
-            weight, source = max(ws.weight for ws in last), "last"
-        else:
-            weight = training_log.compute_current_max(session, user, hand, grip_type_id, edge_mm)
-            source = "max" if weight is not None else None
-        if suggestion is not None:
-            if "suggested_reps" in suggestion:
-                reps = max(reps, suggestion["suggested_reps"])
-            if (
-                suggestion.get("path") == "set"
-                and suggestion["current_sets"] < suggestion["max_sets"]
-            ):
-                sets = max(sets, suggestion["current_sets"] + 1)
-            rpes = [ws.rpe for ws in last if ws.rpe is not None]
-            reasons[hand] = _reason_phrase(suggestion, user.unit_pref, max(rpes) if rpes else None)
-        if deload and weight is not None:
-            weight = go_lighter_weight(weight, ladder)
-        hands.append(HandPlan(hand=hand, weight=weight, source=source))
-
-    reason: str | None
-    if deload:
-        reason = f"Go lighter: {int(GO_LIGHTER_FACTOR * 100)}% of today's plan"
-    elif len(reasons) == 2 and reasons["left"] == reasons["right"]:
-        reason = reasons["left"]
-    elif reasons:
-        reason = "; ".join(f"{hand.capitalize()} {text}" for hand, text in reasons.items())
-    elif had_last:
-        reason = "Same as last session"
-    else:
-        reason = "Built from your current max"
     return TodayPlan(
-        grip=grip, edge_mm=edge_mm, sets=sets, reps=reps, hands=hands,
-        reason=reason, deload=deload,
-        sets_hint=sets if sets > protocol.default_work_sets else None,
+        grip=grip, edge_mm=edge_mm, sets=basis.sets, reps=basis.reps,
+        hands=basis.hands, reason=basis.reason, deload=basis.deload,
+        sets_hint=basis.sets if basis.sets > basis.default_sets else None,
     )
 
 
@@ -652,7 +526,10 @@ def today_view(
         return view
 
     combo_grip, combo_edge = combo
-    view.plan = build_plan(session, user, today, combo_grip, combo_edge, today_session)
+    view.plan = build_plan(
+        session, user, today, combo_grip, combo_edge, today_session,
+        view.start_session_number,
+    )
     plateau, overtraining = _combo_flags(session, user, combo_grip, combo_edge)
     view.go_lighter = _go_lighter(session, user, today, today_session, plateau, overtraining)
     if view.start_session_number is None:

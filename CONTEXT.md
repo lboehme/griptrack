@@ -93,7 +93,11 @@ reason ("+0.5 kg: last session felt easy (RPE 7)"). **Go lighter** is offered
 (never automatic) after a PainReport in the last 7 days, or while the Plateau
 or OvertrainingWarning flag is on for the combo: tapping it marks today's
 TrainingSession `is_deload` and scales every weight to 85%, rounded *down* to
-the Loadable ladder; tapping again restores the plan. Today's states, in
+the Loadable ladder; tapping again restores the plan. Tapping Start accepts the
+plan: session play pre-fills set 1 of each hand with exactly these weights and
+reps (one derivation, `backend/plan.py`, shared by both screens; carry-down
+from the previous set still wins from set 2 on, and the steppers stay
+adjustable — ADR-0011 amendment, 2026-09-24). Today's states, in
 precedence order: **done** (today's latest session was Finished on its Summary
 step, or every planned set of it is committed — shows a recap with Session RPE
 once rated, and "Log a climb"), **resume** (today's session has a
@@ -436,7 +440,9 @@ RPE ≤ 7 on every working set, it suggests the next step. *What* that step is �
 add a set, add weight, or add a rep — is set by the combo's ProgressionPath; the
 RPE gate is only the trigger (see ADR-0011 for the trigger, ADR-0012 for the
 path). RPE ≥ 9 or a below-target set withholds the suggestion ("hold") — it never
-suggests a lower weight and never pre-fills the stepper. A working set with no RPE
+suggests a lower weight. The inline hint itself is text only; the suggested
+weight reaches the stepper only through the Today plan, as set 1's prefill once
+the user taps Start (ADR-0011 amendment). A working set with no RPE
 makes the session ineligible. Deterministic and rule-based, not AI.
 _Avoid_: Coaching, AI suggestion, auto-progression
 

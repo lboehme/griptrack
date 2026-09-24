@@ -88,9 +88,10 @@ def test_rpe_trigger_ready_when_two_sessions_hit_target_at_rpe_le_7(client):
     assert right_hint is not None
     assert "40.5" in right_hint
 
-    # Stepper values remain untouched at 40.0 (never pre-filled with suggestion)
-    assert current_set_weight_input(page.text, "left") == "40.0"
-    assert current_set_weight_input(page.text, "right") == "40.0"
+    # ADR-0011 amendment (PR #154 review D1): set 1 starts at Today's plan,
+    # which is the suggestion when it's ready.
+    assert current_set_weight_input(page.text, "left") == "40.5"
+    assert current_set_weight_input(page.text, "right") == "40.5"
 
 
 def test_rpe_trigger_hold_when_rpe_ge_9(client):
@@ -450,8 +451,8 @@ def test_double_progression_ceiling_transitions_to_weight_build(client):
     assert "40.5" in hint
     assert "+0.5" in hint
 
-    # Steppers remain untouched
-    assert current_set_weight_input(page.text, "left") == "40.0"
+    # Set 1 starts at Today's plan -- the suggestion (ADR-0011 amendment).
+    assert current_set_weight_input(page.text, "left") == "40.5"
 
 
 def test_double_progression_weight_build_continues_above_min(client):

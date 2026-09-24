@@ -150,8 +150,7 @@ def _seed_for_hand(
     hand: str,
     current_set_number: int,
     saved: dict,
-    current_max: dict,
-    default_reps: int,
+    plan_seed: dict,
 ) -> dict:
     """The Focus screen's in-progress values for one hand.
 
@@ -161,8 +160,11 @@ def _seed_for_hand(
     that row's own values win, RPE included — reloading the page must not
     forget what was just saved. Otherwise this is a genuinely new set:
     weight/reps and RPE carry down from the most recently committed set for
-    this hand, else the usual CurrentMax/default-reps prefill and RPE starts
-    blank (nullable) if there is no prior set or the prior set had no RPE."""
+    this hand, else -- set 1 of the session for this hand -- exactly
+    Today's plan (backend.plan.combo_plan: suggestion, last session's top
+    weight or CurrentMax, Go lighter's 85% included; PR #154 review D1),
+    and RPE starts blank (nullable) if there is no prior set or the prior
+    set had no RPE."""
     existing = saved.get((hand, current_set_number))
     if existing is not None:
         return {"weight": existing.weight, "reps": existing.reps, "rpe": existing.rpe}
@@ -170,7 +172,7 @@ def _seed_for_hand(
         prior = saved.get((hand, n))
         if prior is not None:
             return {"weight": prior.weight, "reps": prior.reps, "rpe": prior.rpe}
-    return {"weight": current_max.get(hand), "reps": default_reps, "rpe": None}
+    return {"weight": plan_seed["weight"], "reps": plan_seed["reps"], "rpe": None}
 
 
 def worksets_view(
@@ -226,9 +228,17 @@ def worksets_view(
     sets_init = sets_hint if persisted is None else None
     row_count = max(needed_rows, persisted or sets_init or 0)
     current_set_number = _current_set_number(hands, saved, row_count)
+    # Function-local: plan (and analytics) import training_log, so a
+    # module-level import here would be circular.
+    from backend import plan as plan_module
+
+    combo_plan = plan_module.combo_plan(
+        session, user, date, grip_type_id, edge_mm, training_session, session_number
+    )
     resume_seed = {
         h: _seed_for_hand(
-            h, current_set_number, saved, current_max, protocol.base_work_set_reps
+            h, current_set_number, saved,
+            {"weight": combo_plan.hand(h).weight, "reps": combo_plan.reps},
         )
         for h in hands
     }
@@ -267,16 +277,9 @@ def worksets_view(
     nudge = analytics.session_start_nudge(
         session, user, grip_type_id, edge_mm, date, hands
     )
-    autoreg_suggestions = analytics.autoregulation_suggestions(
-        session,
-        user,
-        grip_type_id,
-        edge_mm,
-        date,
-        hands,
-        training_session=training_session,
-        session_number=session_number,
-    )
+    # The plan already evaluated the autoregulation suggestions for both
+    # hands with this same session context.
+    autoreg_suggestions = {h: combo_plan.suggestions.get(h) for h in hands}
     return {
         "grip": session.get(GripType, grip_type_id),
         "edge_mm": edge_mm,
