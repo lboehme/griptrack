@@ -421,6 +421,8 @@ def _strip_columns(csv_text: str, columns: set[str]) -> str:
         {"session_rpe", "finished_at"},
         # A pre-#146 archive also predates rest_ends_at.
         {"session_rpe", "finished_at", "rest_ends_at"},
+        # A pre-PR-#154-review archive has no play state columns (D2).
+        {"planned_sets", "play_grip_type_id", "play_edge_mm"},
     ],
 )
 def test_an_older_archive_without_the_new_columns_still_imports(client, dropped):
@@ -448,8 +450,60 @@ def test_an_older_archive_without_the_new_columns_still_imports(client, dropped)
     restored = export_sessions(client)
     assert len(restored) == 1
     assert restored[0]["notes"] == "old notes"
-    assert restored[0]["session_rpe"] == ""
-    assert restored[0]["finished_at"] == ""
+    if "session_rpe" in dropped:
+        assert restored[0]["session_rpe"] == ""
+        assert restored[0]["finished_at"] == ""
+    assert restored[0]["planned_sets"] == ""
+
+
+def _archive_with_session_cell(client, column: str, value: str) -> bytes:
+    with zipfile.ZipFile(io.BytesIO(export_archive(client))) as z:
+        members = {n: z.read(n) for n in z.namelist()}
+    rows = list(csv.DictReader(io.StringIO(members["TrainingSession.csv"].decode())))
+    rows[0][column] = value
+    out_csv = io.StringIO()
+    writer = csv.DictWriter(out_csv, fieldnames=list(rows[0].keys()))
+    writer.writeheader()
+    writer.writerows(rows)
+    members["TrainingSession.csv"] = out_csv.getvalue().encode()
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w") as z:
+        for name, data in members.items():
+            z.writestr(name, data)
+    return out.getvalue()
+
+
+@pytest.mark.parametrize("bad_rpe", ["0", "11", "99", "-3"])
+def test_import_rejects_a_session_rpe_outside_1_to_10(client, bad_rpe):
+    register(client, "founder@example.com", "test-pw-1234")
+    save_focus_set(client, 1, date=DATE, left=(30, 5, 7), right=(28, 5, 7))
+    archive = _archive_with_session_cell(client, "session_rpe", bad_rpe)
+
+    code = generate_invite(client)
+    register(client, "phone@example.com", "test-pw-5678", invite_code=code)
+    response = import_archive(client, archive)
+
+    assert response.status_code == 400
+    assert "session_rpe" in response.text
+    assert export_sessions(client) == []
+
+
+def test_import_does_not_restore_a_pending_rest(client):
+    """rest_ends_at is transient play state: a restored session must never
+    reopen on a stale rest step (PR #154 review)."""
+    register(client, "founder@example.com", "test-pw-1234")
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "42.5")
+    log_max_test(client, "right", "half crimp", 20, "2026-07-01", "40")
+    save_focus_set(client, 1, date=DATE, left=(30, 5, 7), right=(28, 5, 7))
+    assert export_sessions(client)[0]["rest_ends_at"] != ""
+    archive = export_archive(client)
+
+    code = generate_invite(client)
+    register(client, "phone@example.com", "test-pw-5678", invite_code=code)
+    assert import_archive(client, archive).status_code == 303
+
+    assert export_sessions(client)[0]["rest_ends_at"] == ""
+    assert step_kind(play(client).text) != "rest"
 
 
 def test_an_archive_with_an_unknown_extra_column_is_still_rejected(client):

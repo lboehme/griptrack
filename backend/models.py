@@ -157,6 +157,17 @@ class TrainingSession(SQLModel, table=True):
     # from these plus started_at in analytics.session_load, never stored.
     session_rpe: int | None = Field(default=None)
     finished_at: datetime | None = Field(default=None)
+    # Session play state (PR #154 review, D2): the combo play is actually
+    # running (stamped by the first rung-done / warmup tick / estimate /
+    # Set commit on it -- never by a GET), and that combo's planned set
+    # count (Today's "+1 set", ⋯ Add a set / Remove empty set). NULL
+    # planned_sets means "the protocol default". A pending rest_ends_at
+    # only belongs to the stamped combo.
+    planned_sets: int | None = Field(default=None)
+    play_grip_type_id: int | None = Field(
+        default=None, foreign_key="grip_types.id", nullable=True
+    )
+    play_edge_mm: int | None = Field(default=None)
 
 
 class PainReport(SQLModel, table=True):

@@ -278,9 +278,14 @@ below) and `TrainingVolume` (the primary trend/plateau signal, not
   (user, date, session_number) — identity-bearing key for two-a-days and
   offline-sync replay), started_at (descriptive only), notes, is_deload
   (plateau/trend math skips deloads), rest_ends_at (nullable — a pending
-  rest; the ring counts down to it), session_rpe (nullable 1–10, the
-  Summary's whole-session rating), finished_at (nullable — stamped once by
-  Finish; Session load = session_rpe × minutes from started_at), created_at
+  rest for the play combo; the ring counts down to it; never imported),
+  session_rpe (nullable 1–10, the Summary's whole-session rating),
+  finished_at (nullable — stamped once by Finish; Session load = session_rpe
+  × minutes from started_at), planned_sets (nullable — the play combo's
+  planned set count: Today's "+1 set", ⋯ Add/Remove a set; NULL = protocol
+  default), play_grip_type_id (FK, nullable) + play_edge_mm (nullable — the
+  combo play is running, stamped by the first rung-done/tick/estimate/Set
+  commit, never by a GET; Today's Resume opens it), created_at
 - **pain_reports**: id, training_session_id (FK), hand, severity (1–3),
   note — at most one row per (session, hand), autosaving; ground truth
   being accumulated for the injury guardian (#28)
