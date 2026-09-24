@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Welcome — GripTrack{% endblock %}
+{% block content %}
+<div class="auth-wrap">
+  <p class="brand">GripTrack<span style="color:var(--acc)">.</span></p>
+  <div class="card">
+    <h2 style="margin-top:0">Set up this phone</h2>
+    <p class="page-sub">This install belongs to you — no password, no accounts. Just a name and a couple of preferences.</p>
+    <form method="post" action="/welcome">
+      <label>Name <input type="text" name="name" autocomplete="given-name" maxlength="60" placeholder="Optional — how we greet you"></label>
+      <label>Units — <strong>fixed after this</strong>, pick what your plates are in
+        <select name="unit_pref">
+          <option value="kg" selected>kg</option>
+          <option value="lbs">lbs</option>
+        </select>
+      </label>
+      <label>How to work through both hands in a session
+        <select name="hand_order_pref">
+          <option value="alternating" selected>alternating — both hands side by side</option>
+          <option value="sequential">sequential — one hand fully, then the other</option>
+        </select>
+      </label>
+      <button type="submit">Continue</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -112,10 +112,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateSystemBarAppearance(config: Configuration = resources.configuration) {
+        // S0 Look (issue #144): the app is dark-only now (PRD decision 6,
+        // docs/ui-review-2026-09.md) regardless of the device's system
+        // light/dark setting, so the status/nav bar icons always render
+        // light-on-dark -- previously this toggled with `config`'s night
+        // mode, which put dark icons over the app's dark background
+        // whenever the *device* was in light mode.
         val insetsController = WindowInsetsControllerCompat(window, window.decorView)
-        val isDarkMode = (config.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-        insetsController.isAppearanceLightStatusBars = !isDarkMode
-        insetsController.isAppearanceLightNavigationBars = !isDarkMode
+        insetsController.isAppearanceLightStatusBars = false
+        insetsController.isAppearanceLightNavigationBars = false
     }
 
     private fun initViews() {
@@ -344,18 +349,49 @@ class MainActivity : AppCompatActivity() {
             var restored = false
             val bundle = savedStateBundle
             if (bundle != null) {
+                // Full Activity-recreation restore (rotation, etc.): the
+                // WebView's own cookie jar and DOM state come back as-is,
+                // so there's no cold start here and no need to re-run
+                // device sign-in.
                 restored = (webView.restoreState(bundle) != null)
             }
             if (!restored) {
                 val path = if (savedPath.startsWith("/")) savedPath else "/$savedPath"
-                webView.loadUrl("$serverUrl$path")
+                deviceSignIn(serverUrl, next = path)
             }
         } else {
             Log.i(TAG, "Loading root URL (savedPath=$savedPath, savedTime=$savedTime, shouldRestore=$shouldRestoreSession)")
             clearHistoryOnNextPageFinished = true
-            webView.loadUrl("$serverUrl/")
+            deviceSignIn(serverUrl, next = null)
         }
         savedStateBundle = null
+    }
+
+    /**
+     * Cold-start sign-in (#145, ADR-0013): exchange the device token the
+     * launcher provisioned in app-private storage for a session cookie by
+     * POSTing to /device-login, landing on `next` (a same-origin relative
+     * path the server validates) or Home on success. Doing this exchange
+     * on every cold start is simpler than tracking whether the existing
+     * cookie is still valid, and is cheap (one local loopback POST).
+     *
+     * Falls back to a plain load of `next`/`/` if the token file can't be
+     * read yet -- the server will then just render its own
+     * anonymous/first-run response, same as before this device-login flow
+     * existed.
+     */
+    private fun deviceSignIn(serverUrl: String, next: String?) {
+        val token = ServerManager.deviceToken(this)
+        if (token == null) {
+            Log.w(TAG, "No device token available; loading ${next ?: "/"} directly")
+            webView.loadUrl("$serverUrl${next ?: "/"}")
+            return
+        }
+        val formBody = StringBuilder("token=").append(Uri.encode(token))
+        if (next != null) {
+            formBody.append("&next=").append(Uri.encode(next))
+        }
+        webView.postUrl("$serverUrl/device-login", formBody.toString().toByteArray(Charsets.UTF_8))
     }
 
     private fun onServerError(error: Throwable) {

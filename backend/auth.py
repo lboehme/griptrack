@@ -6,10 +6,11 @@ import secrets
 import time
 
 from fastapi import Depends, HTTPException, Request
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, func, select
 
 from backend.db import get_session
-from backend.models import VALID_UNITS, Invite, User, utcnow
+from backend.models import VALID_HAND_ORDER_PREFS, VALID_UNITS, Invite, User, utcnow
 from backend.plates import seed_default_inventory
 
 PASSWORD_MIN_LENGTH = 8
@@ -132,6 +133,105 @@ def current_user(user: User | None = Depends(optional_user)) -> User:
 def require_admin(user: User = Depends(current_user)) -> User:
     if not user.is_admin:
         raise HTTPException(status_code=403, detail="Admin only")
+    return user
+
+
+# --- WebView build: device sign-in + first run (ADR-0013, #145) -----------
+
+# Unusable placeholder -- the first-run user is created with a random
+# password nobody knows (see create_device_user); this address just
+# satisfies the unique/non-null `email` column and templates that still
+# print `user.email`. Never used for login (device sign-in is the only way
+# in, in the WebView build).
+DEVICE_USER_EMAIL = "device-owner@griptrack.local"
+
+# Long-lived: the WebView build has no "remember me" concept, and the device
+# token (not the cookie) is what actually gates the loopback server -- see
+# docs/adr/0013-single-user-install-with-device-sign-in.md.
+DEVICE_SESSION_MAX_AGE_SECONDS = 400 * 24 * 60 * 60
+
+
+class DeviceUserExistsError(RegistrationError):
+    """Raised when the WebView first-run flow is re-submitted after the
+    single device User already exists (double-submit/refresh, #145) --
+    routers treat this as "already done", not a validation failure."""
+
+
+def any_user_exists(session: Session) -> bool:
+    return session.exec(select(func.count()).select_from(User)).one() > 0
+
+
+def device_login(session: Session, presented_token: str | None) -> User | None:
+    """WebView-build-only device sign-in (ADR-0013).
+
+    Constant-time-compares `presented_token` (the WebView shell's copy of
+    the launcher-provisioned device token) against
+    `GRIPTRACK_DEVICE_TOKEN` -- read live from the environment the same way
+    `register_user` reads `GRIPTRACK_BOOTSTRAP_TOKEN`, since both are
+    per-process secrets the launcher sets once at boot. Returns the single
+    local User on a match, None on a wrong/missing/absent token or before
+    first run has created a user.
+    """
+    if not device_token_valid(presented_token):
+        return None
+    return session.exec(select(User)).first()
+
+
+def device_token_valid(presented_token: str | None) -> bool:
+    """Constant-time check of the shell's device token against
+    `GRIPTRACK_DEVICE_TOKEN` (ADR-0013). Separate from `device_login` so a
+    correct token before first run is recognised as valid (it grants the
+    first-run bootstrap step) rather than looking like a failed attempt."""
+    expected = os.environ.get("GRIPTRACK_DEVICE_TOKEN")
+    if not expected or not presented_token:
+        return False
+    return hmac.compare_digest(presented_token.encode(), expected.encode())
+
+
+def create_device_user(
+    session: Session,
+    *,
+    name: str | None,
+    unit_pref: str,
+    hand_order_pref: str,
+) -> User:
+    """Create the single local User for the WebView build's first run
+    (ADR-0013). Gets an unusable random password hash and `is_admin=True`
+    so the existing admin-gated code paths (invites, admin reset -- both
+    hidden but not deleted in this build) keep working without a special
+    case.
+
+    Idempotent against double-submit/refresh: refuses (raises
+    DeviceUserExistsError) both on the ordinary "a user already exists"
+    check and, via the unique-email constraint, on the race where two
+    concurrent submissions both pass that check.
+    """
+    if unit_pref not in VALID_UNITS:
+        raise RegistrationError("Unit must be kg or lbs.")
+    if hand_order_pref not in VALID_HAND_ORDER_PREFS:
+        raise RegistrationError("Invalid hand order preference.")
+    if any_user_exists(session):
+        raise DeviceUserExistsError("This device is already set up.")
+
+    random_password = secrets.token_urlsafe(32)
+    user = User(
+        email=DEVICE_USER_EMAIL,
+        hashed_password=hash_password(random_password),
+        name=normalize_name(name),
+        is_admin=True,
+        unit_pref=unit_pref,
+        hand_order_pref=hand_order_pref,
+    )
+    session.add(user)
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise DeviceUserExistsError("This device is already set up.") from None
+    session.refresh(user)
+
+    seed_default_inventory(session, user)
+
     return user
 
 

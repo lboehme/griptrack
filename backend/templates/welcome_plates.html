@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Welcome — Plates — GripTrack{% endblock %}
+{% block content %}
+<h2>Your plates</h2>
+<p class="page-sub">Started you off with a sensible default stack, in {{ user.unit_pref }}. Edit it any time from Profile — nothing here is final.</p>
+<div class="card">
+<table>
+  <thead>
+    <tr><th>Plate ({{ user.unit_pref }})</th><th>Count</th></tr>
+  </thead>
+  <tbody>
+    {% for item in items %}
+    <tr>
+      <td class="plate-weight">{{ item.weight }}</td>
+      <td class="plate-count" data-count="{{ item.count }}">{{ item.count }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+<p><a class="btn btn-secondary" href="/plates">Edit plate inventory →</a></p>
+<div class="auth-wrap" style="margin-top:1.5rem">
+  <a class="btn" href="/welcome/test">Continue</a>
+</div>
+{% endblock %}

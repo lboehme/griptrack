@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#e8532c">
+  <meta name="theme-color" content="#14120F">
   {% if not webview_build %}
   <link rel="manifest" href="/manifest.webmanifest">
   {% endif %}
@@ -21,9 +21,10 @@
   {% block extra_head %}{% endblock %}
 </head>
 <body>
-  <header class="app-header">
+  {% include "_topo_map.html" %}
+  <header class="app-header glass-bar">
     <h1 class="wordmark"><a href="/">GripTrack<span class="dot">.</span></a></h1>
-    {% if user is defined and user %}
+    {% if user is defined and user and not webview_build %}
     <form class="logout-form" method="post" action="/logout">
       <button type="submit">Log out</button>
     </form>
@@ -34,7 +35,7 @@
   </main>
   {% if user is defined and user %}
   {% set path = request.url.path %}
-  <nav class="tabbar">
+  <nav class="tabbar glass-bar">
     <a href="/" {% if path == "/" %}class="active"{% endif %}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5V21h-6v-6h-6v6H3z"/></svg>
       Home

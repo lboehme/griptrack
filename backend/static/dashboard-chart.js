@@ -3,47 +3,58 @@
 // the server, fed by JSON-in-DOM payloads (#volume-trend-data and
 // #asymmetry-chart-data).
 //
-// Mark specs and both theme palettes match the design system: 2px
-// round-capped line, 8px markers with a 2px surface-color ring, ~10%-opacity
+// Mark specs match the design system (docs/ui-review-2026-09.md, V2/V7):
+// 2px round-capped line, 8px markers with a surface-color ring, ~10%-opacity
 // area wash (for volume), hairline solid recessive grid, endpoint direct-
-// labeled, axis text in muted "ink" token.
-// Asymmetry charts display signed series, zero line at y=0, and shaded
-// ±10-15% reference bands.
+// labeled, axis text in the muted token. The palette is read from the
+// page's own CSS custom properties (issue #144's dark-only token set,
+// app.css's :root block) rather than picked from prefers-color-scheme, so
+// there's exactly one source of truth for colour. The second series in
+// each chart (Mean Intensity / Load Gap) is drawn as a dotted chalk line
+// rather than a second hue, so it stays distinguishable without colour —
+// the same non-colour rule V2 uses for the L/R hand lines.
 // Requires uPlot vendored at /static/uplot.iife.min.js.
 document.addEventListener("DOMContentLoaded", () => {
   if (typeof uPlot === "undefined") return;
 
-  const THEMES = {
-    light: {
-      surface: "#ffffff",
-      mark: "#e8532c",
-      loadMark: "#2563eb",
-      intensityMark: "#2563eb",
-      ink: "#68727f",
-      grid: "#eef0f3",
-      text: "#14181f",
-      band: "rgba(232, 161, 60, 0.15)",
-      zeroLine: "#93a4b4",
-    },
-    dark: {
-      surface: "#14171e",
-      mark: "#ef5a30",
-      loadMark: "#60a5fa",
-      intensityMark: "#60a5fa",
-      ink: "#93a4b4",
-      grid: "#262c37",
-      text: "#eceef1",
-      band: "rgba(243, 185, 95, 0.15)",
-      zeroLine: "#68727f",
-    },
+  const style = getComputedStyle(document.documentElement);
+  const token = (name, fallback) => {
+    const v = style.getPropertyValue(name).trim();
+    return v || fallback;
   };
-  const prefersDark =
-    window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-  const palette = prefersDark ? THEMES.dark : THEMES.light;
+
+  // Alpha tint of a token colour, for canvas (which can't take var()).
+  // Tokens are 6-digit hex today; any other valid colour is used as-is
+  // (opaque) rather than falling back to a hard-coded tint.
+  function withAlpha(color, alpha) {
+    const hex = /^#([0-9a-fA-F]{6})$/.exec(color);
+    if (!hex) return color;
+    const n = parseInt(hex[1], 16);
+    return "rgba(" + (n >> 16) + ", " + ((n >> 8) & 255) + ", " + (n & 255) + ", " + alpha + ")";
+  }
+
+  const palette = {
+    // Charts sit on strong glass (see app.css's .trend-chart/.asymmetry-chart
+    // rules) — deliberately not opaque, so the topo map and card blur keep
+    // showing through behind the plotted lines/points.
+    surface: "transparent",
+    mark: token("--acc", "#FF6A3D"),
+    loadMark: token("--tx", "#F4EFE7"),
+    intensityMark: token("--tx", "#F4EFE7"),
+    ink: token("--mu", "#A89F92"),
+    grid: token("--line", "#383229"),
+    text: token("--tx", "#F4EFE7"),
+    band: withAlpha(token("--warn", "#F2B24C"), 0.15),
+    zeroLine: token("--mu", "#A89F92"),
+    // The point ring needs a genuinely opaque colour (not the transparent
+    // "surface" above) so markers read as solid dots over the glass/topo
+    // background rather than punching a hole in the line.
+    pointRing: token("--s1", "#1D1A16"),
+  };
 
   // ~10%-opacity area wash under the line, matching the old ax.fill_between
-  // alpha=0.10 -- appended as an 8-digit hex alpha suffix.
-  const AREA_FILL = palette.mark + "1a";
+  // alpha=0.10 -- derived from the --acc token like every chart colour.
+  const AREA_FILL = withAlpha(palette.mark, 0.1);
 
   function toUnixSeconds(isoDate) {
     return Math.floor(new Date(isoDate + "T00:00:00Z").getTime() / 1000);
@@ -308,7 +319,7 @@ document.addEventListener("DOMContentLoaded", () => {
             points: {
               show: true,
               size: 8,
-              stroke: palette.surface,
+              stroke: palette.pointRing,
               width: 2,
               fill: palette.mark,
             },
@@ -328,11 +339,11 @@ document.addEventListener("DOMContentLoaded", () => {
             label: "Mean Intensity",
             stroke: palette.intensityMark,
             width: 2,
-            dash: [5, 4],
+            dash: [1, 5],
             points: {
               show: true,
               size: 7,
-              stroke: palette.surface,
+              stroke: palette.pointRing,
               width: 2,
               fill: palette.intensityMark,
             },
@@ -401,7 +412,8 @@ document.addEventListener("DOMContentLoaded", () => {
         };
 
         const chart = new uPlot(opts, chartData, target);
-        chart.root.style.background = palette.surface;
+        // Deliberately no root background: the container div is strong glass
+        // (app.css) and the map/blur should keep showing through the chart.
         chart.root.style.borderRadius = "10px";
         charts.push({ chart, target });
       });
@@ -473,7 +485,7 @@ document.addEventListener("DOMContentLoaded", () => {
             points: {
               show: true,
               size: 8,
-              stroke: palette.surface,
+              stroke: palette.pointRing,
               width: 2,
               fill: palette.mark,
             },
@@ -489,11 +501,11 @@ document.addEventListener("DOMContentLoaded", () => {
             label: "Load Gap",
             stroke: palette.loadMark,
             width: 2,
-            dash: [5, 4],
+            dash: [1, 5],
             points: {
               show: true,
               size: 7,
-              stroke: palette.surface,
+              stroke: palette.pointRing,
               width: 2,
               fill: palette.loadMark,
             },
@@ -539,7 +551,8 @@ document.addEventListener("DOMContentLoaded", () => {
         };
 
         const chart = new uPlot(opts, chartData, target);
-        chart.root.style.background = palette.surface;
+        // Deliberately no root background: the container div is strong glass
+        // (app.css) and the map/blur should keep showing through the chart.
         chart.root.style.borderRadius = "10px";
         charts.push({ chart, target });
       });
