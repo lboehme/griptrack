@@ -188,7 +188,7 @@ def test_no_data_yet_prompts_for_the_guided_max_test(client):
     page = today_page(client)
 
     assert state(page) == "no_data"
-    assert 'href="/max-tests"' in page
+    assert 'href="/progress/maxes"' in page
     assert "today-start-form" not in page
     assert "today-plan" not in page
 
@@ -235,7 +235,7 @@ def test_voided_test_no_longer_drives_the_plan_combo(client):
     log_max_test(client, "left", "open hand", 10, day(-9), "35")
     assert plan_attr(today_page(client), "grip-type-id") == grip_type_id(client, "open hand")
 
-    max_tests = client.get("/max-tests").text
+    max_tests = client.get("/progress/maxes").text
     newest_id = max(int(i) for i in re.findall(r'action="/max-tests/(\d+)/void"', max_tests))
     client.post(f"/max-tests/{newest_id}/void")
 
@@ -601,13 +601,15 @@ def test_tab_bar_is_hidden_on_first_run_screens(webview_client):
     assert 'class="tabbar' in webview_client.get("/").text
 
 
-def test_progress_and_settings_alias_the_existing_pages(client):
+def test_progress_is_a_real_page_and_settings_aliases_profile(client):
     register(client)
 
+    # Progress shipped (#150): a page of its own, no longer a 303 alias.
     progress = client.get("/progress", follow_redirects=False)
     settings = client.get("/settings", follow_redirects=False)
 
-    assert (progress.status_code, progress.headers["location"]) == (303, "/dashboard")
+    assert progress.status_code == 200
+    assert 'id="progress-root"' in progress.text
     assert (settings.status_code, settings.headers["location"]) == (303, "/profile")
 
 

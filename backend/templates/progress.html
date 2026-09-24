@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Progress — GripTrack{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="/static/uplot.min.css">
+<script src="/static/uplot.iife.min.js" defer></script>
+<script src="/static/progress-chart.js" defer></script>
+{% endblock %}
+{% block content %}
+{% include "_progress_body.html" %}
+{% endblock %}

@@ -131,7 +131,7 @@
 
   <div class="today-actionbar glass-bar">
     {% if view.state == "no_data" %}
-    <a class="btn today-primary" href="/max-tests">Start max test</a>
+    <a class="btn today-primary" href="/progress/maxes">Start max test</a>
     {% elif view.state == "resume" and view.resume %}
     <a class="btn today-primary today-resume-btn" href="{{ view.resume.url }}">Resume · set {{ view.resume.set_number }} of {{ view.resume.total_sets }}</a>
     {% elif view.state == "done" %}

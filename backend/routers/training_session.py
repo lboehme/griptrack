@@ -531,10 +531,11 @@ def summary_redirect(
     session_number: int | None,
 ) -> RedirectResponse:
     """The no-JS answer for the summary step's autosave forms (#147): back
-    to /session/play when the form carried its combo, else the pre-#147
-    /history fallback every older caller of these endpoints still gets."""
+    to /session/play when the form carried its combo, else the timeline
+    (#150; the pre-#147 /history fallback) every older caller of these
+    endpoints still gets."""
     if grip_type_id is None or edge_mm is None:
-        return RedirectResponse("/history", status_code=303)
+        return RedirectResponse("/progress/timeline", status_code=303)
     hand = play_hand if play_hand in VALID_HANDS else None
     return play_redirect(grip_type_id, edge_mm, date, hand, session_number)
 
@@ -558,7 +559,7 @@ def update_session(
 
     The optional combo fields (grip_type_id, edge_mm, hand) are only a
     return address: the summary step posts them so a no-JS save lands back
-    on /session/play instead of /history."""
+    on /session/play instead of the timeline."""
     training_session = training_log.find_session(session, user, date, session_number)
     if training_session is not None:
         training_session.notes = notes or ""

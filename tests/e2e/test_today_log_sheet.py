@@ -36,7 +36,7 @@ def test_logging_a_climb_takes_three_taps(live_server, authenticated_page):
 
 def test_sheet_opens_and_closes_from_another_tab_page(live_server, authenticated_page):
     page = authenticated_page
-    page.goto(f"{live_server}/dashboard")
+    page.goto(f"{live_server}/progress")
     history_before = page.evaluate("() => history.length")
 
     page.locator(".tabbar-log").click()
@@ -46,7 +46,7 @@ def test_sheet_opens_and_closes_from_another_tab_page(live_server, authenticated
     page.locator(".sheet-close").click()
 
     expect(page.locator(".log-sheet")).to_have_count(0)
-    assert page.url.endswith("/dashboard")
+    assert page.url.endswith("/progress")
     assert page.evaluate("() => history.length") == history_before
 
 

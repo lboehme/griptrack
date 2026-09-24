@@ -19,6 +19,32 @@ GRADE_NOT_RECOGNIZED_MESSAGE = (
 )
 
 
+# V-scale floor for each gym-circuit grade colour band (V2 of
+# docs/ui-review-2026-09.md): 6A/6A+ = V3 ... 7B and up = V8+. Below V3
+# (below 6A) has no band in the spec, so it renders with no colour. Values
+# are app.css custom-property names: templates wrap them in var(), the
+# Progress chart resolves them at runtime (no colour literals in Python).
+GRADE_COLOR_BANDS: list[tuple[float, str]] = [
+    (8.0, "--grade-7b"),
+    (6.0, "--grade-7a"),
+    (5.0, "--grade-6c"),
+    (4.0, "--grade-6b"),
+    (3.0, "--grade-6a"),
+]
+
+
+def grade_color_token(grade: object) -> str:
+    """The app.css token name of a boulder grade's colour band, or "" when
+    the grade doesn't parse or sits below the lowest band (6A)."""
+    value = parse_boulder_grade(str(grade)) if grade is not None else None
+    if value is None:
+        return ""
+    for floor, token in GRADE_COLOR_BANDS:
+        if value >= floor:
+            return token
+    return ""
+
+
 class InvalidStyleError(ValueError):
     """Raised when an unrecognized climb style is provided."""
 

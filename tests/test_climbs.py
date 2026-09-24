@@ -14,7 +14,7 @@ def climb_rows(client):
     """Parse the logged climb list into (discipline, grade, style, date)
     tuples. The standalone /climbs page is gone (#149 -- logging moved to
     the ＋ Log sheet), so the list is read where it still lives: /history."""
-    page = client.get("/history").text
+    page = client.get("/progress/timeline").text
     return re.findall(
         r'class="climb" data-discipline="(\w+)" data-grade="([^"]+)" '
         r'data-style="(\w+)" data-date="([\d-]+)"',
@@ -23,7 +23,7 @@ def climb_rows(client):
 
 
 def history_climb_rows(client):
-    page = client.get("/history").text
+    page = client.get("/progress/timeline").text
     return re.findall(
         r'class="climb" data-discipline="(\w+)" data-grade="([^"]+)" '
         r'data-style="(\w+)" data-date="([\d-]+)"',
@@ -121,7 +121,7 @@ def test_unparseable_grade_is_badged_in_history(client):
     register(client)
     log_climb(client, grade="hard", style="flash")
 
-    page = client.get("/history").text
+    page = client.get("/progress/timeline").text
     assert "grade-unparsed" in page
     assert "not recognized" in page.lower()
 
@@ -140,7 +140,7 @@ def test_parseable_v_and_font_grades_show_no_warning_or_badge(client):
     assert "recognized" not in v_response.text.lower()
     assert "recognized" not in font_response.text.lower()
 
-    history_page = client.get("/history").text
+    history_page = client.get("/progress/timeline").text
     assert "grade-unparsed" not in history_page
 
 
@@ -153,7 +153,7 @@ def test_existing_sport_rows_still_render_in_history_unchanged(client):
     assert ("boulder", "V5", "flash", "2026-07-04") in rows
     assert ("sport", "7a+", "redpoint", "2026-07-02") in rows
 
-    page = client.get("/history").text
+    page = client.get("/progress/timeline").text
     # Legacy sport rows aren't badged as "unparsed" — they're excluded from
     # the correlation by discipline, not by a grade-parse failure.
     sport_li = re.search(r'<li class="climb"[^>]*data-discipline="sport"[^>]*>.*?</li>', page, re.DOTALL)

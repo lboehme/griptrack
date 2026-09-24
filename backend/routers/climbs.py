@@ -15,7 +15,7 @@ router = APIRouter()
 @router.get("/climbs")
 def climbs_page(user: User = Depends(auth.current_user)):
     """The climb form moved into the ＋ Log sheet (#149); the climb list
-    lives on /history."""
+    lives on the Progress timeline (#150)."""
     return RedirectResponse("/?log=climb", status_code=303)
 
 

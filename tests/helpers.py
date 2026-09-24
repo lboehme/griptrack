@@ -51,7 +51,7 @@ def register_second_user(client, email="friend@example.com", password="test-pw-4
 
 
 def grip_type_id(client, name):
-    page = client.get("/max-tests").text
+    page = client.get("/progress/maxes").text
     return re.search(rf'value="(\d+)"[^>]*>{name}<', page, re.IGNORECASE).group(1)
 
 
@@ -342,7 +342,7 @@ def import_archive(
 
 def current_maxes(client):
     """Parse the max-tests page into {(hand, grip, edge): weight}."""
-    page = client.get("/max-tests").text
+    page = client.get("/progress/maxes").text
     return {
         (h, g, int(e)): float(w)
         for h, g, e, w in re.findall(

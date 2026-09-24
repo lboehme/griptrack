@@ -1,0 +1,86 @@
+{# Progress (#150): story sentences, the headline %BW chart, Go deeper.
+   Everything is assembled in backend/progress.py; this only lays out
+   `view`. The combo/range pickers are plain links (the no-JS path) that
+   htmx upgrades into an in-place swap of #progress-root. #}
+{% set combo = view.combo %}
+<div id="progress-root" class="progress" data-range="{{ view.range_key }}"{% if combo %} data-grip-type-id="{{ combo.grip_type_id }}" data-edge-mm="{{ combo.edge_mm }}"{% endif %}>
+  <header class="today-head progress-head">
+    <p class="overline">{% if combo %}{{ combo.grip_name|display_name }} · {{ combo.edge_mm }} mm{% else %}Your training{% endif %}</p>
+    <h2 class="today-headline">Progress</h2>
+  </header>
+
+  {% if view.combos|length > 1 %}
+  <nav class="chip-row progress-chips progress-combos" aria-label="Grip and edge">
+    {% for c in view.combos %}
+    <a class="chip-link{% if c.selected %} on{% endif %}" href="/progress?{{ c.query }}"
+       hx-get="/progress?{{ c.query }}" hx-target="#progress-root" hx-swap="outerHTML" hx-push-url="true"
+       data-grip-type-id="{{ c.grip_type_id }}" data-edge-mm="{{ c.edge_mm }}"{% if c.selected %} aria-current="true"{% endif %}>{{ c.grip_name|display_name }} · {{ c.edge_mm }} mm</a>
+    {% endfor %}
+  </nav>
+  {% endif %}
+  <nav class="chip-row progress-chips progress-ranges" aria-label="Range">
+    {% for r in view.ranges %}
+    <a class="chip-link{% if r.selected %} on{% endif %}" href="/progress?{{ r.query }}"
+       hx-get="/progress?{{ r.query }}" hx-target="#progress-root" hx-swap="outerHTML" hx-push-url="true"
+       data-range="{{ r.key }}"{% if r.selected %} aria-current="true"{% endif %}>{{ r.label }}</a>
+    {% endfor %}
+  </nav>
+
+  {% if view.sentences %}
+  <section class="card glass strong progress-story" aria-label="Summary">
+    <ul class="plain">
+      {% for s in view.sentences %}
+      <li class="story-sentence" data-kind="{{ s.kind }}"{% if s.hand %} data-hand="{{ s.hand }}"{% endif %}>
+        <span class="story-mark story-{{ s.kind }}" aria-hidden="true"></span>
+        <p><strong>{{ s.claim }}</strong>{% if s.advice %} <span class="muted">{{ s.advice }}</span>{% endif %}</p>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  <section class="card glass strong progress-chart-card">
+    <h3>Strength, % of bodyweight</h3>
+    <div class="progress-legend">
+      {% for entry in view.legend %}
+      <span class="progress-legend-item" data-hand="{{ entry.hand }}"{% if entry.latest_pct is not none %} data-latest="{{ "%.4f"|format(entry.latest_pct) }}"{% endif %}>
+        <span class="progress-swatch {{ entry.hand }}" aria-hidden="true"></span>
+        {{ entry.hand|display_name }}
+        <strong>{% if entry.latest_pct is not none %}{{ "%.1f"|format(entry.latest_pct * 100) }}%{% else %}–{% endif %}</strong>
+      </span>
+      {% endfor %}
+    </div>
+    <div class="progress-chart" data-progress-chart role="img" aria-label="{{ view.aria_label }}"></div>
+    {% if not view.has_points %}
+    <p class="muted progress-empty">Nothing in this range yet{% if view.range_key != "all" %} — try <a href="/progress?{{ view.ranges[-1].query }}">All</a>{% endif %}.</p>
+    {% endif %}
+    {% if view.grade_bands %}
+    <ul class="plain progress-grades" aria-label="Sends by grade">
+      {% for band in view.grade_bands %}
+      <li><span class="grade-dot" style="--dot: var({{ band.token }})" aria-hidden="true"></span>{{ band.label }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    <script type="application/json" id="progress-chart-data">{{ view.chart|tojson }}</script>
+  </section>
+
+  <section class="progress-deeper">
+    <p class="overline">Go deeper</p>
+    <ul class="plain card progress-rows">
+      {% for href, label, hint in [
+        ("/progress/volume", "Training volume", "Volume and mean intensity per session"),
+        ("/progress/balance", "Left/right balance", "Strength and load gap between hands"),
+        ("/progress/grade", "Strength vs grade", "How your sends track your pull"),
+        ("/progress/maxes", "Maxes", "Current maxes, test history, guided test"),
+        ("/progress/timeline", "All sessions & climbs", "Everything you logged, by week"),
+      ] %}
+      <li>
+        <a class="progress-row" href="{{ href }}">
+          <span class="progress-row-text"><strong>{{ label }}</strong><span class="muted">{{ hint }}</span></span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+</div>

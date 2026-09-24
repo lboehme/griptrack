@@ -90,7 +90,7 @@ def seed_max_tests(page, live_server, hands=("left", "right")):
     /session/play lands straight on the warmup rung step instead of the
     untested-hand estimate cards."""
     for hand in hands:
-        page.goto(f"{live_server}/max-tests")
+        page.goto(f"{live_server}/progress/maxes")
         form = page.locator('form[action="/max-tests"]')
         form.locator(f'input[name="hand"][value="{hand}"]').check()
         form.locator("select.grip-select").select_option(label=["Half crimp", "half crimp"])

@@ -1,6 +1,6 @@
 from datetime import date as date_type
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlmodel import Session, select
 
@@ -8,32 +8,11 @@ from backend import auth, training_log
 from backend.db import get_session
 from backend.limits import MAX_EDGE_MM, MAX_WEIGHT
 from backend.models import GripType, User
-from backend.templating import templates
 
 router = APIRouter()
 
-
-@router.get("/max-tests")
-def max_tests_page(
-    request: Request,
-    user: User = Depends(auth.current_user),
-    session: Session = Depends(get_session),
-):
-    grip_types = session.exec(select(GripType).order_by(GripType.name)).all()
-    combos = training_log.tested_combinations(session, user)
-    tests = training_log.max_test_history(session, user)
-
-    return templates.TemplateResponse(
-        request,
-        "max_tests.html",
-        {
-            "user": user,
-            "grip_types": grip_types,
-            "combos": combos,
-            "test_history": tests,
-            "today": date_type.today().isoformat(),
-        },
-    )
+# The Maxes detail page under Progress (#150); GET /max-tests redirects there.
+MAXES_PAGE = "/progress/maxes"
 
 
 @router.post("/max-tests")
@@ -53,7 +32,7 @@ def log_max_test(
     training_log.record_max_weight_test(
         session, user, hand, grip_type_id, edge_mm, date, weight
     )
-    return RedirectResponse("/max-tests", status_code=303)
+    return RedirectResponse(MAXES_PAGE, status_code=303)
 
 
 @router.post("/grip-types")
@@ -81,4 +60,4 @@ def void_max_test(
     test = training_log.void_max_weight_test(session, user, test_id)
     if test is None:
         raise HTTPException(status_code=403, detail="Cannot void this test")
-    return RedirectResponse("/max-tests", status_code=303)
+    return RedirectResponse(MAXES_PAGE, status_code=303)
