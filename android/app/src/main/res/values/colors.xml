@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- S0 Look (issue #144): matches backend/static/app.css's --acc/--bg/
-         --tx/--mu/--danger tokens. Splash/window background is the app's
-         dark ground now that the app is dark-only (docs/ui-review-2026-09.md,
-         PRD decision 6) -- previously an unrelated near-black (#18181B). -->
+    <!-- S0 Look (issue #144): matches the acc, bg, tx, mu and danger tokens
+         in backend/static/app.css. (XML forbids a double hyphen inside a
+         comment, so the CSS custom-property names are spelled without it.)
+         Splash/window background is the app's dark ground now that the app
+         is dark-only (docs/ui-review-2026-09.md, PRD decision 6); previously
+         an unrelated near-black (#18181B). -->
     <color name="brand_primary">#FF6A3D</color>
     <color name="ic_launcher_background">#FF6A3D</color>
     <color name="splash_bg">#14120F</color>
