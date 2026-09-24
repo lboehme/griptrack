@@ -272,3 +272,14 @@ def test_settings_plates_summarises_what_can_be_loaded(client):
     assert "58.5 kg" in page
     assert "smallest plate is <strong>0.5 kg</strong>" in page
     assert "Loading pin" in page
+
+
+def test_a_tap_never_wipes_a_stack_bigger_than_the_tap_cycle(client):
+    """PR #154 review: a 20-plate stack set through the form must survive a
+    tap -- only exactly TAP_CYCLE_MAX wraps to 0."""
+    register(client)
+    client.post("/plates", data={"weight": "10", "count": "20"})
+
+    tap(client, "10")
+
+    assert inventory_rows(client)[10.0] == 20

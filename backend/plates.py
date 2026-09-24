@@ -149,8 +149,8 @@ TAP_CYCLE_MAX = 10
 
 
 def tap_plate(session: Session, user: User, weight: float) -> int:
-    """One tap on a plate circle: count + 1, wrapping to 0 after
-    TAP_CYCLE_MAX. Returns the new count. Increments server-side so rapid
+    """One tap on a plate circle: count + 1, wrapping to 0 from exactly
+    TAP_CYCLE_MAX (a bigger stack is left alone). Returns the new count. Increments server-side so rapid
     taps (queued one after another by htmx) each count."""
     item = session.exec(
         select(PlateInventoryItem)
@@ -158,7 +158,14 @@ def tap_plate(session: Session, user: User, weight: float) -> int:
         .where(PlateInventoryItem.weight == weight)
     ).first()
     current = item.count if item is not None else 0
-    new_count = 0 if current >= TAP_CYCLE_MAX else current + 1
+    # Only exactly TAP_CYCLE_MAX wraps: a bigger stack (set through the
+    # form) is never wiped by a stray tap -- it just stays as it is.
+    if current == TAP_CYCLE_MAX:
+        new_count = 0
+    elif current < TAP_CYCLE_MAX:
+        new_count = current + 1
+    else:
+        return current
     set_plate(session, user, weight, new_count)
     return new_count
 
