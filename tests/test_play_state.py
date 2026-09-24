@@ -17,6 +17,9 @@ from backend.db import get_session
 from backend.models import TrainingSession
 from tests.helpers import (
     complete_warmup,
+    export_archive,
+    generate_invite,
+    import_archive,
     get_session_page,
     grip_type_id,
     log_max_test,
@@ -262,3 +265,19 @@ def test_a_pending_rest_does_not_leak_onto_another_combo(client):
     assert 'id="rest-step"' not in other
     # ...and the original combo still shows its rest.
     assert step_kind(play(client, **params).text) == "rest"
+
+
+def test_export_import_round_trips_the_play_state(client):
+    setup_tested_user(client)
+    params = combo(client)
+    complete_warmup(client, params["grip_type_id"], 20)
+    client.post("/session/sets", data={**params, "sets": 5})
+    archive = export_archive(client)
+
+    code = generate_invite(client)
+    register(client, "phone@example.com", "test-pw-5678", invite_code=code)
+    assert import_archive(client, archive).status_code == 303
+
+    restored = sessions(client)[-1]
+    assert restored.planned_sets == 5
+    assert (restored.play_grip_type_id, restored.play_edge_mm) == (int(params["grip_type_id"]), 20)
