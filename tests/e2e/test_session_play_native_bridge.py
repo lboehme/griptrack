@@ -107,6 +107,11 @@ def test_plus_30_s_reschedules_start_rest_30000_ms_later(live_server, authentica
     wait_for_more_start_rest_calls(page, count_before)
 
     assert start_rest_calls(page)[-1][1] == first_ms + 30000
+    # Re-arming cancels the previous alarm first, so a refused start can't
+    # leave the old one to fire 30 s early (PR #154 review MUST-FIX 7).
+    recorded = calls(page)
+    last_start = max(i for i, c in enumerate(recorded) if c[0] == "startRest")
+    assert recorded[last_start - 1] == ["stopRest"]
 
 
 def test_settings_sound_toggle_passes_sound_true_to_start_rest(live_server, authenticated_page):

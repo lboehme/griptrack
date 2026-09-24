@@ -281,6 +281,10 @@
   function startNativeRest(step) {
     var endsAtMs = parseInt(step.dataset.restEndsAtMs, 10);
     if (!endsAtMs || endsAtMs <= Date.now()) return;
+    // Cancel the previous notification/alarm first: if the shell refuses
+    // this start (an end it considers implausible), no stale alarm from
+    // the earlier end is left to fire early (PR #154 review MUST-FIX 7).
+    nativeCall("stopRest");
     nativeCall(
       "startRest",
       endsAtMs,

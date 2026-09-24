@@ -59,7 +59,12 @@ class RestBridge(
         const val EXTRA_SOUND = "org.griptrack.app.extra.REST_SOUND"
 
         const val MAX_TEXT_LENGTH = 80
-        const val MAX_REST_AHEAD_MS = 30 * 60 * 1000L
+        /**
+         * Well above the longest rest the server can store (limits.MAX_REST_SECONDS
+         * plus MAX_REST_EXTENSION_SECONDS of +30 s taps), so a legitimate rest is
+         * never refused and left to fire a stale alarm (PR #154 review).
+         */
+        const val MAX_REST_AHEAD_MS = 2 * 60 * 60 * 1000L
 
         private const val KEY_ASKED_NOTIFICATIONS = "asked_notification_permission"
 
@@ -69,7 +74,7 @@ class RestBridge(
             return value.filter { !it.isISOControl() }.take(MAX_TEXT_LENGTH)
         }
 
-        /** Whether a rest end is plausible: in the future, at most 30 minutes ahead. */
+        /** Whether a rest end is plausible: in the future, at most two hours ahead. */
         fun isValidRestEnd(endsAtEpochMs: Long, nowMs: Long = System.currentTimeMillis()): Boolean {
             return endsAtEpochMs > nowMs && endsAtEpochMs <= nowMs + MAX_REST_AHEAD_MS
         }

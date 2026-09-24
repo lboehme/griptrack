@@ -6,7 +6,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from backend import plates
-from backend.limits import MAX_REPS, MAX_WEIGHT
+from backend.limits import (
+    MAX_REPS,
+    MAX_REST_EXTENSION_SECONDS,
+    MAX_REST_SECONDS,
+    MAX_WEIGHT,
+)
 from backend.models import (
     BodyWeightLog,
     GripType,
@@ -763,7 +768,10 @@ def extend_rest(training_session: TrainingSession, session: Session, seconds: in
     current = _aware(training_session.rest_ends_at)
     if current is None:
         return
-    training_session.rest_ends_at = current + timedelta(seconds=seconds)
+    # Bounded (PR #154 review MUST-FIX 7): never more than
+    # MAX_REST_SECONDS + MAX_REST_EXTENSION_SECONDS ahead of now.
+    latest = utcnow() + timedelta(seconds=MAX_REST_SECONDS + MAX_REST_EXTENSION_SECONDS)
+    training_session.rest_ends_at = min(current + timedelta(seconds=seconds), latest)
     session.add(training_session)
     session.commit()
 

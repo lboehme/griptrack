@@ -1114,3 +1114,38 @@ def test_estimate_and_check_refuse_an_unknown_grip_so_export_stays_importable(cl
     register(client, "phone@example.com", "test-pw-5678", invite_code=code)
     assert import_archive(client, archive).status_code == 303
 
+
+
+def test_rest_extend_is_capped_server_side(client):
+    """PR #154 review MUST-FIX 7: +30 s taps can't push rest_ends_at more
+    than MAX_REST_SECONDS + MAX_REST_EXTENSION_SECONDS ahead (the native
+    bridge refuses an end too far ahead, which would leave a stale alarm)."""
+    import re
+    from datetime import datetime, timedelta, timezone
+
+    from backend.limits import MAX_REST_EXTENSION_SECONDS, MAX_REST_SECONDS
+    from tests.helpers import complete_warmup, save_focus_set
+
+    register(client)
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "40")
+    log_max_test(client, "right", "half crimp", 20, "2026-07-01", "40")
+    client.post(
+        "/profile/protocol",
+        data={"base_work_set_reps": 5, "default_rest_seconds": MAX_REST_SECONDS},
+    )
+    gid = grip_type_id(client, "half crimp")
+    complete_warmup(client, gid, 20)
+    save_focus_set(client, 1, left=(30, 5, 7), right=(30, 5, 7))
+
+    data = {"grip_type_id": gid, "edge_mm": 20, "date": "2026-07-04"}
+    for _ in range(40):  # 40 × 30 s = 20 min of taps
+        response = client.post("/session/rest/extend", data=data, headers={"HX-Request": "true"})
+        assert response.status_code == 200
+    ends_at = datetime.fromisoformat(
+        re.search(r'data-rest-ends-at="([^"]+)"', response.text).group(1)
+    )
+    if ends_at.tzinfo is None:
+        ends_at = ends_at.replace(tzinfo=timezone.utc)
+    ahead = ends_at - datetime.now(timezone.utc)
+    assert ahead <= timedelta(seconds=MAX_REST_SECONDS + MAX_REST_EXTENSION_SECONDS)
+    assert ahead > timedelta(seconds=MAX_REST_SECONDS + MAX_REST_EXTENSION_SECONDS - 60)

@@ -35,6 +35,10 @@ MIN_REST_SECONDS = 15
 MAX_REST_SECONDS = 1800
 MIN_DEFAULT_REST_SECONDS = MIN_REST_SECONDS
 MAX_DEFAULT_REST_SECONDS = MAX_REST_SECONDS
+# "+30 s" taps can push a pending rest at most this far past the longest
+# stored rest; the Android bridge (RestBridge.MAX_REST_AHEAD_MS, 2 h) accepts
+# anything up to MAX_REST_SECONDS + this, so it never refuses a real rest.
+MAX_REST_EXTENSION_SECONDS = 600
 
 
 # Import (backend.archive, #102, #120) is an untrusted-file ingress point:

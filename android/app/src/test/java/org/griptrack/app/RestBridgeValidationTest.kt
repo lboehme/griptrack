@@ -15,12 +15,14 @@ class RestBridgeValidationTest {
     private val now = 1_800_000_000_000L
 
     @Test
-    fun restEndMustBeInTheFutureAndAtMostThirtyMinutesAhead() {
+    fun restEndMustBeInTheFutureAndAtMostTwoHoursAhead() {
         assertFalse(RestBridge.isValidRestEnd(now - 1, now))
         assertFalse(RestBridge.isValidRestEnd(now, now))
         assertTrue(RestBridge.isValidRestEnd(now + 1, now))
-        assertTrue(RestBridge.isValidRestEnd(now + 30 * 60 * 1000L, now))
-        assertFalse(RestBridge.isValidRestEnd(now + 30 * 60 * 1000L + 1, now))
+        // The longest rest the server stores (30 min) plus +30 s taps is valid.
+        assertTrue(RestBridge.isValidRestEnd(now + 40 * 60 * 1000L, now))
+        assertTrue(RestBridge.isValidRestEnd(now + 2 * 60 * 60 * 1000L, now))
+        assertFalse(RestBridge.isValidRestEnd(now + 2 * 60 * 60 * 1000L + 1, now))
     }
 
     @Test
