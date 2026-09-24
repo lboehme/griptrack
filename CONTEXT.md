@@ -116,7 +116,50 @@ Climb, a BodyWeightLog entry, or a PainReport ("Tweak", on the day's session,
 created under the usual start_or_get_session and past-date rules). Opened in
 place by htmx without a history entry; `/?log=climb|bodyweight|tweak` opens it
 server-side. Replaced the standalone climb page (`/climbs` now redirects there);
-the climb list lives on History.
+the climb list lives on the Progress Timeline.
+
+**Progress**:
+The second tab (`/progress`, issue #150), answering "am I getting stronger, and
+does it show in my climbing?" in three layers: **Story sentences** on top, then
+one headline chart, then **Go deeper** rows that open detail pages. The chart is
+CurrentMax as a share of bodyweight, per hand, as of each date the chosen
+(grip_type, edge_mm) was trained or tested (`CurrentMax(as_of=d) /
+bodyweight(as_of=d)`, reusing the CurrentMax rule and the bodyweight time series;
+dates with no CurrentMax or no bodyweight are skipped), drawn as step lines —
+Left solid accent, Right dotted chalk — with parsed boulder sends as
+grade-coloured dots on a second, grade axis. A combo picker appears once more
+than one (grip, edge) has data (default: last trained) and a range picker offers
+6W / 3M / All; both are plain query params that htmx swaps in place. Go deeper
+holds Training volume, Left/right balance, Strength vs grade (moved unchanged
+from the old Trends page), **Maxes** (current maxes, test history with void, the
+manual and guided max-test forms — from the old Max tests page) and the
+**Timeline**. Raw data lists sit behind collapsed "Show data" disclosures.
+Absorbed Trends, History and Max tests: `/dashboard`, `/history` and
+`GET /max-tests` 303 into it.
+_Avoid_: Trends, dashboard, stats (for the page)
+
+**Story sentence**:
+One line of Progress's headline layer: a bold claim plus muted advice, written
+from a fixed template over an *existing* analytics signal and shown only when
+that signal passes its own threshold — never a new statistic
+(`backend/progress.py` `story_sentences`). At most three, in priority order:
+CurrentMax %BW change over the range per hand (only if it moved by a whole
+percent), the Plateau flag, the OvertrainingWarning, the AsymmetryWarning, and
+the strength–grade correlation's ρ in words (only past its n ≥ 8 floor). With a
+slot left, one "what's missing" line names the thinnest gap (no max test, no
+bodyweight, or how many more boulder sends the correlation needs — never a
+negative count).
+_Avoid_: Insight, headline stat, AI summary
+
+**Timeline**:
+Progress's "All sessions & climbs" detail page (`/progress/timeline`, replacing
+History): every TrainingSession and Climb, newest first, grouped by Monday-start
+week, with a "Climbs only" filter (`?show=climbs`). A session row shows its first
+combo (+N when it trained more), top set, total volume, Session RPE and a Deload
+tag, and opens that session in Session play (its date, combo and
+session_number — a finished session lands on its Summary); its raw sets stay
+behind "Show sets". A climb row shows a grade dot and the style.
+_Avoid_: History, log, feed
 
 **rest_ends_at**:
 A nullable `datetime` on `TrainingSession`: when set, the play step is
