@@ -112,6 +112,9 @@ def toggle_go_lighter(
     _require_grip(session, grip_type_id)
     if training_log.is_past_date(date) and training_log.find_session(session, user, date) is None:
         return HTMLResponse("No session on that date.", status_code=400)
-    today.set_go_lighter(session, user, date, on, session_number)
+    try:
+        today.set_go_lighter(session, user, date, on, session_number)
+    except today.LogDateError as exc:
+        return HTMLResponse(str(exc), status_code=400)
     query = _combo_query(grip_type_id, edge_mm)
     return RedirectResponse("/" + (f"?{query}" if query else ""), status_code=303)

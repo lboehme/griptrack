@@ -1202,6 +1202,18 @@ def is_past_date(date: date_type, today: date_type | None = None) -> bool:
     return date < (today if today is not None else server_today())
 
 
+# A client-local date can run up to a day ahead of the server's (time
+# zones); anything later is a future date no session write accepts.
+FUTURE_DATE_TOLERANCE_DAYS = 1
+
+
+def is_future_date(date: date_type) -> bool:
+    """Whether `date` is past the server's today plus the time-zone
+    tolerance -- Go lighter and a tweak must never create a future-dated
+    session (PR #154 review)."""
+    return date > server_today() + timedelta(days=FUTURE_DATE_TOLERANCE_DAYS)
+
+
 def server_today() -> date_type:
     """The server's own date -- the one clock is_past_date reads (a seam
     tests pin when a fixed session date must count as "today")."""

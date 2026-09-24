@@ -362,3 +362,43 @@ def test_sheet_saves_are_scoped_to_the_logged_in_user(client):
     assert db_rows(client, BodyWeightLog, "founder@example.com") == []
     assert db_rows(client, PainReport, "founder@example.com") == []
     assert [c.grade for c in db_rows(client, Climb, "friend@example.com")] == ["6A"]
+
+
+# ---------- PR #154 review: blank grades and future dates ----------
+
+
+def test_a_grade_that_is_blank_after_stripping_is_rejected(client):
+    register(client)
+
+    for blank in ("   ", "\t"):
+        assert post_climb(client, grade=blank).status_code == 400
+    assert db_rows(client, Climb) == []
+
+
+def test_a_tweak_on_a_future_date_is_rejected(client):
+    register(client)
+
+    for future in ("9999-12-31", day(2)):
+        response = client.post("/log/tweak", data={"date": future, "hand": "left", "severity": "1"})
+        assert response.status_code == 400
+    assert db_rows(client, PainReport) == []
+    assert db_rows(client, TrainingSession) == []
+
+
+def test_a_tweak_tomorrow_is_within_the_timezone_tolerance(client):
+    register(client)
+
+    response = client.post(
+        "/log/tweak", data={"date": day(1), "hand": "left", "severity": "1"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+
+
+def test_go_lighter_on_a_future_date_is_rejected(client):
+    register(client)
+
+    for future in ("9999-12-31", day(2)):
+        response = client.post("/today/lighter", data={"date": future, "on": "1"})
+        assert response.status_code == 400
+    assert db_rows(client, TrainingSession) == []

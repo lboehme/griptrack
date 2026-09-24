@@ -558,7 +558,10 @@ def set_go_lighter(
     the day's latest (created under the usual start_or_get_session rules
     if needed), or the explicit second-session slot Today plans (PR #154
     review MUST-FIX 3: never the already-finished first session). Never
-    automatic -- only this explicit toggle writes the flag."""
+    automatic -- only this explicit toggle writes the flag. Raises
+    LogDateError for a future date."""
+    if training_log.is_future_date(date):
+        raise LogDateError("That date is in the future.")
     training_session = training_log.create_idle_session(
         session, user, date, session_number
     )
@@ -648,7 +651,10 @@ def resolve_climb_grade(grade: str, grade_other: str | None) -> str:
         if not text:
             raise ValueError("Type a grade for Other…")
         return text
-    return grade.strip()
+    text = grade.strip()
+    if not text:
+        raise ValueError("Pick a grade.")
+    return text
 
 
 def resolve_log_date(when: str, client_today: date_type, pick_date: date_type | None) -> date_type:
@@ -681,6 +687,8 @@ def log_tweak(
         raise ValueError("Hand must be left, right, or both.")
     if severity not in SEVERITY_LABELS:
         raise ValueError("Severity must be 1, 2, or 3.")
+    if training_log.is_future_date(date):
+        raise LogDateError("That date is in the future.")
     existing = training_log.find_session(session, user, date)
     if existing is None and training_log.is_past_date(date):
         raise LogDateError("No session on that date.")
