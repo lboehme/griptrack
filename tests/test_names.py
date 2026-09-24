@@ -1,14 +1,18 @@
 """Display names (issue #25): optional at signup, editable on the profile,
 greeting falls back to the email's local part when unset."""
 
+import html
 import re
 
 from tests.helpers import register, register_second_user
 
 
 def greeting(client):
-    match = re.search(r"<h2>Hey ([^<]+)", client.get("/").text)
-    return match.group(1).strip("​ \U0001f44a")
+    """The name Today's headline greets with ("Pull day, Lukas." -- #149),
+    read off the headline's data attribute so it's independent of which
+    Today state (no data yet, plan, done, ...) the headline copy is in."""
+    match = re.search(r'class="today-headline" data-greeting-name="([^"]*)"', client.get("/").text)
+    return html.unescape(match.group(1))
 
 
 def test_registering_with_a_name_personalizes_the_greeting(client):
@@ -102,5 +106,7 @@ def test_name_is_scoped_to_the_logged_in_user(client):
 def test_email_identity_display_is_unchanged_by_a_name(client):
     register(client, "lifter@example.com", "test-pw-1234", name="Lukas")
 
-    assert "Logged in as lifter@example.com" in client.get("/").text
+    # Today dropped its "Logged in as <email>" line (#149 -- it leaked the
+    # device placeholder address on-device); the profile still shows it.
+    assert "Logged in as" not in client.get("/").text
     assert "lifter@example.com" in client.get("/profile").text

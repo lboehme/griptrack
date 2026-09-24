@@ -21,7 +21,9 @@ idempotent upserts against it). Default flows (start page, session-page
 redirects) always resolve to the day's *latest* session_number; starting a
 second session on today is an explicit affordance, and navigating to a
 past date with no session at all requires an explicit "create one?"
-confirmation rather than instantiating silently (issue #51).
+confirmation rather than instantiating silently (issue #51). Since #149
+the start page is Today (`/session/new` redirects there) and "start a second
+session today" lives in its Change picker.
 _Avoid_: Session (ambiguous with the auth/login session), Workout, Training Log
 
 **Session play**:
@@ -78,6 +80,43 @@ is missing, so an unfinished session has no load. Nothing consumes it yet —
 it's the standard load signal meant for the OvertrainingWarning and the
 injury guardian (#28), per docs/adr/0014.
 _Avoid_: Training load (ambiguous with TrainingVolume), tonnage
+
+**Today plan**:
+What the Today screen (`/`, issue #149) proposes for today's session, derived
+by `backend/today.py` from data already logged — never stored. The combo is the
+last-trained (grip_type, edge_mm) unless the user picks another with **Change**;
+sets × reps come from the TrainingProtocol and the combo's ProgressionPath (Set
+progression's "+1 set" and Double progression's "+1 rep" raise them); each hand's
+weight is the Autoregulation suggestion's next rung when it's ready, else the
+last session's top weight on that combo, else CurrentMax — with a one-line
+reason ("+0.5 kg: last session felt easy (RPE 7)"). **Go lighter** is offered
+(never automatic) after a PainReport in the last 7 days, or while the Plateau
+or OvertrainingWarning flag is on for the combo: tapping it marks today's
+TrainingSession `is_deload` and scales every weight to 85%, rounded *down* to
+the Loadable ladder; tapping again restores the plan. Today's states, in
+precedence order: **done** (today's latest session was Finished on its Summary
+step, or every planned set of it is committed — shows a recap with Session RPE
+once rated, and "Log a climb"), **resume** (today's session has a
+warmup tick, estimate or work set but isn't done — "Resume · set N of M"),
+**no data yet** (nothing tested or trained — prompts the guided max test),
+**rest day** (see Rest-day suggestion), and **plan**. An empty session row (from
+Go lighter, or a tweak logged before training) doesn't count as started.
+_Avoid_: Program, workout of the day, prescription
+
+**Rest-day suggestion**:
+Today's headline becomes a rest-day message when the user trained (logged work
+sets) on each of the two days before today, or while the OvertrainingWarning is
+on for the planned combo. Advisory only: Start stays available as a secondary
+"Train anyway" button — it never blocks a session.
+_Avoid_: Forced rest, lockout
+
+**＋ Log sheet**:
+The bottom sheet behind the tab bar's centre ＋ (issue #149): quick capture of a
+Climb, a BodyWeightLog entry, or a PainReport ("Tweak", on the day's session,
+created under the usual start_or_get_session and past-date rules). Opened in
+place by htmx without a history entry; `/?log=climb|bodyweight|tweak` opens it
+server-side. Replaced the standalone climb page (`/climbs` now redirects there);
+the climb list lives on History.
 
 **rest_ends_at**:
 A nullable `datetime` on `TrainingSession`: when set, the play step is

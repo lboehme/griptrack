@@ -15,10 +15,13 @@ object SessionLifecycleHelper {
 
     const val HOME_PATH = "/"
 
+    // Tab bar (#149): Today (/), Progress, Settings. /progress and /settings
+    // 303 to /dashboard and /profile until S5/S6 ship, so the WebView lands
+    // on those paths -- both spellings count as the tab root.
     val TAB_ROOTS = setOf(
-        "/session/new",
+        "/progress",
         "/dashboard",
-        "/climbs",
+        "/settings",
         "/profile"
     )
 
@@ -93,7 +96,7 @@ object SessionLifecycleHelper {
      * on process resurrection or recreation.
      *
      * Only active `/session/...` pages (e.g. warmup, worksets) are restored.
-     * Tab roots like `/session/new`, auth pages, and POST actions are rejected.
+     * Tab roots, the retired `/session/new`, auth pages, and POST actions are rejected.
      */
     fun isRestorableSessionPath(pathAndQuery: String?): Boolean {
         if (pathAndQuery.isNullOrBlank()) return false

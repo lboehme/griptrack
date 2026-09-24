@@ -1561,3 +1561,46 @@ def delete_progression_settings(
         session.commit()
         return True
     return False
+
+
+PAIN_REPORT_HANDS = ("left", "right", "both")
+
+
+def record_pain_report(
+    session: Session,
+    training_session: TrainingSession,
+    hand: str,
+    severity: int,
+    note: str | None,
+) -> PainReport:
+    """Upsert one PainReport (see CONTEXT.md: PainReport) -- at most one row
+    per (session, hand). The play "How did it feel?" disclosure autosaves its
+    severity and note independently, so this must update in place rather
+    than always inserting; the Today ＋ Log sheet's Tweak tab (#149) shares
+    the same write."""
+    report = session.exec(
+        select(PainReport)
+        .where(PainReport.training_session_id == training_session.id)
+        .where(PainReport.hand == hand)
+    ).first()
+    if report is None:
+        report = PainReport(training_session_id=training_session.id, hand=hand)
+    report.severity = severity
+    report.note = note
+    session.add(report)
+    session.commit()
+    session.refresh(report)
+    return report
+
+
+def log_bodyweight(
+    session: Session, user: User, date: date_type, weight: float
+) -> BodyWeightLog:
+    """Append one BodyWeightLog entry (a time series, never a mutable profile
+    field -- ADR-0001). Shared by the profile form and the ＋ Log sheet's
+    Bodyweight tab (#149)."""
+    entry = BodyWeightLog(user_id=user.id, date=date, weight=weight)
+    session.add(entry)
+    session.commit()
+    session.refresh(entry)
+    return entry

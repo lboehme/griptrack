@@ -121,7 +121,7 @@ def test_second_session_affordance_only_appears_once_today_has_one(client):
     setup_tested_user(client)
     today = date_type.today().isoformat()
 
-    before = client.get("/session/new").text
+    before = client.get("/today/change").text
     assert "start-second-session" not in before
 
     grip_id = grip_type_id(client, "half crimp")
@@ -133,7 +133,7 @@ def test_second_session_affordance_only_appears_once_today_has_one(client):
         },
     )
 
-    after = client.get("/session/new").text
+    after = client.get("/today/change").text
     assert "start-second-session" in after
     assert 'name="session_number" value="2"' in after
 

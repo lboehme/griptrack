@@ -97,7 +97,7 @@ def test_round_trip_restores_a_populated_account_into_a_fresh_one(client):
         ("right", "half crimp", 20): 38.0,
     }
 
-    climbs_page = client.get("/climbs").text
+    climbs_page = client.get("/history").text
     assert "great send" in climbs_page
 
     new_export = _zip_members(export_archive(client))
@@ -161,7 +161,7 @@ def test_import_reverses_the_export_side_formula_neutralization(client):
     # a still-present leading quote (unreversed neutralization) and a
     # correctly-reversed one are distinguishable here: `'` escapes to
     # `&#39;` only if it's really part of the stored value.
-    climbs_page = client.get("/climbs").text
+    climbs_page = client.get("/history").text
     assert "&#39;=HYPERLINK" not in climbs_page
     assert "=HYPERLINK(&#34;http://evil&#34;)" in climbs_page
 

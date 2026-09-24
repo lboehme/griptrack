@@ -6,4 +6,6 @@ to the Focus redesign issues, not here."""
 
 
 def test_authenticated_home_page_renders(authenticated_page):
-    assert "Logged in as e2e@example.com" in authenticated_page.content()
+    # Today (#149): the coach home, with the new tab bar.
+    assert authenticated_page.locator("#today-root").is_visible()
+    assert authenticated_page.locator(".tabbar .tabbar-log").is_visible()

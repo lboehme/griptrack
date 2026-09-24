@@ -10,6 +10,14 @@ from backend.models import CLIMB_STYLES, Climb, User
 # so history keeps rendering them).
 NEW_CLIMB_DISCIPLINE = "boulder"
 
+# Loud feedback for a grade the correlation can't parse (issue #55). A
+# server-side constant, never echoed from user input -- shared by the legacy
+# /climbs form and the ＋ Log sheet's Climb tab (#149).
+GRADE_NOT_RECOGNIZED_MESSAGE = (
+    "Climb logged, but the grade wasn't recognized — this climb won't "
+    "appear in the strength/grade correlation."
+)
+
 
 class InvalidStyleError(ValueError):
     """Raised when an unrecognized climb style is provided."""
@@ -54,6 +62,34 @@ def climbs_newest_first(session: Session, user: User) -> list[Climb]:
         session.exec(
             select(Climb)
             .where(Climb.user_id == user.id)
+            .order_by(Climb.date.desc(), Climb.id.desc())
+        ).all()
+    )
+
+
+def recent_climbs(session: Session, user: User, limit: int) -> list[Climb]:
+    """The user's `limit` newest climbs (same ordering as
+    climbs_newest_first), for the ＋ Log sheet's grade/style defaults."""
+    return list(
+        session.exec(
+            select(Climb)
+            .where(Climb.user_id == user.id)
+            .order_by(Climb.date.desc(), Climb.id.desc())
+            .limit(limit)
+        ).all()
+    )
+
+
+def climbs_between(
+    session: Session, user: User, start: date_type, end: date_type
+) -> list[Climb]:
+    """The user's climbs dated start..end inclusive, newest first."""
+    return list(
+        session.exec(
+            select(Climb)
+            .where(Climb.user_id == user.id)
+            .where(Climb.date >= start)
+            .where(Climb.date <= end)
             .order_by(Climb.date.desc(), Climb.id.desc())
         ).all()
     )

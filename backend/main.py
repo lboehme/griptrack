@@ -18,6 +18,7 @@ from backend.routers import device_auth as device_auth_router
 from backend.routers import guided_max_test as guided_max_test_router
 from backend.routers import history as history_router
 from backend.routers import home as home_router
+from backend.routers import log_sheet as log_sheet_router
 from backend.routers import max_tests as max_tests_router
 from backend.routers import plates as plates_router
 from backend.routers import profile as profile_router
@@ -101,6 +102,7 @@ def create_app() -> FastAPI:
         return await call_next(request)
 
     app.include_router(home_router.router)
+    app.include_router(log_sheet_router.router)
     app.include_router(auth_router.router)
     if webview_build:
         # First run + device sign-in replace registration (ADR-0013) --

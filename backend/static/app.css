@@ -386,7 +386,19 @@ a,
 
 .tabbar a.active { color: var(--tx); }
 
-.tabbar a.active svg { background: var(--acc); color: var(--acc-on); }
+/* V5: the active tab reads as chalk text with an orange icon; the only
+   filled pill in the bar is the centre ＋ Log action (#149). */
+.tabbar a.active svg { color: var(--acc); }
+
+.tabbar a.tabbar-log svg {
+  width: 22px;
+  height: 22px;
+  padding: 7px 13px;
+  background: var(--acc);
+  color: var(--acc-on);
+}
+
+.tabbar a.tabbar-log { color: var(--tx); }
 
 /* ---------- cards (glass level 1, see above) ---------- */
 
@@ -1978,4 +1990,555 @@ code.invite-code {
 .summary-actions .btn:not(.btn-secondary) {
   min-height: 4rem;
   font-size: 1.5rem;
+}
+
+
+/* ============================================================
+   Today (#149): the coach home. Headline block, the plan card (strong
+   glass), Go lighter / bodyweight prompts, the week strip, and a frosted
+   action bar pinned directly above the tab bar (V8) so Start never
+   scrolls away.
+   ============================================================ */
+
+.today { padding-bottom: 5.5rem; }
+
+/* The page-in slide would make .app-main a transform containing block while
+   it runs, dragging the fixed action bar along with it -- Today fades in
+   instead. */
+@media (prefers-reduced-motion: no-preference) {
+  .app-main:has(#today-root) { animation-name: page-fade; }
+}
+
+@keyframes page-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.app-main-no-tabbar { padding-bottom: 2rem; }
+
+.overline {
+  margin: 0 0 .45rem;
+  font-family: var(--font-body);
+  font-size: .75rem;
+  font-weight: 600;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--mu);
+}
+
+.overline-acc { color: var(--acc); }
+
+.today-head { margin: .2rem 0 1.1rem; }
+
+.today-date { margin-bottom: .2rem; }
+
+.today-headline {
+  margin: 0;
+  font-family: var(--font-condensed);
+  font-size: clamp(2.6rem, 13vw, 3.6rem);
+  font-weight: 700;
+  line-height: .9;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+.today-sub {
+  max-width: 20rem;
+  margin: .55rem 0 0;
+  color: var(--mu);
+  font-size: .95rem;
+  line-height: 1.4;
+}
+
+.today-card { margin-bottom: .75rem; }
+
+.today-lead { margin: 0; font-size: 1.02rem; font-weight: 500; }
+
+.today-plan-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: .6rem;
+}
+
+.today-setsreps {
+  font-family: var(--font-condensed);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--mu);
+  font-variant-numeric: tabular-nums;
+}
+
+.today-combo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .2rem .75rem;
+  margin: 0 0 .8rem;
+  font-size: 1.08rem;
+  font-weight: 600;
+}
+
+.today-change {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  font-size: .88rem;
+  font-weight: 650;
+  color: var(--acc);
+  text-decoration: none;
+}
+
+.today-weights {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .6rem;
+}
+
+.today-hand {
+  display: flex;
+  align-items: baseline;
+  gap: .4rem;
+  min-width: 0;
+}
+
+.today-hand .hand-badge { align-self: center; width: 1.65rem; height: 1.65rem; font-size: .9rem; }
+
+.today-weight {
+  font-family: var(--font-condensed);
+  font-size: clamp(2.3rem, 11vw, 3.2rem);
+  font-weight: 700;
+  line-height: .9;
+  font-variant-numeric: tabular-nums;
+}
+
+.today-unit { color: var(--mu); font-size: .85rem; font-weight: 600; }
+
+.today-reason {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  margin: .9rem 0 0;
+  padding-top: .75rem;
+  border-top: 1px solid var(--line);
+  font-size: .9rem;
+  font-weight: 650;
+  color: var(--acc);
+}
+
+.today-reason svg { width: 16px; height: 16px; flex: none; }
+
+.today-plan[data-deload] .today-reason { color: var(--warn); }
+
+.today-lighter {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: .55rem .75rem;
+  align-items: center;
+}
+
+.today-lighter-icon { width: 22px; height: 22px; color: var(--warn); }
+
+.today-lighter-text { display: flex; flex-direction: column; gap: .15rem; min-width: 0; }
+
+.today-lighter-text strong { font-size: .98rem; }
+
+.today-lighter-text span { color: var(--mu); font-size: .88rem; line-height: 1.35; }
+
+.today-lighter-form { grid-column: 1 / -1; margin: 0; }
+
+.today-lighter.is-active { border-color: var(--warn); }
+
+.today-bodyweight {
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
+  color: var(--tx);
+  text-decoration: none;
+}
+
+.today-bodyweight span { color: var(--mu); font-size: .88rem; }
+
+.today-picker-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .6rem;
+}
+
+.today-picker-actions .btn-secondary { min-height: var(--touch); }
+
+.today-second-form { margin: .7rem 0 0; }
+
+.today-stats { display: flex; gap: 1.6rem; }
+
+.today-stat { display: flex; flex-direction: column; }
+
+.today-stat-num {
+  font-family: var(--font-condensed);
+  font-size: 2.6rem;
+  font-weight: 700;
+  line-height: .95;
+  font-variant-numeric: tabular-nums;
+}
+
+.today-stat-label { color: var(--mu); font-size: .85rem; }
+
+.today-again { margin: .9rem 0 0; }
+
+.today-again a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  color: var(--acc);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.today-week {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .55rem;
+  margin-top: .3rem;
+}
+
+.today-tile {
+  display: flex;
+  flex-direction: column;
+  gap: .2rem;
+  min-width: 0;
+  margin: 0;
+  padding: .8rem .75rem;
+}
+
+.today-tile-num {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  font-family: var(--font-condensed);
+  font-size: 1.9rem;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.today-tile-num small { color: var(--mu); font-size: 1.1rem; }
+
+.today-tile-label { color: var(--mu); font-size: .78rem; line-height: 1.25; }
+
+.grade-dot {
+  display: inline-block;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dot, var(--mu));
+}
+
+.today-actionbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: var(--tabbar-h);
+  z-index: 9;
+  padding: .7rem clamp(.65rem, 4vw, 1.25rem) .75rem;
+  border-top: 1px solid color-mix(in srgb, var(--tx) 8%, transparent);
+}
+
+.today-actionbar > * { max-width: 620px; margin: 0 auto; }
+
+.today-start-form { margin: 0 auto; }
+
+.today-primary,
+.today-start:not(.btn-secondary) {
+  min-height: 4rem;
+  font-size: 1.5rem;
+}
+
+/* ============================================================
+   ＋ Log sheet (#149, V7): solid surface (a translucent sheet lets the
+   content behind it smear through — V6), 28 px top corners, a 3-way tab
+   row, chips. Slides up over a scrim.
+   ============================================================ */
+
+.sheet-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: color-mix(in srgb, var(--shade) 66%, transparent);
+}
+
+.log-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 21;
+  max-height: 92vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  max-width: 620px;
+  margin: 0 auto;
+  padding: .5rem clamp(.9rem, 4vw, 1.25rem) calc(1.2rem + env(safe-area-inset-bottom));
+  background: var(--s1);
+  border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
+  border-top: 1px solid var(--line);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .log-sheet { animation: sheet-up .28s cubic-bezier(.2, .8, .3, 1) both; }
+}
+
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: none; }
+}
+
+.sheet-top {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 2.75rem;
+}
+
+.sheet-handle {
+  width: 40px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.sheet-close {
+  position: absolute;
+  right: 0;
+  top: 0;
+  display: grid;
+  place-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  color: var(--mu);
+}
+
+.sheet-close svg { width: 20px; height: 20px; }
+
+.sheet-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 3px;
+  padding: 3px;
+  margin: 0 0 1rem;
+  background: var(--field-fill);
+  border: 1.5px solid color-mix(in srgb, var(--tx) 16%, transparent);
+  border-radius: 999px;
+}
+
+.sheet-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  border-radius: 999px;
+  font-size: .95rem;
+  font-weight: 650;
+  color: var(--mu);
+  text-decoration: none;
+}
+
+.sheet-tab.active { background: var(--tx); color: var(--bg); }
+
+.sheet-error {
+  margin: 0 0 .8rem;
+  color: var(--danger);
+  font-size: .9rem;
+  font-weight: 600;
+}
+
+.sheet-error[hidden] { display: none; }
+
+.sheet-form .overline { margin-top: .9rem; }
+
+.sheet-form .overline:first-of-type { margin-top: 0; }
+
+.sheet-hint { color: var(--mu); font-size: .85rem; margin: .6rem 0 0; text-align: center; }
+
+.sheet-submit { margin-top: 1.2rem; min-height: 4rem; font-size: 1.4rem; }
+
+/* Chips (V7): radios inside labels, so the sheet works without JS. The
+   radio stays in the accessibility tree but is visually replaced by the
+   chip face. */
+.chip {
+  position: relative;
+  display: flex;
+  margin: 0;
+  font-size: 1rem;
+  color: var(--tx);
+  cursor: pointer;
+}
+
+.chip-radio {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.chip-face {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .4rem;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: .3rem .95rem;
+  font-family: var(--font-body);
+  font-weight: 600;
+  color: var(--tx);
+  background: var(--field-fill);
+  border: 1.5px solid color-mix(in srgb, var(--tx) 16%, transparent);
+  border-radius: 999px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.chip-radio:checked + .chip-face { background: var(--tx); color: var(--bg); border-color: var(--tx); }
+
+.chip-radio:focus-visible + .chip-face { outline: 2px solid var(--acc); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .chip-face { transition: background .15s ease, color .15s ease; }
+  .chip:active .chip-face { transform: scale(.97); }
+}
+
+.chip-row { display: flex; flex-wrap: wrap; gap: .5rem; }
+
+.grade-chips {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: .45rem;
+}
+
+.grade-chip .chip-face {
+  min-height: 3rem;
+  padding: .3rem .2rem;
+  border-radius: 14px;
+  font-family: var(--font-condensed);
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.grade-chips-more {
+  display: flex;
+  gap: .45rem;
+  margin-top: .45rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+
+.grade-chips-more .grade-chip { flex: 0 0 4.2rem; }
+
+.grade-chips-more .grade-chip-other { flex-basis: 5.6rem; }
+
+.grade-other-field,
+.pick-date-field { display: none; margin: .7rem 0 0; }
+
+.sheet-climb:has(input[name="grade"][value="__other__"]:checked) .grade-other-field,
+.sheet-climb:has(input[name="when"][value="date"]:checked) .pick-date-field { display: block; }
+
+.severity-chips { display: grid; gap: .5rem; }
+
+.severity-chip .chip-face {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: .05rem;
+  padding: .55rem 1rem;
+  border-radius: var(--radius-btn-sm);
+  white-space: normal;
+}
+
+.severity-chip small { font-size: .82rem; font-weight: 500; color: var(--mu); }
+
+.severity-chip .chip-radio:checked + .chip-face small { color: var(--bg); }
+
+.sheet-tweak label:not(.chip) { margin-top: .9rem; }
+
+.bw-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.bw-value {
+  display: flex;
+  align-items: baseline;
+  gap: .3rem;
+  margin: 0;
+}
+
+.bw-value input {
+  width: 7ch;
+  margin: 0;
+  padding: 0;
+  text-align: center;
+  font-family: var(--font-condensed);
+  font-size: 3rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: transparent;
+  border: none;
+}
+
+.bw-unit { color: var(--mu); font-size: 1rem; font-weight: 600; }
+
+/* Toast (V7): a chalk pill just above the action bar / tab bar, gone after
+   2.6 s. The grade warning (issue #55) lingers a little longer. */
+.toast-stack {
+  position: fixed;
+  left: 20px;
+  right: 20px;
+  bottom: calc(var(--tabbar-h) + 6rem);
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .5rem;
+  pointer-events: none;
+}
+
+.toast {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  margin: 0;
+  padding: .7rem 1.1rem;
+  border-radius: 999px;
+  background: var(--tx);
+  color: var(--bg);
+  font-weight: 650;
+  box-shadow: 0 10px 30px -12px color-mix(in srgb, var(--shade) 60%, transparent);
+  animation: toast-hide 0s linear 2.6s forwards;
+}
+
+.toast svg { width: 18px; height: 18px; color: var(--ok); }
+
+.toast-warning { margin: 0; animation: toast-hide 0s linear 8s forwards; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .toast { animation: toast-in .2s ease both, toast-hide 0s linear 2.6s forwards; }
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes toast-hide {
+  to { visibility: hidden; opacity: 0; }
 }

@@ -222,19 +222,20 @@ def test_voided_test_drops_out_of_the_strength_grade_correlation(client):
 
 
 def test_voided_test_no_longer_counts_as_the_last_used_combination(client):
-    """last_used_combination filters voided tests: the session-start form
-    default falls back to the previously used combo."""
+    """last_used_combination filters voided tests: the session-start
+    default (Today's Change picker since #149) falls back to the previously
+    used combo."""
     register(client)
     log_max_test(client, "left", "half crimp", 20, "2026-07-01", "42.5")
     log_max_test(client, "left", "open hand", 10, "2026-07-02", "35")
 
-    page = client.get("/session/new").text
+    page = client.get("/today/change").text
     assert f'value="{grip_type_id(client, "open hand")}" selected' in page
 
     newest_id = max(_extract_voidable_test_ids(client.get("/max-tests").text))
     client.post(f"/max-tests/{newest_id}/void", follow_redirects=True)
 
-    page = client.get("/session/new").text
+    page = client.get("/today/change").text
     assert f'value="{grip_type_id(client, "half crimp")}" selected' in page
 
 

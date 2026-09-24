@@ -2,7 +2,7 @@ from datetime import date as date_type
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from backend import auth, training_log
 from backend.db import get_session
@@ -17,7 +17,7 @@ from backend.limits import (
     MAX_WEIGHT,
     MIN_SESSION_RPE,
 )
-from backend.models import VALID_HANDS, GripType, PainReport, User
+from backend.models import VALID_HANDS, User
 from backend.templating import templates
 
 router = APIRouter()
@@ -635,25 +635,11 @@ def add_pain_report(
     at most one PainReport per (session, hand). The optional combo fields
     are only the no-JS return address -- `play_hand` rather than `hand`,
     since `hand` here is the tweaked hand, not the play page's hand."""
-    if hand not in ("left", "right", "both"):
+    if hand not in training_log.PAIN_REPORT_HANDS:
         return HTMLResponse("Hand must be left, right, or both.", status_code=400)
     training_session = training_log.find_session(session, user, date, session_number)
     if training_session is not None:
-        # One logical "tweak" per hand is one row — the severity select and
-        # the note field autosave independently on the frontend, so this
-        # must be an upsert keyed on (session, hand) rather than always
-        # inserting, matching the autosave idiom everywhere else in the app.
-        report = session.exec(
-            select(PainReport)
-            .where(PainReport.training_session_id == training_session.id)
-            .where(PainReport.hand == hand)
-        ).first()
-        if report is None:
-            report = PainReport(training_session_id=training_session.id, hand=hand)
-        report.severity = severity
-        report.note = note
-        session.add(report)
-        session.commit()
+        training_log.record_pain_report(session, training_session, hand, severity, note)
 
     if request.headers.get("HX-Request"):
         return Response(status_code=204)
@@ -661,36 +647,9 @@ def add_pain_report(
 
 
 @router.get("/session/new")
-def new_session_form(
-    request: Request,
-    user: User = Depends(auth.current_user),
-    session: Session = Depends(get_session),
-):
-    grip_types = session.exec(select(GripType).order_by(GripType.name)).all()
-    last_used = training_log.last_used_combination(session, user)
-    today = date_type.today()
-    # "Start a second session today" only appears once today already has
-    # one — the server's own clock is close enough here (this is a display
-    # affordance, not the client-local date correctness the date input
-    # itself needs; see the local-date-default JS for that).
-    today_session = training_log.find_session(session, user, today)
-    return templates.TemplateResponse(
-        request,
-        "new_session.html",
-        {
-            "user": user,
-            "grip_types": grip_types,
-            "default_grip_type_id": last_used[0] if last_used else None,
-            "default_edge_mm": last_used[1] if last_used else "",
-            "today": today.isoformat(),
-            "next_session_number_today": (
-                today_session.session_number + 1 if today_session else None
-            ),
-            "history": training_log.session_history(session, user)[:8],
-            "grip_names": training_log.grip_names(session),
-            "grip_dimension_names": training_log.grip_dimension_names(session),
-        },
-    )
+def new_session_form(user: User = Depends(auth.current_user)):
+    """Replaced by Today's plan + Change picker (#149)."""
+    return RedirectResponse("/", status_code=303)
 
 
 @router.get("/session/warmup")

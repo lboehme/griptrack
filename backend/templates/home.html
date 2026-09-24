@@ -1,45 +1,153 @@
 {% extends "base.html" %}
+{% block title %}{% if user %}Today — GripTrack{% else %}GripTrack{% endif %}{% endblock %}
+{% block extra_head %}<script src="/static/dimension-label.js" defer></script>{% endblock %}
 {% block content %}
 {% if user %}
-<h2>Hey {{ user.name or user.email.split("@")[0] }} 👊</h2>
-<p class="page-sub">Ready to pull?</p>
+{# Today (#149): a small coach. All the rules (which state, which weights,
+   why) live in backend/today.py; this template only lays out `view`. The
+   root re-fetches itself in place (no history entry) after a ＋ Log save. #}
+<div id="today-root" class="today" data-state="{{ view.state }}"
+     hx-get="/{% if combo_query %}?{{ combo_query }}{% endif %}" hx-trigger="griptrack-logged from:body"
+     hx-select="#today-root" hx-target="this" hx-swap="outerHTML" hx-disinherit="*">
+  <header class="today-head">
+    <p class="overline today-date">{{ view.today|human_date }}</p>
+    <h2 class="today-headline" data-greeting-name="{{ view.greeting_name or "" }}">{{ view.headline }}</h2>
+    <p class="today-sub">{{ view.subline }}</p>
+  </header>
 
-<div class="hero-action">
-  <a class="btn" href="/session/new">
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>
-    Start training session
+  {% if view.state == "no_data" %}
+  <section class="card today-card today-nodata">
+    <p class="overline overline-acc">Start here</p>
+    <p class="today-lead">Find your max on each hand. Warmups and work sets are built from it.</p>
+  </section>
+
+  {% elif view.state == "resume" and view.resume %}
+  <section class="card glass strong today-card today-resume" data-set="{{ view.resume.set_number }}" data-total-sets="{{ view.resume.total_sets }}">
+    <p class="overline overline-acc">Session in progress</p>
+    <p class="today-lead">Set {{ view.resume.set_number }} of {{ view.resume.total_sets }} is up next.</p>
+  </section>
+
+  {% elif view.state == "done" and view.recap %}
+  <section class="card glass strong today-card today-recap">
+    <p class="overline overline-acc">Today's session</p>
+    <div class="today-stats">
+      <div class="today-stat">
+        <span class="today-stat-num" data-recap-volume="{{ view.recap.volume }}">{{ "{:,.0f}".format(view.recap.volume) }}</span>
+        <span class="today-stat-label">{{ view.recap.unit }} volume</span>
+      </div>
+      <div class="today-stat">
+        <span class="today-stat-num" data-recap-sets="{{ view.recap.sets }}">{{ view.recap.sets }}</span>
+        <span class="today-stat-label">set{{ "s" if view.recap.sets != 1 }}</span>
+      </div>
+      {% if view.recap.session_rpe is not none %}
+      <div class="today-stat">
+        <span class="today-stat-num" data-recap-rpe="{{ view.recap.session_rpe }}">{{ view.recap.session_rpe }}</span>
+        <span class="today-stat-label">session RPE</span>
+      </div>
+      {% endif %}
+    </div>
+    <p class="today-again"><a href="/?change=1" hx-get="/today/change" hx-target="#today-picker-slot" hx-swap="innerHTML">Train again today</a></p>
+  </section>
+  <div id="today-picker-slot">{% if picker %}{% include "_today_picker.html" %}{% endif %}</div>
+
+  {% elif view.plan %}
+  {% set plan = view.plan %}
+  <section class="card glass strong today-card today-plan" data-grip-type-id="{{ plan.grip.id }}" data-edge-mm="{{ plan.edge_mm }}" data-sets="{{ plan.sets }}" data-reps="{{ plan.reps }}"{% if plan.deload %} data-deload{% endif %}>
+    <div class="today-plan-top">
+      <p class="overline overline-acc">Today's plan</p>
+      <span class="today-setsreps">{{ plan.sets }} × {{ plan.reps }}</span>
+    </div>
+    <p class="today-combo">
+      <span>{{ plan.grip.name|display_name }} · {{ plan.edge_mm }} mm</span>
+      <a class="today-change" href="/?change=1&amp;grip_type_id={{ plan.grip.id }}&amp;edge_mm={{ plan.edge_mm }}"
+         hx-get="/today/change?grip_type_id={{ plan.grip.id }}&amp;edge_mm={{ plan.edge_mm }}"
+         hx-target="#today-picker-slot" hx-swap="innerHTML">Change</a>
+    </p>
+    <div class="today-weights">
+      {% for hp in plan.hands %}
+      <div class="today-hand" data-hand="{{ hp.hand }}" data-weight="{{ hp.weight if hp.weight is not none else "" }}" data-source="{{ hp.source or "" }}">
+        <span class="hand-badge hand-badge-{{ hp.hand }}">{{ hp.hand[0]|upper }}</span>
+        <span class="today-weight">{{ hp.weight|num_trim if hp.weight is not none else "—" }}</span>
+        {% if hp.weight is not none %}<span class="today-unit">{{ view.unit }}</span>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% if plan.reason %}
+    <p class="today-reason" data-reason="{{ plan.reason }}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>
+      {{ plan.reason }}
+    </p>
+    {% endif %}
+  </section>
+  <div id="today-picker-slot">{% if picker %}{% include "_today_picker.html" %}{% endif %}</div>
+
+  {% if view.go_lighter.offered %}
+  <section class="card today-card today-lighter{% if view.go_lighter.active %} is-active{% endif %}">
+    <svg class="today-lighter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4M12 17.5v.01"/></svg>
+    <div class="today-lighter-text">
+      <strong>{{ view.go_lighter.headline }}</strong>
+      <span>{{ view.go_lighter.detail }}</span>
+    </div>
+    <form method="post" action="/today/lighter" class="today-lighter-form"
+          hx-post="/today/lighter" hx-select="#today-root" hx-target="#today-root" hx-swap="outerHTML">
+      <input type="hidden" name="date" value="{{ view.today }}" class="local-date-default">
+      <input type="hidden" name="on" value="{{ "0" if view.go_lighter.active else "1" }}">
+      {% if combo_query %}
+      <input type="hidden" name="grip_type_id" value="{{ plan.grip.id }}">
+      <input type="hidden" name="edge_mm" value="{{ plan.edge_mm }}">
+      {% endif %}
+      <button type="submit" class="btn-secondary go-lighter-btn" aria-pressed="{{ "true" if view.go_lighter.active else "false" }}">{{ "Undo lighter" if view.go_lighter.active else "Go lighter" }}</button>
+    </form>
+  </section>
+  {% endif %}
+  {% endif %}
+
+  {% if view.bodyweight_stale %}
+  <a class="card today-card today-bodyweight" href="/?log=bodyweight" hx-get="/log/sheet?tab=bodyweight" hx-target="#log-sheet-slot" hx-swap="innerHTML">
+    <strong>Time for a weigh-in?</strong>
+    <span>Your strength-to-bodyweight numbers use your latest bodyweight.</span>
   </a>
+  {% endif %}
+
+  <section class="today-week" aria-label="This week">
+    <div class="card today-tile" data-week-sessions="{{ view.week.sessions }}">
+      <span class="today-tile-num">{{ view.week.sessions }}{% if view.week.target %}<small>/{{ view.week.target }}</small>{% endif %}</span>
+      <span class="today-tile-label">session{{ "s" if view.week.sessions != 1 }} this week</span>
+    </div>
+    <div class="card today-tile" data-week-climbs="{{ view.week.climbs }}">
+      <span class="today-tile-num">{{ view.week.climbs }}</span>
+      <span class="today-tile-label">climb{{ "s" if view.week.climbs != 1 }} this week</span>
+    </div>
+    <div class="card today-tile" data-best-send="{{ view.week.best_send.grade if view.week.best_send else "" }}">
+      {% if view.week.best_send %}
+      {% set color = view.week.best_send.grade|grade_color %}
+      <span class="today-tile-num">{{ view.week.best_send.grade }}<span class="grade-dot" style="--dot: {{ color or "var(--mu)" }}" aria-hidden="true"></span></span>
+      {% else %}
+      <span class="today-tile-num">—</span>
+      {% endif %}
+      <span class="today-tile-label">best send</span>
+    </div>
+  </section>
+
+  <div class="today-actionbar glass-bar">
+    {% if view.state == "no_data" %}
+    <a class="btn today-primary" href="/max-tests">Start max test</a>
+    {% elif view.state == "resume" and view.resume %}
+    <a class="btn today-primary today-resume-btn" href="{{ view.resume.url }}">Resume · set {{ view.resume.set_number }} of {{ view.resume.total_sets }}</a>
+    {% elif view.state == "done" %}
+    <a class="btn today-primary" href="/?log=climb" hx-get="/log/sheet?tab=climb" hx-target="#log-sheet-slot" hx-swap="innerHTML">Log a climb</a>
+    {% elif view.plan %}
+    <form method="get" action="/session/play" class="today-start-form">
+      <input type="hidden" name="grip_type_id" value="{{ view.plan.grip.id }}">
+      <input type="hidden" name="edge_mm" value="{{ view.plan.edge_mm }}">
+      <input type="hidden" name="date" value="{{ view.today }}" class="local-date-default">
+      {% if view.start_session_number %}<input type="hidden" name="session_number" value="{{ view.start_session_number }}">{% endif %}
+      {% if view.plan.sets_hint %}<input type="hidden" name="sets" value="{{ view.plan.sets_hint }}">{% endif %}
+      <button type="submit" class="today-start{% if view.state == "rest" %} btn-secondary{% endif %}">{{ "Train anyway" if view.state == "rest" else "Start session" }}</button>
+    </form>
+    {% endif %}
+  </div>
 </div>
-
-<div class="quick-grid">
-  <a href="/climbs">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 20 10 8l4 6 3-4 4 10H3z"/></svg>
-    Log a climb
-    <small>Sends &amp; attempts</small>
-  </a>
-  <a href="/max-tests">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17a5 5 0 0 0 5-5V4H7v8a5 5 0 0 0 5 5zM7 6H4a3 3 0 0 0 3 3M17 6h3a3 3 0 0 1-3 3"/></svg>
-    Max tests
-    <small>Your current maxes</small>
-  </a>
-  <a href="/dashboard">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19 10 12l4 4 6-8"/></svg>
-    Trends
-    <small>Volume &amp; plateaus</small>
-  </a>
-  <a href="/history">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>
-    History
-    <small>Sessions &amp; sends</small>
-  </a>
-  <a href="/profile">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></svg>
-    Profile
-    <small>Bodyweight &amp; settings</small>
-  </a>
-</div>
-
-<p class="muted" style="font-size:.8rem; margin-top:1.2rem;">Logged in as {{ user.email }}</p>
 {% else %}
 <div class="auth-wrap">
   <p class="brand">GripTrack<span class="dot" style="color:var(--acc)">.</span></p>

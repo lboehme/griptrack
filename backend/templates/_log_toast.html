@@ -1,0 +1,10 @@
+{# Confirmation after a ＋ Log save (#149, V7 toast): a chalk pill that
+   hides itself after 2.6 s (CSS only). The text is always one of
+   backend.today.SAVED_MESSAGES, never echoed input. #}
+<div class="toast-stack">
+  {% if grade_warning %}<p class="grade-warning toast-warning" role="alert">{{ grade_warning }}</p>{% endif %}
+  <p class="toast" role="status">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+    {{ toast }}
+  </p>
+</div>

@@ -23,7 +23,6 @@ from backend.limits import (
 )
 from backend.models import (
     VALID_PROGRESSION_PATHS,
-    BodyWeightLog,
     GripType,
     TrainingProtocol,
     User,
@@ -67,8 +66,7 @@ def log_bodyweight(
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
-    session.add(BodyWeightLog(user_id=user.id, date=date, weight=weight))
-    session.commit()
+    training_log.log_bodyweight(session, user, date, weight)
     return RedirectResponse("/profile", status_code=303)
 
 

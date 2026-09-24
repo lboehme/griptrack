@@ -100,13 +100,13 @@ def seed_max_tests(page, live_server, hands=("left", "right")):
 
 
 def start_session_play(page, live_server):
-    """Seed both hands' max tests and start a session, landing on
-    /session/play's first warmup rung step."""
+    """Seed both hands' max tests and start a session from Today (#149 --
+    the plan defaults to the last-tested combo, half crimp / 20 mm),
+    landing on /session/play's first warmup rung step."""
     seed_max_tests(page, live_server)
-    page.goto(f"{live_server}/session/new")
-    page.locator(".grip-select").select_option(label=["Half crimp", "half crimp"])
-    page.locator('input[name="edge_mm"]').fill("20")
+    page.goto(f"{live_server}/")
     page.get_by_role("button", name="Start session").click()
+    page.wait_for_url("**/session/play**")
 
 
 def advance_to_worksets(page, max_rungs=8):
