@@ -134,6 +134,24 @@ def strength_grade_correlation(session: Session, user: User) -> dict:
     return result
 
 
+def session_load(training_session: TrainingSession) -> float | None:
+    """Session load (#147, CONTEXT.md): Session RPE × duration in minutes,
+    the standard sRPE training-load signal (docs/adr/0014). Derived, never
+    stored. Duration runs from started_at to finished_at, so it's None
+    until the session has been finished -- and None whenever Session RPE
+    or either timestamp is missing. Not consumed by any analytics yet
+    (the overtraining warning / injury guardian #28 are the intended
+    readers)."""
+    if training_session.session_rpe is None:
+        return None
+    minutes = training_log.duration_minutes(
+        training_session.started_at, training_session.finished_at
+    )
+    if minutes is None:
+        return None
+    return training_session.session_rpe * minutes
+
+
 def training_volume_trend(
     session: Session, user: User, hand: str, grip_type_id: int, edge_mm: int
 ) -> list[tuple[date_type, float]]:

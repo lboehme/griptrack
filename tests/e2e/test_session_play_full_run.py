@@ -28,4 +28,4 @@ def test_full_session_from_warmup_through_last_set(live_server, authenticated_pa
             skip_btn.click()
 
     # The final set's commit skips rest and goes straight to the summary.
-    expect(page.get_by_text("All sets done")).to_be_visible()
+    expect(page.get_by_text("Session done")).to_be_visible()

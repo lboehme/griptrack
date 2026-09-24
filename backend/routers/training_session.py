@@ -11,9 +11,11 @@ from backend.limits import (
     MAX_NOTES_LENGTH,
     MAX_REPS,
     MAX_SESSION_NUMBER,
+    MAX_SESSION_RPE,
     MAX_SET_NUMBER,
     MAX_TOGGLE_LENGTH,
     MAX_WEIGHT,
+    MIN_SESSION_RPE,
 )
 from backend.models import VALID_HANDS, GripType, PainReport, User
 from backend.templating import templates
@@ -521,6 +523,22 @@ def set_rest_sound(
     )
 
 
+def summary_redirect(
+    grip_type_id: int | None,
+    edge_mm: int | None,
+    date: date_type,
+    play_hand: str | None,
+    session_number: int | None,
+) -> RedirectResponse:
+    """The no-JS answer for the summary step's autosave forms (#147): back
+    to /session/play when the form carried its combo, else the pre-#147
+    /history fallback every older caller of these endpoints still gets."""
+    if grip_type_id is None or edge_mm is None:
+        return RedirectResponse("/history", status_code=303)
+    hand = play_hand if play_hand in VALID_HANDS else None
+    return play_redirect(grip_type_id, edge_mm, date, hand, session_number)
+
+
 @router.post("/session/update")
 def update_session(
     request: Request,
@@ -528,12 +546,19 @@ def update_session(
     session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
     notes: str | None = Form(default=None, max_length=MAX_NOTES_LENGTH),
     is_deload: str | None = Form(default=None),
+    grip_type_id: int | None = Form(default=None),
+    edge_mm: int | None = Form(default=None, gt=0, le=MAX_EDGE_MM),
+    hand: str | None = Form(default=None),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
     """Autosave endpoint for session-level fields. The form always posts
     both fields together, so a checkbox that's unchecked (and therefore
-    omitted by the browser) is unambiguous: it means False."""
+    omitted by the browser) is unambiguous: it means False.
+
+    The optional combo fields (grip_type_id, edge_mm, hand) are only a
+    return address: the summary step posts them so a no-JS save lands back
+    on /session/play instead of /history."""
     training_session = training_log.find_session(session, user, date, session_number)
     if training_session is not None:
         training_session.notes = notes or ""
@@ -544,7 +569,52 @@ def update_session(
 
     if request.headers.get("HX-Request"):
         return Response(status_code=204)
-    return RedirectResponse("/history", status_code=303)
+    return summary_redirect(grip_type_id, edge_mm, date, hand, session_number)
+
+
+@router.post("/session/rpe")
+def save_session_rpe(
+    request: Request,
+    grip_type_id: int = Form(),
+    edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
+    date: date_type = Form(),
+    session_rpe: int = Form(ge=MIN_SESSION_RPE, le=MAX_SESSION_RPE),
+    hand: str | None = Form(default=None),
+    session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
+    user: User = Depends(auth.current_user),
+    session: Session = Depends(get_session),
+):
+    """Session RPE chip on the summary step (#147): autosaves on tap and
+    answers like every play action -- the summary fragment for htmx, a 303
+    back to /session/play for a plain form post. Scoped to the current
+    user's own (date, session_number) session; there's nothing to rate
+    before a set exists, so a missing session is a no-op, not a create."""
+    require_grip_type(session, grip_type_id)
+    training_session = training_log.find_session(session, user, date, session_number)
+    if training_session is not None:
+        training_log.set_session_rpe(session, training_session, session_rpe)
+    return play_response(
+        request, user, session, grip_type_id, edge_mm, date,
+        hand if hand in VALID_HANDS else None, session_number,
+    )
+
+
+@router.post("/session/finish")
+def finish_session(
+    request: Request,
+    date: date_type = Form(),
+    session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
+    user: User = Depends(auth.current_user),
+    session: Session = Depends(get_session),
+):
+    """Finish on the summary step (#147): stamps finished_at if it isn't
+    set yet (idempotent) and goes home."""
+    training_session = training_log.find_session(session, user, date, session_number)
+    if training_session is not None:
+        training_log.finish_session(session, training_session)
+    if request.headers.get("HX-Request"):
+        return Response(status_code=204, headers={"HX-Redirect": "/"})
+    return RedirectResponse("/", status_code=303)
 
 
 @router.post("/session/pain-report")
@@ -555,9 +625,16 @@ def add_pain_report(
     severity: int = Form(ge=1, le=3),
     note: str | None = Form(default=None, max_length=MAX_NOTES_LENGTH),
     session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
+    grip_type_id: int | None = Form(default=None),
+    edge_mm: int | None = Form(default=None, gt=0, le=MAX_EDGE_MM),
+    play_hand: str | None = Form(default=None),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
+    """Tweaks (#147 summary step; formerly the "How did it feel?" card):
+    at most one PainReport per (session, hand). The optional combo fields
+    are only the no-JS return address -- `play_hand` rather than `hand`,
+    since `hand` here is the tweaked hand, not the play page's hand."""
     if hand not in ("left", "right", "both"):
         return HTMLResponse("Hand must be left, right, or both.", status_code=400)
     training_session = training_log.find_session(session, user, date, session_number)
@@ -580,7 +657,7 @@ def add_pain_report(
 
     if request.headers.get("HX-Request"):
         return Response(status_code=204)
-    return RedirectResponse("/history", status_code=303)
+    return summary_redirect(grip_type_id, edge_mm, date, play_hand, session_number)
 
 
 @router.get("/session/new")

@@ -18,6 +18,10 @@ MAX_PLATE_WEIGHT = 1000
 MAX_PLATE_COUNT = 100
 MAX_SESSION_NUMBER = 20
 
+# Session RPE (#147): the summary step's whole-session effort rating.
+MIN_SESSION_RPE = 1
+MAX_SESSION_RPE = 10
+
 # Training protocol settings (rep target and rest duration, #127)
 MIN_REP_TARGET = 1
 MAX_REP_TARGET = 30

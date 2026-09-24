@@ -164,7 +164,7 @@ def test_the_final_sets_commit_skips_rest_and_reaches_the_summary(client):
     response = save_focus_set(client, 3, left=(30, 5, 7), right=(28, 5, 7))
 
     assert step_kind(response.text) == "summary"
-    assert "All sets done" in response.text
+    assert "Session done" in response.text
     assert rest_ends_at(response.text) is None
 
 
@@ -859,6 +859,14 @@ def test_worksets_step_defaults_to_three_sets_with_protocol_prefills(client):
 # ---------- session-level fields: notes/deload/pain (unchanged endpoints) ----------
 
 
+def summary_step(client, date="2026-07-04"):
+    """The summary step's page (#147), where notes/deload/tweaks now live:
+    Finish pins a session with logged sets to its summary on resume, so
+    this reaches it without committing every planned set first."""
+    client.post("/session/finish", data={"date": date})
+    return play_page(client, date=date)
+
+
 def test_session_notes_over_the_length_ceiling_are_rejected(client):
     setup_tested_user(client)
     save_work_set(client, "left", 1, "40", "5", date="2026-07-04")
@@ -902,9 +910,10 @@ def test_session_notes_and_deload_autosave(client):
     )
     assert response.status_code == 204
 
-    page = workset_step(client, date="2026-07-04")
+    page = summary_step(client)
+    assert step_kind(page.text) == "summary"
     assert "Felt tired today." in page.text
-    assert 'name="is_deload" checked' in page.text or 'checked name="is_deload"' in page.text
+    assert re.search(r'name="is_deload"[^>]*checked', page.text)
 
 
 def test_pain_report_autosaves_and_displays(client):
@@ -917,9 +926,10 @@ def test_pain_report_autosaves_and_displays(client):
     )
     assert response.status_code == 204
 
-    page = workset_step(client, date="2026-07-04")
+    page = summary_step(client)
     assert "Tweaked a pulley" in page.text
-    assert re.search(r"<td>Left</td>\s*<td>2</td>", page.text)
+    assert re.search(r'id="tweak-hand-left"[^>]*checked', page.text)
+    assert re.search(r'id="tweak-left-severity-2"[^>]*checked', page.text)
 
 
 def test_pain_report_save_is_an_upsert_keyed_on_hand(client):
@@ -938,18 +948,18 @@ def test_pain_report_save_is_an_upsert_keyed_on_hand(client):
     )
     assert response.status_code == 204
 
-    page = workset_step(client, date="2026-07-04")
+    page = summary_step(client)
     assert page.text.count("Tweaked a pulley") == 1
-    assert page.text.count("<td>Left</td>") == 1
+    assert re.search(r'id="tweak-left-severity-2"[^>]*checked', page.text)
 
     client.post(
         "/session/pain-report",
         data={"date": "2026-07-04", "hand": "right", "severity": "1"},
         headers={"HX-Request": "true"},
     )
-    page = workset_step(client, date="2026-07-04")
-    assert page.text.count("<td>Left</td>") == 1
-    assert page.text.count("<td>Right</td>") == 1
+    page = summary_step(client)
+    assert re.search(r'id="tweak-left-severity-2"[^>]*checked', page.text)
+    assert re.search(r'id="tweak-right-severity-1"[^>]*checked', page.text)
 
 
 def test_pain_reports_and_session_meta_are_isolated_per_user(client):
@@ -980,7 +990,7 @@ def test_pain_reports_and_session_meta_are_isolated_per_user(client):
         data={"date": "2026-07-04", "notes": "User B notes"},
         headers={"HX-Request": "true"},
     )
-    b_page = workset_step(client, date="2026-07-04").text
+    b_page = summary_step(client).text
     assert "User B own tweak" in b_page
     assert "User A pulley tweak" not in b_page
     assert "User A notes" not in b_page
@@ -988,10 +998,10 @@ def test_pain_reports_and_session_meta_are_isolated_per_user(client):
     from tests.helpers import login
 
     login(client, "lifter@example.com", "test-pw-1234")
-    a_page = workset_step(client, date="2026-07-04").text
+    a_page = summary_step(client).text
     assert "User A pulley tweak" in a_page
     assert "User A notes" in a_page
-    assert 'name="is_deload" checked' in a_page or 'checked name="is_deload"' in a_page
+    assert re.search(r'name="is_deload"[^>]*checked', a_page)
     assert "User B own tweak" not in a_page
     assert "User B notes" not in a_page
 
@@ -1008,42 +1018,35 @@ def test_pain_report_severity_out_of_bounds_is_rejected(client):
         assert response.status_code == 422, f"severity {severity} was accepted"
 
 
-# ---------- "How did it feel?" disclosure, restored on the work-set step ----------
+# ---------- notes/deload/tweaks live on the summary step (#147) ----------
 
 
-def test_how_it_felt_disclosure_sits_below_completed_and_holds_notes_deload_pain(client):
+def test_summary_holds_notes_deload_and_tweaks_below_the_stats(client):
     setup_tested_user(client)
     save_work_set(client, "left", 1, "40", "5", date="2026-07-04")
 
-    page = workset_step(client, date="2026-07-04").text
+    page = summary_step(client).text
 
-    completed_idx = page.index('class="completed-section"')
-    disclosure_idx = page.index('id="how-it-felt"')
-    assert disclosure_idx > completed_idx
-
-    details_open = page.index("<details", disclosure_idx - 20)
-    details_close = page.index("</details>", details_open)
-    disclosure_html = page[details_open:details_close]
-
-    assert "How did it feel?" in disclosure_html
-    assert 'id="session-update-form"' in disclosure_html
-    assert 'name="is_deload"' in disclosure_html
-    assert 'name="notes"' in disclosure_html
-    assert 'id="pain-report-form"' in disclosure_html
-    assert 'name="hand"' in disclosure_html
-    assert 'name="severity"' in disclosure_html
-    assert disclosure_html.count("<details") == 1
-    assert disclosure_html.count("<summary") == 1
+    stats_idx = page.index('class="summary-stats"')
+    assert page.index('id="session-rpe-form"') > stats_idx
+    assert page.index('class="summary-tweaks"') > stats_idx
+    assert page.index('id="session-update-form"') > stats_idx
+    assert 'name="is_deload"' in page
+    assert 'name="notes"' in page
+    assert 'name="severity"' in page
+    assert "How did it feel?" not in page
 
 
-def test_pain_report_hand_uses_segmented_group(client):
+def test_tweak_hand_uses_a_segmented_none_left_right_group(client):
     setup_tested_user(client)
     save_work_set(client, "left", 1, "40", "5", date="2026-07-04")
-    page = workset_step(client, date="2026-07-04").text
+    page = summary_step(client).text
     assert 'select name="hand"' not in page
-    assert 'input type="radio" name="hand" value="left"' in page
-    assert 'input type="radio" name="hand" value="right"' in page
-    assert 'input type="radio" name="hand" value="both"' in page
+    for choice in ("none", "left", "right"):
+        assert re.search(
+            rf'<input type="radio" id="tweak-hand-{choice}" name="tweak_hand" value="{choice}"',
+            page,
+        )
 
 
 def test_switch_hand_link_absent_for_alternating_hand_order(client):
@@ -1140,6 +1143,9 @@ def test_no_new_write_route_is_added_beyond_play_and_its_actions(client):
         "/session/rest/sound",
         "/session/update",
         "/session/pain-report",
+        # Summary step (#147).
+        "/session/rpe",
+        "/session/finish",
     }
 
 

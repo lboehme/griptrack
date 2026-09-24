@@ -829,3 +829,33 @@ def test_rest_sound_toggle_is_bounded_and_rejects_cross_origin_posts(client):
         follow_redirects=False,
     )
     assert unknown_grip.status_code == 404
+
+
+def test_session_rpe_is_bounded_and_numeric(client):
+    """Session RPE (#147) is a bounded 1–10 integer (backend/limits.py):
+    an out-of-range, fractional or non-numeric value is rejected before it
+    can reach the training_sessions row."""
+    from backend.limits import MAX_SESSION_RPE, MIN_SESSION_RPE
+
+    register(client)
+    save_work_set(client, "left", 1, "40", "5", date="2026-07-04")
+    common = {
+        "grip_type_id": grip_type_id(client, "half crimp"),
+        "edge_mm": 20,
+        "date": "2026-07-04",
+    }
+    for bad in (
+        str(MIN_SESSION_RPE - 1), str(MAX_SESSION_RPE + 1), "1e9", "-1", "7.5",
+        "NaN", "seven", "'; DROP TABLE training_sessions;--",
+    ):
+        response = client.post(
+            "/session/rpe", data={**common, "session_rpe": bad}, follow_redirects=False
+        )
+        assert response.status_code == 422, f"session_rpe {bad!r} was accepted"
+
+    ok = client.post(
+        "/session/rpe",
+        data={**common, "session_rpe": str(MAX_SESSION_RPE)},
+        follow_redirects=False,
+    )
+    assert ok.status_code == 303

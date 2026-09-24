@@ -561,6 +561,71 @@ def _aware(dt: datetime | None) -> datetime | None:
     return dt
 
 
+def duration_minutes(start: datetime | None, end: datetime | None) -> float | None:
+    """Minutes from `start` to `end` (fractional), or None if either is
+    missing. Naive and aware datetimes are both read as UTC (SQLite drops
+    tzinfo on the round trip), and a negative span (clock skew) clamps to
+    0 rather than producing a negative duration."""
+    start_aware, end_aware = _aware(start), _aware(end)
+    if start_aware is None or end_aware is None:
+        return None
+    return max(0.0, (end_aware - start_aware).total_seconds() / 60)
+
+
+def set_session_rpe(
+    session: Session, training_session: TrainingSession, session_rpe: int
+) -> None:
+    """Session RPE (#147): the summary's whole-session effort chip. The
+    router has already bounded the value (limits.MIN/MAX_SESSION_RPE);
+    re-tapping another chip just overwrites it."""
+    training_session.session_rpe = session_rpe
+    session.add(training_session)
+    session.commit()
+
+
+def finish_session(session: Session, training_session: TrainingSession) -> None:
+    """Finish (#147): stamp finished_at once. Idempotent -- a second tap (or
+    a replayed POST) never moves an already-set finished_at, so session
+    duration and session load stay anchored to the first Finish."""
+    if training_session.finished_at is None:
+        training_session.finished_at = utcnow()
+        session.add(training_session)
+        session.commit()
+
+
+def summary_view(ws: dict, hands: list[str]) -> dict:
+    """The Summary step's readouts (#147), computed from the worksets_view
+    data play_view already loaded: TrainingVolume (Σ weight × reps) for
+    this combo in this session, sets per hand, the mean of the logged set
+    RPEs, the duration so far (to finished_at, or to now while unfinished),
+    and the current tweak (PainReport) per hand."""
+    saved = [w for (h, _n), w in ws["saved"].items() if h in hands]
+    volume = sum(w.weight * w.reps for w in saved)
+    per_hand = {h: sum(1 for w in saved if w.hand == h) for h in hands}
+    counts = [c for c in per_hand.values() if c]
+    rpes = [w.rpe for w in saved if w.rpe is not None]
+    training_session = ws["training_session"]
+    minutes = None
+    if training_session is not None:
+        minutes = duration_minutes(
+            training_session.started_at, training_session.finished_at or utcnow()
+        )
+    tweaks = {r.hand: r for r in ws["pain_reports"] if r.hand in ("left", "right")}
+    return {
+        "volume": volume,
+        # 1,405 / 212.5 -- thousands separator, and no ".0" on whole numbers.
+        "volume_display": f"{volume:,.1f}".removesuffix(".0"),
+        "sets_per_hand": per_hand,
+        "sets_per_hand_uniform": counts[0] if counts and len(set(counts)) == 1 else None,
+        "avg_rpe": round(sum(rpes) / len(rpes), 1) if rpes else None,
+        "duration_minutes": int(minutes) if minutes is not None else None,
+        "session_rpe": training_session.session_rpe if training_session else None,
+        "finished": bool(training_session and training_session.finished_at),
+        "tweaks": tweaks,
+        "tweak_hand": next((h for h in ("left", "right") if h in tweaks), "none"),
+    }
+
+
 def extend_rest(training_session: TrainingSession, session: Session, seconds: int = 30) -> None:
     """The "+30 s" action: push rest_ends_at later. If rest had already been
     cleared (or never started) there's nothing to extend -- a stale/duplicate
@@ -670,9 +735,22 @@ def play_view(
         not has_any_workset and not warmup_complete
     )
 
+    # Finish (#147) pins the session to its summary on resume -- even if a
+    # set is later deleted -- as long as this view's hand(s) actually
+    # logged something. Two deliberate escape hatches: an explicit
+    # sets= hint (the ⋯ menu's "＋ Add a set" after finishing goes back to
+    # the work-set step for that one extra set), and a sequential-order
+    # other hand with nothing logged yet (its "Start {other} hand" link
+    # still runs that hand's warmup/sets normally).
+    finished = training_session is not None and training_session.finished_at is not None
+    view_has_sets = any(h in ws["hands"] for (h, _n) in ws["saved"])
+
     if ws["editing"]:
         kind = "workset"
         step_number = total_rungs + ws["display_set_number"]
+    elif finished and view_has_sets and sets_hint is None:
+        kind = "summary"
+        step_number = total_steps
     elif warmup_incomplete:
         kind = "warmup"
         step_number = w["current_step"] if w["steps"] else 1
@@ -707,6 +785,18 @@ def play_view(
     if rest_ends_at is not None:
         remaining_seconds = max(0, int((rest_ends_at - utcnow()).total_seconds()))
 
+    other_hand = (
+        ("right" if w["hands"][0] == "left" else "left")
+        if len(w["hands"]) == 1
+        else None
+    )
+    # Sequential order: the other hand is still "left to do" until it has
+    # logged every planned set -- only then does Finish become the summary's
+    # primary action instead of "Start {other} hand".
+    other_hand_pending = other_hand is not None and (
+        sum(1 for (h, _n) in ws["saved"] if h == other_hand) < total_sets
+    )
+
     return {
         "warmup": w,
         "worksets": ws,
@@ -724,11 +814,11 @@ def play_view(
         "hand": w["hands"][0] if len(w["hands"]) == 1 else "",
         # Sequential HandOrderPreference runs one hand's whole flow at a
         # time; the other hand is where the "Switch to"/"Start" links go.
-        "other_hand": (
-            ("right" if w["hands"][0] == "left" else "left")
-            if len(w["hands"]) == 1
-            else None
-        ),
+        "other_hand": other_hand,
+        "other_hand_pending": other_hand_pending,
+        # Session-level readouts: both hands' sets for this combo, even
+        # on a sequential-order hand's summary.
+        "summary": summary_view(ws, ["left", "right"]) if kind == "summary" else None,
         "session_number": w["session_number"],
         "training_session": training_session,
         "sets_hint": sets_hint,

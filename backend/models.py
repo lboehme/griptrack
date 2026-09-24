@@ -149,6 +149,14 @@ class TrainingSession(SQLModel, table=True):
     # hasn't been committed yet — even once it's in the past, the rest step
     # just shows "Pull" / "Start set N" until the user acts.
     rest_ends_at: datetime | None = Field(default=None)
+    # Session summary (#147, docs/adr/0014): the whole-session effort rating
+    # (Session RPE, 1–10, bounded by limits.MIN/MAX_SESSION_RPE -- the
+    # summary's five chips post 3/5/7/9/10) and when the user tapped
+    # Finish. Both nullable: a session that never reached Finish simply has
+    # neither. Session load (Session RPE × duration in minutes) is derived
+    # from these plus started_at in analytics.session_load, never stored.
+    session_rpe: int | None = Field(default=None)
+    finished_at: datetime | None = Field(default=None)
 
 
 class PainReport(SQLModel, table=True):

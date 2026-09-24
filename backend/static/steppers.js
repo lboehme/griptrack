@@ -1,9 +1,10 @@
 /* Session play (#146, docs/adr/0014) client JS: work-set steppers with
  * hold-to-repeat (moved here from the old worksets.html Focus screen,
  * issue #141), the rest ring countdown (always computed from the stored
- * rest_ends_at, never a decrementing counter), and the feature-detected
+ * rest_ends_at, never a decrementing counter), the feature-detected
  * S3 native rest bridge calls with a Screen Wake Lock fallback
- * (docs/adr/0015, #148). Vanilla, ES5-ish, no build step.
+ * (docs/adr/0015, #148), and the summary step's notes/deload/tweak
+ * autosave (#147). Vanilla, ES5-ish, no build step.
  *
  * Every /session/play action round-trips through the server and htmx swaps
  * #play-root's contents in (a fresh DOM each time), so this file never
@@ -345,61 +346,35 @@
   document.addEventListener("DOMContentLoaded", onSettle);
   document.body.addEventListener("htmx:afterSettle", onSettle);
 
-  // ---- "How did it feel?" disclosure (issue #81, restored on the play
-  // work-set step in #146 review item 1): notes/deload and pain reports
-  // keep autosaving per interaction -- no commit button, no edit-mode dance.
-  // Delegated on document (not bound once at load) since the disclosure is
-  // re-rendered fresh on every htmx swap of #play-root. ----
-  function displayName(str) {
-    if (!str) return "";
-    var s = String(str).replace(/_/g, " ");
-    return s.charAt(0).toUpperCase() + s.slice(1);
-  }
-
-  function upsertPainRow(hand, severity, note) {
-    var body = document.getElementById("pain-reports-body");
-    var table = document.getElementById("pain-reports-table");
-    if (!body) return;
-    var row = body.querySelector('tr[data-hand="' + hand + '"]');
-    if (!row) {
-      row = document.createElement("tr");
-      row.dataset.hand = hand;
-      body.appendChild(row);
-    }
-    row.replaceChildren();
-    [displayName(hand), displayName(severity), note || ""].forEach(function (text) {
-      var td = document.createElement("td");
-      td.textContent = text;
-      row.appendChild(td);
+  // ---- Summary step autosave (#147; notes/deload and tweaks moved here
+  // from the old "How did it feel?" card): no commit button -- a change
+  // posts straight to the existing /session/update and /session/pain-report
+  // endpoints (HX-Request -> 204). Delegated on document since the summary
+  // is re-rendered fresh on every htmx swap of #play-root. Session RPE
+  // chips need no JS of their own: they're htmx form buttons. ----
+  function postForm(form) {
+    return fetch(form.action, {
+      method: "POST",
+      body: new FormData(form),
+      headers: { "HX-Request": "true" },
     });
-    if (table) table.hidden = false;
   }
 
   document.addEventListener("change", function (e) {
     var metaForm = e.target.closest("#session-update-form");
     if (metaForm) {
-      fetch(metaForm.action, {
-        method: "POST",
-        body: new FormData(metaForm),
-        headers: { "HX-Request": "true" },
-      });
+      postForm(metaForm);
       return;
     }
 
-    var painForm = e.target.closest("#pain-report-form");
-    if (painForm) {
-      var severityInput = painForm.querySelector('input[name="severity"]');
-      if (!severityInput || !severityInput.value) return;
-      var handRadio = painForm.querySelector('input[name="hand"]:checked');
-      var hand = handRadio ? handRadio.value : "left";
-      var note = painForm.querySelector('input[name="note"]').value;
-      var severity = severityInput.value;
-      fetch(painForm.action, {
-        method: "POST",
-        body: new FormData(painForm),
-        headers: { "HX-Request": "true" },
-      }).then(function (response) {
-        if (response.ok) upsertPainRow(hand, severity, note);
+    // A tweak is one PainReport per (session, hand): nothing to save until
+    // a severity is picked; after that, severity and note both autosave.
+    var tweakForm = e.target.closest(".tweak-form");
+    if (tweakForm) {
+      if (!tweakForm.querySelector('input[name="severity"]:checked')) return;
+      var status = tweakForm.querySelector('[data-role="tweak-status"]');
+      postForm(tweakForm).then(function (response) {
+        if (status) status.textContent = response.ok ? "Saved" : "Could not save";
       });
     }
   });

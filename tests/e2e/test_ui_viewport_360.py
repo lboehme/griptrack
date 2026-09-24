@@ -92,6 +92,39 @@ def test_worksets_card_elements_and_set_done_within_360x740(live_server, authent
     assert svg_box["height"] >= 10, f"Checkmark svg height {svg_box['height']} < 10px"
 
 
+def test_summary_finish_is_above_the_fold_with_no_overflow_at_360x740(
+    live_server, authenticated_page
+):
+    """The summary step (#147) is the longest session screen; its Finish
+    button is pinned in the bottom action area (V8), so it must be visible
+    at 360x740 without scrolling, with no horizontal overflow."""
+    page = authenticated_page
+    page.set_viewport_size({"width": 360, "height": 740})
+    _seed_session_and_worksets(page, live_server)
+    for set_number in range(1, 4):
+        page.locator(".set-done-btn").click()
+        if set_number < 3:
+            page.get_by_role("button", name="Skip rest").click()
+    expect(page.get_by_text("Session done")).to_be_visible()
+
+    for tweak in ("none", "left"):  # also with the tweak picker revealed
+        page.locator(f"label:has(#tweak-hand-{tweak})").click()
+        page.evaluate("() => window.scrollTo(0, 0)")
+        scroll_width = page.evaluate("() => document.documentElement.scrollWidth")
+        inner_width = page.evaluate("() => window.innerWidth")
+        assert scroll_width <= inner_width, (
+            f"Horizontal overflow on summary: scrollWidth {scroll_width} > {inner_width}"
+        )
+        finish = page.locator(".summary-finish-btn")
+        expect(finish).to_be_visible()
+        box = finish.bounding_box()
+        assert box is not None
+        assert box["y"] >= 0 and box["y"] + box["height"] <= 740, (
+            f"Finish button spans {box['y']}..{box['y'] + box['height']}, outside 0..740"
+        )
+        assert box["height"] >= 44
+
+
 def test_worksets_stepper_buttons_fit_at_130_percent_font_scale(live_server, authenticated_page):
     """At 412 px with 130% font scale, stepper buttons must still sit inside their cards."""
     page = authenticated_page
