@@ -172,12 +172,20 @@ def device_login(session: Session, presented_token: str | None) -> User | None:
     local User on a match, None on a wrong/missing/absent token or before
     first run has created a user.
     """
-    expected = os.environ.get("GRIPTRACK_DEVICE_TOKEN")
-    if not expected or not presented_token:
-        return None
-    if not hmac.compare_digest(presented_token, expected):
+    if not device_token_valid(presented_token):
         return None
     return session.exec(select(User)).first()
+
+
+def device_token_valid(presented_token: str | None) -> bool:
+    """Constant-time check of the shell's device token against
+    `GRIPTRACK_DEVICE_TOKEN` (ADR-0013). Separate from `device_login` so a
+    correct token before first run is recognised as valid (it grants the
+    first-run bootstrap step) rather than looking like a failed attempt."""
+    expected = os.environ.get("GRIPTRACK_DEVICE_TOKEN")
+    if not expected or not presented_token:
+        return False
+    return hmac.compare_digest(presented_token.encode(), expected.encode())
 
 
 def create_device_user(

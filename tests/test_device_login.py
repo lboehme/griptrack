@@ -11,6 +11,9 @@ from tests.helpers import register
 
 
 def complete_first_run(client, name="Owner", unit_pref="kg", hand_order_pref="alternating"):
+    # First run is only reachable after the shell's device-token exchange
+    # (ADR-0013): /device-login with no user yet grants the bootstrap step.
+    device_login(client)
     return client.post(
         "/welcome",
         data={"name": name, "unit_pref": unit_pref, "hand_order_pref": hand_order_pref},
@@ -145,6 +148,7 @@ def test_first_run_is_idempotent_against_double_submit(webview_client):
 
 
 def test_first_run_rejects_invalid_unit_pref(webview_client):
+    device_login(webview_client)
     response = webview_client.post(
         "/welcome",
         data={"name": "Owner", "unit_pref": "stones", "hand_order_pref": "alternating"},
@@ -153,6 +157,7 @@ def test_first_run_rejects_invalid_unit_pref(webview_client):
 
 
 def test_first_run_rejects_invalid_hand_order_pref(webview_client):
+    device_login(webview_client)
     response = webview_client.post(
         "/welcome",
         data={"name": "Owner", "unit_pref": "kg", "hand_order_pref": "bogus"},
@@ -161,6 +166,7 @@ def test_first_run_rejects_invalid_hand_order_pref(webview_client):
 
 
 def test_first_run_bounds_the_name_length(webview_client):
+    device_login(webview_client)
     response = webview_client.post(
         "/welcome",
         data={"name": "x" * 5000, "unit_pref": "kg", "hand_order_pref": "alternating"},
@@ -199,7 +205,8 @@ def test_device_login_redirects_to_welcome_before_first_run(webview_client):
 
     assert response.status_code == 303
     assert response.headers["location"] == "/welcome"
-    assert "session=" not in response.headers.get("set-cookie", "")
+    # The cookie carries only the first-run grant -- it is not a sign-in.
+    assert webview_client.get("/profile").status_code == 401
 
 
 def test_device_login_rejects_a_wrong_token(webview_client):
@@ -326,3 +333,53 @@ def test_wrong_device_token_cannot_read_or_write_data(webview_client):
 
     assert webview_client.get("/profile").status_code == 401
     assert webview_client.get("/dashboard").status_code == 401
+
+
+# --- First run is gated on the device token (Copilot review, PR #153) ---
+
+
+def test_first_run_post_without_a_device_token_exchange_is_refused(webview_client):
+    # Another app on the phone can reach 127.0.0.1 but can't read the
+    # device token -- it must not be able to claim a fresh install.
+    response = webview_client.post(
+        "/welcome",
+        data={"name": "Intruder", "unit_pref": "kg", "hand_order_pref": "alternating"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 403
+    assert "session=" not in response.headers.get("set-cookie", "")
+    device_login(webview_client)
+    assert webview_client.get("/welcome").status_code == 200  # still unclaimed
+
+
+def test_first_run_page_without_a_device_token_exchange_is_refused(webview_client):
+    assert webview_client.get("/welcome", follow_redirects=False).status_code == 403
+
+
+def test_wrong_device_token_before_first_run_is_rejected(webview_client):
+    response = device_login(webview_client, token="not-the-real-token")
+
+    assert response.status_code == 403
+    assert webview_client.get("/welcome", follow_redirects=False).status_code == 403
+
+
+def test_correct_token_before_first_run_is_not_counted_as_a_failure(webview_client):
+    for _ in range(10):
+        response = device_login(webview_client)
+        assert response.status_code == 303
+        assert response.headers["location"] == "/welcome"
+
+
+def test_first_run_bootstrap_grant_is_spent_after_the_user_is_created(webview_client):
+    complete_first_run(webview_client)
+    webview_client.cookies.clear()
+
+    response = webview_client.post(
+        "/welcome",
+        data={"name": "Again", "unit_pref": "kg", "hand_order_pref": "alternating"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code in (303, 403)
+    assert "session=" not in response.headers.get("set-cookie", "")

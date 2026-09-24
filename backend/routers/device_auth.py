@@ -25,6 +25,11 @@ router = APIRouter()
 MAX_DEVICE_TOKEN_LENGTH = 512
 MAX_NEXT_LENGTH = 2048
 
+# Signed-session flag set only by a successful /device-login before first
+# run. Without it, /welcome is refused: any app on the phone can reach the
+# loopback port, but only the shell holds the device token (ADR-0013).
+FIRST_RUN_GRANT = "first_run_grant"
+
 
 def _safe_next(next: str | None) -> str | None:
     """A `next` value is only ever honored if it's a same-origin relative
@@ -55,12 +60,16 @@ def device_login(
             "Too many attempts. Wait a minute and try again.", status_code=429
         )
 
+    if not auth.device_token_valid(token):
+        limiter.record_failure(client_key)
+        return HTMLResponse("Invalid device token.", status_code=403)
+
     user = auth.device_login(session, token)
     if user is None:
-        limiter.record_failure(client_key)
-        if not auth.any_user_exists(session):
-            return RedirectResponse("/welcome", status_code=303)
-        return HTMLResponse("Invalid device token.", status_code=403)
+        # Correct token, no user yet: grant the one-time first-run step.
+        # Only the shell can read the token, so only it can reach /welcome.
+        request.session[FIRST_RUN_GRANT] = True
+        return RedirectResponse("/welcome", status_code=303)
 
     request.session["user_id"] = user.id
     request.session["session_version"] = user.session_version
@@ -72,7 +81,13 @@ def device_login(
 def welcome_start(request: Request, session: Session = Depends(get_session)):
     if auth.any_user_exists(session):
         return RedirectResponse("/", status_code=303)
+    if not request.session.get(FIRST_RUN_GRANT):
+        return _first_run_refused()
     return templates.TemplateResponse(request, "welcome_start.html", {})
+
+
+def _first_run_refused() -> HTMLResponse:
+    return HTMLResponse("Open GripTrack from the app to set it up.", status_code=403)
 
 
 @router.post("/welcome")
@@ -83,6 +98,12 @@ def welcome_create(
     hand_order_pref: str = Form(default="alternating"),
     session: Session = Depends(get_session),
 ):
+    if auth.any_user_exists(session):
+        # Idempotent: a refresh or double-submit after the device user
+        # already exists just rejoins the app instead of erroring.
+        return RedirectResponse("/", status_code=303)
+    if not request.session.get(FIRST_RUN_GRANT):
+        return _first_run_refused()
     if unit_pref not in VALID_UNITS:
         return HTMLResponse("Unit must be kg or lbs.", status_code=400)
     if hand_order_pref not in VALID_HAND_ORDER_PREFS:
@@ -99,6 +120,7 @@ def welcome_create(
     except auth.RegistrationError as error:
         return HTMLResponse(str(error), status_code=400)
 
+    request.session.pop(FIRST_RUN_GRANT, None)
     request.session["user_id"] = user.id
     request.session["session_version"] = user.session_version
     return RedirectResponse("/welcome/plates", status_code=303)

@@ -30,6 +30,7 @@ from backend.launcher import (
     bootstrap,
     build_app,
     database_url_for,
+    ensure_device_token,
     ensure_session_secret,
     run_migrations,
     serve,
@@ -112,6 +113,49 @@ def test_ensure_session_secret_differs_per_app_dir(tmp_path):
     assert ensure_session_secret(dir_a) != ensure_session_secret(dir_b)
 
 
+# --- ensure_device_token (ADR-0013) ------------------------------------
+
+
+def test_ensure_device_token_persists_and_reuses_across_calls(tmp_path):
+    first = ensure_device_token(tmp_path)
+    second = ensure_device_token(tmp_path)
+
+    assert first == second
+    assert len(first) >= 32
+    assert (tmp_path / "device_token").read_text().strip() == first
+
+
+def test_ensure_device_token_accepts_string_path(tmp_path):
+    assert ensure_device_token(str(tmp_path)) == ensure_device_token(tmp_path)
+
+
+def test_ensure_device_token_differs_per_app_dir(tmp_path):
+    dir_a, dir_b = tmp_path / "a", tmp_path / "b"
+
+    assert ensure_device_token(dir_a) != ensure_device_token(dir_b)
+
+
+def test_ensure_device_token_is_distinct_from_the_session_secret(tmp_path):
+    assert ensure_device_token(tmp_path) != ensure_session_secret(tmp_path)
+
+
+def test_bootstrap_exports_the_persisted_device_token(tmp_path):
+    bootstrap(tmp_path)
+    bootstrap(tmp_path)
+
+    assert os.environ["GRIPTRACK_DEVICE_TOKEN"] == ensure_device_token(tmp_path)
+
+
+def _device_sign_in(client, app_dir):
+    """What the Android shell does on cold start: exchange the persisted
+    device token. Before first run this grants the /welcome step."""
+    return client.post(
+        "/device-login",
+        data={"token": ensure_device_token(app_dir)},
+        follow_redirects=False,
+    )
+
+
 # --- run_migrations -------------------------------------------------------
 
 
@@ -192,6 +236,7 @@ def test_build_app_serves_in_webview_mode_without_sw_or_manifest(tmp_path):
         assert login_response.status_code == 303
         assert login_response.headers["location"] == "/welcome"
 
+        _device_sign_in(client, tmp_path)
         response = client.get("/welcome")
 
     assert response.status_code == 200
@@ -203,6 +248,7 @@ def test_build_app_accepts_string_path(tmp_path):
     app = build_app(str(tmp_path))
 
     with TestClient(app) as client:
+        _device_sign_in(client, tmp_path)
         response = client.get("/welcome")
 
     assert response.status_code == 200
@@ -215,6 +261,7 @@ def test_build_app_creates_the_device_user_through_first_run(tmp_path):
     app = build_app(tmp_path)
 
     with TestClient(app) as client:
+        _device_sign_in(client, tmp_path)
         response = client.post(
             "/welcome",
             data={"name": "Owner", "unit_pref": "kg", "hand_order_pref": "alternating"},
@@ -242,6 +289,7 @@ def test_build_app_persists_the_device_user_to_the_app_dir_database(tmp_path):
     app = build_app(tmp_path)
 
     with TestClient(app) as client:
+        _device_sign_in(client, tmp_path)
         client.post(
             "/welcome",
             data={"name": "Owner", "unit_pref": "kg", "hand_order_pref": "alternating"},
@@ -289,11 +337,13 @@ def test_serve_wiring_boots_a_reachable_loopback_server(tmp_path):
                 time.sleep(0.1)
         assert healthy, "server did not become healthy in time"
 
-        response = httpx.post(
-            f"{base_url}/welcome",
-            data={"name": "Owner", "unit_pref": "kg", "hand_order_pref": "alternating"},
-            follow_redirects=False,
-        )
+        with httpx.Client(base_url=base_url) as http:
+            http.post("/device-login", data={"token": ensure_device_token(tmp_path)})
+            response = http.post(
+                "/welcome",
+                data={"name": "Owner", "unit_pref": "kg", "hand_order_pref": "alternating"},
+                follow_redirects=False,
+            )
         assert response.status_code == 303
     finally:
         server.should_exit = True

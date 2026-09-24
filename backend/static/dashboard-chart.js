@@ -23,6 +23,16 @@ document.addEventListener("DOMContentLoaded", () => {
     return v || fallback;
   };
 
+  // Alpha tint of a token colour, for canvas (which can't take var()).
+  // Tokens are 6-digit hex today; any other valid colour is used as-is
+  // (opaque) rather than falling back to a hard-coded tint.
+  function withAlpha(color, alpha) {
+    const hex = /^#([0-9a-fA-F]{6})$/.exec(color);
+    if (!hex) return color;
+    const n = parseInt(hex[1], 16);
+    return "rgba(" + (n >> 16) + ", " + ((n >> 8) & 255) + ", " + (n & 255) + ", " + alpha + ")";
+  }
+
   const palette = {
     // Charts sit on strong glass (see app.css's .trend-chart/.asymmetry-chart
     // rules) — deliberately not opaque, so the topo map and card blur keep
@@ -34,7 +44,7 @@ document.addEventListener("DOMContentLoaded", () => {
     ink: token("--mu", "#A89F92"),
     grid: token("--line", "#383229"),
     text: token("--tx", "#F4EFE7"),
-    band: "rgba(242, 178, 76, 0.15)", // --warn tint
+    band: withAlpha(token("--warn", "#F2B24C"), 0.15),
     zeroLine: token("--mu", "#A89F92"),
     // The point ring needs a genuinely opaque colour (not the transparent
     // "surface" above) so markers read as solid dots over the glass/topo
@@ -43,9 +53,8 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   // ~10%-opacity area wash under the line, matching the old ax.fill_between
-  // alpha=0.10 -- appended as an 8-digit hex alpha suffix. Only meaningful
-  // when the mark colour is a 6-digit hex (true for the --acc token).
-  const AREA_FILL = /^#[0-9a-fA-F]{6}$/.test(palette.mark) ? palette.mark + "1a" : "rgba(255, 106, 61, 0.1)";
+  // alpha=0.10 -- derived from the --acc token like every chart colour.
+  const AREA_FILL = withAlpha(palette.mark, 0.1);
 
   function toUnixSeconds(isoDate) {
     return Math.floor(new Date(isoDate + "T00:00:00Z").getTime() / 1000);
