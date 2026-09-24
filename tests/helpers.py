@@ -223,17 +223,45 @@ def log_bodyweight(client, date, weight):
     )
 
 
-def get_session_page(client, path, params):
-    """GET a session page (warmup/worksets), auto-confirming the "no
-    session on this date — create one?" prompt if it appears.
+def complete_warmup(
+    client, grip_id, edge_mm, date="2026-07-04", hand=None, session_number=None,
+    max_rungs=8,
+):
+    """The HTTP-seam equivalent of the e2e advance_to_worksets helper
+    (session play, #146): POST /session/rung-done repeatedly until the
+    work-set step is reached, and return that final GET response. A no-op
+    once the work-set step is already showing (or nothing to warm up,
+    e.g. an untested-hand estimate prompt)."""
+    params = {"grip_type_id": grip_id, "edge_mm": edge_mm, "date": date}
+    if hand:
+        params["hand"] = hand
+    if session_number is not None:
+        params["session_number"] = session_number
+    page = get_session_page(client, "/session/play", params)
+    for step_index in range(max_rungs):
+        if "rung-tile" not in page.text:
+            return page
+        client.post(
+            "/session/rung-done",
+            data={**params, "step_index": step_index},
+            follow_redirects=True,
+        )
+        page = get_session_page(client, "/session/play", params)
+    return page
 
-    Most tests exercise the normal warmup/worksets content, not the
-    past-date creation gate itself (see test_multi_session_days.py for
-    that) — this keeps every other test's dates free to land anywhere in
-    the past without tripping over the gate."""
+
+def get_session_page(client, path, params):
+    """GET a session page (play, or the legacy warmup/worksets which now
+    just redirect to it), auto-confirming the "no session on this date —
+    create one?" prompt if it appears.
+
+    Most tests exercise the normal page content, not the past-date creation
+    gate itself (see test_multi_session_days.py for that) — this keeps
+    every other test's dates free to land anywhere in the past without
+    tripping over the gate."""
     response = client.get(path, params=params, follow_redirects=True)
     if "session-confirm-card" in response.text:
-        page = "warmup" if path.endswith("warmup") else "worksets"
+        page = path.rsplit("/", 1)[-1]
         client.post(
             "/session/create", data={"page": page, **params}, follow_redirects=True
         )

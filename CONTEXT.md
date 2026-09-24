@@ -24,6 +24,38 @@ past date with no session at all requires an explicit "create one?"
 confirmation rather than instantiating silently (issue #51).
 _Avoid_: Session (ambiguous with the auth/login session), Workout, Training Log
 
+**Session play**:
+A training session runs on one page, `/session/play`, full screen with no
+tab bar (`docs/adr/0014-session-play-as-server-driven-steps.md`). The
+server derives the current **step** purely from persisted state — warmup
+ticks recorded, work sets committed against the planned set count, and
+whether a rest is pending — and renders it as an htmx fragment (a full page
+without htmx, or after a plain form POST). The step names are: **Warmup
+rung** (one ramp rung at a time, with tick targets and a "Rung done"
+button), **Work set** (the hand cards and steppers, unchanged Set commit),
+**Rest** (a ring countdown computed from the stored `rest_ends_at`, never a
+decrementing counter — see below), and **Summary** (a minimal "all sets
+done" placeholder pending the real screen, issue #147). The page always
+opens on the right step after a pause, reload, or Android killing the app.
+Replaced the two separate `/session/warmup` and `/session/worksets` pages,
+which now redirect to it.
+_Avoid_: warmup page, worksets page (as separate screens — they're steps of
+one page now)
+
+**rest_ends_at**:
+A nullable `datetime` on `TrainingSession`: when set, the play step is
+**Rest**, and the ring countdown is always computed from this stored end
+time (`now` vs. `rest_ends_at`), never from a client-side decrementing
+counter — so a reload or the app being killed and reopened resumes at the
+right remaining time instead of restarting the clock. Set to
+`now + TrainingProtocol.default_rest_seconds` by a normal (non-final,
+non-edit) Set commit; **+30 s** bumps it by exactly 30 seconds; **Skip
+rest** and **Start set N** both clear it. Once it's in the past, the rest
+step shows "Pull" / **Start set N** until the user acts — it is never
+silently skipped.
+_Avoid_: rest timer state, countdown seconds (nothing is stored as a
+plain remaining-seconds counter)
+
 **WorkSet**:
 One set of the tracked work-set portion of a TrainingSession (hand,
 grip_type, edge_mm, weight_kg, reps, set_number, rpe). Warmup/ramp sets are

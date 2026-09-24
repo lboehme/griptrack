@@ -452,7 +452,7 @@ def test_training_protocol_per_user_isolation(client):
 
 
 def test_worksets_view_reflects_user_protocol_rep_target(client):
-    from tests.helpers import current_set_field, get_session_page
+    from tests.helpers import complete_warmup, current_set_field
 
     register(client, "lifter@example.com", "test-pw-1234")
     log_max_test(client, "left", "half crimp", 20, "2026-07-01", "40")
@@ -464,11 +464,7 @@ def test_worksets_view_reflects_user_protocol_rep_target(client):
     )
 
     gid = grip_type_id(client, "half crimp")
-    worksets = get_session_page(
-        client,
-        "/session/worksets",
-        params={"grip_type_id": gid, "edge_mm": 20, "date": "2026-07-04"},
-    )
+    worksets = complete_warmup(client, gid, 20, date="2026-07-04")
     assert worksets.status_code == 200
     assert current_set_field(worksets.text, "left", "reps") == "8"
     assert current_set_field(worksets.text, "right", "reps") == "8"

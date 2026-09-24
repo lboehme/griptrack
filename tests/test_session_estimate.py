@@ -5,6 +5,7 @@ ramp and work-set prefills for this session only (see CONTEXT.md)."""
 import re
 
 from tests.helpers import (
+    complete_warmup,
     current_set_field,
     get_session_page,
     grip_type_id,
@@ -26,7 +27,7 @@ def warmup_page(client, grip="half crimp", edge_mm=20, date="2026-07-04", hand=N
     }
     if hand is not None:
         params["hand"] = hand
-    return get_session_page(client, "/session/warmup", params)
+    return get_session_page(client, "/session/play", params)
 
 
 def estimate_form_hands(page_text):
@@ -34,14 +35,18 @@ def estimate_form_hands(page_text):
 
 
 def ramp_weights(page_text):
-    """Parse warmup page into {(hand, step_index): suggested_weight}."""
-    return {
-        (h, int(s)): float(w)
-        for h, s, w in re.findall(
-            r'class="ramp-weight" data-hand="(\w+)" data-step="(\d+)">([\d.]+)<',
-            page_text,
-        )
-    }
+    """Parse /session/play's current-rung weight per hand (session play,
+    #146: one rung is shown at a time, not the whole card ladder --
+    {hand: weight} for whichever rung is currently on screen)."""
+    result = {}
+    for hand, weight in re.findall(
+        r'rung-tile[^"]*"\s*data-hand="(\w+)">.*?'
+        r'<div class="rung-tile-weight">([\d.]+)',
+        page_text,
+        re.DOTALL,
+    ):
+        result[hand] = float(weight)
+    return result
 
 
 def save_estimate(
@@ -67,7 +72,7 @@ def test_fully_untested_combo_shows_an_estimate_form_per_hand_and_no_ramp(client
 
     assert page.status_code == 200
     assert estimate_form_hands(page.text) == {"left", "right"}
-    assert 'class="ramp-weight"' not in page.text
+    assert "rung-tile-weight" not in page.text
     # The guided-test link is pre-filled per hand with this page's context.
     grip_id = grip_type_id(client, "half crimp")
     for hand in ("left", "right"):
@@ -84,14 +89,12 @@ def test_submitted_estimate_drives_that_hands_ramp_through_plate_rounding(client
     assert response.status_code == 200
 
     page = warmup_page(client)
-    # Same hand-computed values as the real-max ramp for 42.5 against the
-    # seeded kg inventory (see test_warmup) — the estimate feeds the exact
-    # same ramp/plate-rounding path.
+    # Same hand-computed value as the real-max ramp for 42.5 against the
+    # seeded kg inventory (see test_multi_session_days) — the estimate feeds
+    # the exact same ramp/plate-rounding path. Session play (#146) shows one
+    # rung at a time, so only the first (current) rung is on screen here.
     weights = ramp_weights(page.text)
-    assert weights[("left", 0)] == 21.25
-    assert weights[("left", 1)] == 27.5
-    assert weights[("left", 2)] == 33.75
-    assert weights[("left", 3)] == 38.0
+    assert weights["left"] == 21.25
     # The right hand still has neither max nor estimate: its form remains.
     assert estimate_form_hands(page.text) == {"right"}
 
@@ -106,9 +109,8 @@ def test_estimating_the_untested_hand_completes_a_mixed_ramp_table(client):
     weights = ramp_weights(page.text)
     # Both hands' ramps render together: the left from its real CurrentMax,
     # the right from the estimate (same literals as test_warmup's 42.5/40).
-    assert weights[("left", 0)] == 21.25
-    assert weights[("right", 0)] == 20.0
-    assert weights[("right", 3)] == 36.0
+    assert weights["left"] == 21.25
+    assert weights["right"] == 20.0
     # A hand with a real CurrentMax is never shown an estimate prompt.
     assert estimate_form_hands(page.text) == set()
 
@@ -122,7 +124,7 @@ def test_resubmitting_an_estimate_updates_it_in_place(client):
     weights = ramp_weights(warmup_page(client).text)
     # The ramp follows the corrected value: 50% of 45 = 22.5 (20+2.5 exact),
     # not 40's first step of 20.0.
-    assert weights[("left", 0)] == 22.5
+    assert weights["left"] == 22.5
 
 
 def worksets_page(client, grip="half crimp", edge_mm=20, date="2026-07-04"):
@@ -141,6 +143,8 @@ def test_workset_prefill_uses_the_same_fallback_as_the_warmup_ramp(client):
     register(client)
     log_max_test(client, "left", "half crimp", 20, "2026-07-01", "42.5")
     save_estimate(client, "right", "40")
+    grip_id = grip_type_id(client, "half crimp")
+    complete_warmup(client, grip_id, 20)
 
     page = worksets_page(client)
 
@@ -188,7 +192,9 @@ def test_estimate_only_training_never_feeds_the_strength_grade_correlation(clien
     assert 'class="corr-point"' not in page
 
 
-def test_htmx_estimate_submission_gets_a_no_content_response(client):
+def test_htmx_estimate_submission_returns_the_next_step_fragment(client):
+    """Session play (#146, docs/adr/0014): an htmx POST gets the next
+    step's fragment back (not a bare 204) so it can be swapped straight in."""
     register(client)
 
     response = client.post(
@@ -203,8 +209,9 @@ def test_htmx_estimate_submission_gets_a_no_content_response(client):
         headers={"HX-Request": "true"},
     )
 
-    assert response.status_code == 204
-    assert ("left", 0) in ramp_weights(warmup_page(client).text)
+    assert response.status_code == 200
+    assert "<html" not in response.text  # a fragment, not a full page
+    assert "left" in ramp_weights(response.text)
 
 
 def test_a_new_session_never_inherits_an_earlier_sessions_estimate(client):
@@ -215,7 +222,7 @@ def test_a_new_session_never_inherits_an_earlier_sessions_estimate(client):
 
     # The combo is still untested, so the fresh session re-prompts.
     assert estimate_form_hands(page.text) == {"left", "right"}
-    assert 'class="ramp-weight"' not in page.text
+    assert "rung-tile-weight" not in page.text
 
 
 def test_estimate_above_the_weight_ceiling_is_rejected(client):
@@ -236,10 +243,10 @@ def test_estimates_are_isolated_per_user(client):
     # estimate, and their own estimate is theirs alone.
     assert estimate_form_hands(warmup_page(client).text) == {"left", "right"}
     save_estimate(client, "left", "50")
-    assert ramp_weights(warmup_page(client).text)[("left", 0)] == 25.0
+    assert ramp_weights(warmup_page(client).text)["left"] == 25.0
 
     login(client, "lifter@example.com", "test-pw-1234")
-    assert ramp_weights(warmup_page(client).text)[("left", 0)] == 20.0
+    assert ramp_weights(warmup_page(client).text)["left"] == 20.0
 
 
 def test_estimate_flow_under_sequential_hand_order(client):
@@ -251,12 +258,10 @@ def test_estimate_flow_under_sequential_hand_order(client):
 
     save_estimate(client, "left", "40")
     left = warmup_page(client)
-    assert {h for h, s in ramp_weights(left.text)} == {"left"}
+    assert set(ramp_weights(left.text)) == {"left"}
     assert estimate_form_hands(left.text) == set()
 
     right = warmup_page(client, hand="right")
     assert estimate_form_hands(right.text) == {"right"}
     save_estimate(client, "right", "42.5")
-    assert {h for h, s in ramp_weights(warmup_page(client, hand="right").text)} == {
-        "right"
-    }
+    assert set(ramp_weights(warmup_page(client, hand="right").text)) == {"right"}

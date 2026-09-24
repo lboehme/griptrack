@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="/static/app.css">
   <script src="/static/htmx.min.js" defer></script>
   <script src="/static/client-date.js" defer></script>
+  <script src="/static/steppers.js" defer></script>
   {% if not webview_build %}
   <script src="/static/register-sw.js" defer></script>
   {% endif %}
@@ -22,6 +23,7 @@
 </head>
 <body>
   {% include "_topo_map.html" %}
+  {% if not hide_chrome %}
   <header class="app-header glass-bar">
     <h1 class="wordmark"><a href="/">GripTrack<span class="dot">.</span></a></h1>
     {% if user is defined and user and not webview_build %}
@@ -30,10 +32,11 @@
     </form>
     {% endif %}
   </header>
-  <main class="app-main">
+  {% endif %}
+  <main class="app-main{% if hide_chrome %} app-main-play{% endif %}">
     {% block content %}{% endblock %}
   </main>
-  {% if user is defined and user %}
+  {% if user is defined and user and not hide_chrome %}
   {% set path = request.url.path %}
   <nav class="tabbar glass-bar">
     <a href="/" {% if path == "/" %}class="active"{% endif %}>

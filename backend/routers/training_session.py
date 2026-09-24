@@ -38,6 +38,57 @@ def combo_redirect(
     return RedirectResponse(url, status_code=303)
 
 
+def play_redirect(
+    grip_type_id: int,
+    edge_mm: int,
+    date: date_type,
+    hand: str | None,
+    session_number: int | None = None,
+    sets: int | None = None,
+    edit: int | None = None,
+) -> RedirectResponse:
+    """Back to /session/play for the same combo, preserving every query
+    parameter a step might have been rendered with (issue #146: the no-JS
+    fallback for every play action, and the /session/warmup, /session/worksets
+    redirects)."""
+    url = f"/session/play?grip_type_id={grip_type_id}&edge_mm={edge_mm}&date={date}"
+    if hand:
+        url += f"&hand={hand}"
+    if session_number is not None:
+        url += f"&session_number={session_number}"
+    if sets is not None:
+        url += f"&sets={sets}"
+    if edit is not None:
+        url += f"&edit={edit}"
+    return RedirectResponse(url, status_code=303)
+
+
+def play_response(
+    request: Request,
+    user: User,
+    session: Session,
+    grip_type_id: int,
+    edge_mm: int,
+    date: date_type,
+    hand: str | None,
+    session_number: int | None,
+    sets: int | None = None,
+    edit: int | None = None,
+):
+    """Every play action answers the same way (ADR-0014): with HX-Request,
+    the next step's fragment; without it, a 303 back to /session/play so a
+    plain form post still lands on the right step as a full page."""
+    if request.headers.get("HX-Request"):
+        view = training_log.play_view(
+            session, user, grip_type_id, edge_mm, date, hand, session_number,
+            sets, edit,
+        )
+        return templates.TemplateResponse(
+            request, "_play_fragment.html", {"user": user, **view}
+        )
+    return play_redirect(grip_type_id, edge_mm, date, hand, session_number, sets, edit)
+
+
 def require_grip_type(session: Session, grip_type_id: int) -> None:
     try:
         training_log.require_grip_type(session, grip_type_id)
@@ -100,9 +151,11 @@ def create_session(
     """The explicit "create a session on this past date" confirmation
     (see needs_creation_confirmation) — the only place a past-dated
     session gets created without one already existing."""
-    if page not in ("warmup", "worksets"):
+    if page not in ("play", "warmup", "worksets"):
         return HTMLResponse("Unknown page.", status_code=400)
     training_log.start_or_get_session(session, user, date, session_number)
+    if page == "play":
+        return play_redirect(grip_type_id, edge_mm, date, hand, session_number)
     return combo_redirect(page, grip_type_id, edge_mm, date, hand or "", session_number)
 
 
@@ -119,23 +172,9 @@ def worksets_page(
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
-    """edit=N is the Focus screen's Edit mode (issue #80): re-renders the
-    same page with set N's saved values loaded into the hand cards instead
-    of the normal in-progress set -- the no-JS degradation of tapping a
-    COMPLETED row. Saving posts to the same /session/set as any other Set
-    commit; Cancel is just a plain link back to this page without edit=."""
-    require_grip_type(session, grip_type_id)
-    if needs_creation_confirmation(session, user, date, session_number):
-        return confirm_creation_response(
-            request, user, "worksets", grip_type_id, edge_mm, date, hand,
-            session_number,
-        )
-    view = training_log.worksets_view(
-        session, user, grip_type_id, edge_mm, date, hand, sets, session_number, edit
-    )
-    return templates.TemplateResponse(
-        request, "worksets.html", {"user": user, **view}
-    )
+    """Session play (#146, docs/adr/0014): /session/worksets is now just a
+    redirect to /session/play, preserving every query parameter."""
+    return play_redirect(grip_type_id, edge_mm, date, hand, session_number, sets, edit)
 
 
 @router.post("/session/workset")
@@ -180,6 +219,9 @@ def save_focus_set(
     date: date_type = Form(),
     set_number: int = Form(ge=1, le=MAX_SET_NUMBER),
     session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
+    hand: str | None = Form(default=None),
+    editing: str | None = Form(default=None),
+    sets: int | None = Form(default=None, ge=1, le=MAX_SET_NUMBER),
     left_weight: float | None = Form(default=None),
     left_reps: int | None = Form(default=None),
     left_rpe: float | None = Form(default=None),
@@ -193,7 +235,11 @@ def save_focus_set(
     writes both hands' WorkSets for one set_number in a single atomic
     request instead of two calls to the per-hand /session/workset — a
     half-failure on flaky gym wifi must never log one hand and not the
-    other."""
+    other.
+
+    Session play (#146): a normal (non-editing) commit also starts the rest
+    step, per training_log.commit_focus_set / docs/adr/0014 orchestrator
+    decision 1."""
     try:
         hands_payload = training_log.parse_hands_payload(
             left_weight, left_reps, left_rpe, right_weight, right_reps, right_rpe
@@ -205,15 +251,13 @@ def save_focus_set(
         training_log.commit_focus_set(
             session, user, grip_type_id, edge_mm, date, set_number,
             session_number, hands_payload,
+            editing=(editing == "true"), sets_hint=sets,
         )
     except training_log.UnknownGripTypeError:
         raise HTTPException(status_code=404, detail="Unknown grip type") from None
 
-    if request.headers.get("HX-Request"):
-        return Response(status_code=204)
-    redirect_hand = next(iter(hands_payload)) if len(hands_payload) == 1 else ""
-    return combo_redirect(
-        "worksets", grip_type_id, edge_mm, date, redirect_hand, session_number
+    return play_response(
+        request, user, session, grip_type_id, edge_mm, date, hand, session_number
     )
 
 
@@ -235,9 +279,9 @@ def delete_focus_set(
         training_log.delete_set_and_renumber(
             session, training_session, grip_type_id, edge_mm, set_number
         )
-    if request.headers.get("HX-Request"):
-        return Response(status_code=204)
-    return combo_redirect("worksets", grip_type_id, edge_mm, date, hand or "", session_number)
+    return play_response(
+        request, user, session, grip_type_id, edge_mm, date, hand, session_number
+    )
 
 
 @router.post("/session/set/restore")
@@ -248,6 +292,7 @@ def restore_focus_set(
     date: date_type = Form(),
     set_number: int = Form(ge=1, le=MAX_SET_NUMBER),
     session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
+    hand: str | None = Form(default=None),
     left_weight: float | None = Form(default=None),
     left_reps: int | None = Form(default=None),
     left_rpe: float | None = Form(default=None),
@@ -276,11 +321,8 @@ def restore_focus_set(
     except training_log.UnknownGripTypeError:
         raise HTTPException(status_code=404, detail="Unknown grip type") from None
 
-    if request.headers.get("HX-Request"):
-        return Response(status_code=204)
-    redirect_hand = next(iter(hands_payload)) if len(hands_payload) == 1 else ""
-    return combo_redirect(
-        "worksets", grip_type_id, edge_mm, date, redirect_hand, session_number
+    return play_response(
+        request, user, session, grip_type_id, edge_mm, date, hand, session_number
     )
 
 
@@ -328,9 +370,9 @@ def save_session_estimate(
     training_log.record_session_estimate(
         session, training_session, hand, grip_type_id, edge_mm, weight
     )
-    if request.headers.get("HX-Request"):
-        return Response(status_code=204)
-    return combo_redirect("warmup", grip_type_id, edge_mm, date, hand, session_number)
+    return play_response(
+        request, user, session, grip_type_id, edge_mm, date, hand, session_number
+    )
 
 
 @router.post("/session/check")
@@ -351,10 +393,81 @@ def check_warmup_step(
         session, user, date, session_number
     )
     training_log.toggle_warmup_check(session, training_session, hand, step_index)
-    # htmx ticks stay on the page (no reload); plain form posts redirect.
-    if request.headers.get("HX-Request"):
-        return Response(status_code=204)
-    return combo_redirect("warmup", grip_type_id, edge_mm, date, hand, session_number)
+    return play_response(
+        request, user, session, grip_type_id, edge_mm, date, hand, session_number
+    )
+
+
+@router.post("/session/rung-done")
+def rung_done(
+    request: Request,
+    grip_type_id: int = Form(),
+    edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
+    date: date_type = Form(),
+    hand: str | None = Form(default=None),
+    step_index: int = Form(ge=0, le=MAX_SET_NUMBER),
+    session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
+    user: User = Depends(auth.current_user),
+    session: Session = Depends(get_session),
+):
+    """The play warmup step's primary button: ticks every in-play hand's
+    tile for this rung (any already ticked by hand are left as-is) and
+    advances to the next rung, or the first work set once every rung is
+    done."""
+    require_grip_type(session, grip_type_id)
+    training_session = training_log.start_or_get_session(
+        session, user, date, session_number
+    )
+    hands = training_log.hands_for(user, hand)
+    training_log.complete_warmup_rung(session, training_session, hands, step_index)
+    return play_response(
+        request, user, session, grip_type_id, edge_mm, date, hand, session_number
+    )
+
+
+@router.post("/session/rest/extend")
+def extend_rest(
+    request: Request,
+    grip_type_id: int = Form(),
+    edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
+    date: date_type = Form(),
+    hand: str | None = Form(default=None),
+    session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
+    user: User = Depends(auth.current_user),
+    session: Session = Depends(get_session),
+):
+    """The "+30 s" rest action (orchestrator decision 1: bumps rest_ends_at
+    by exactly 30 seconds)."""
+    require_grip_type(session, grip_type_id)
+    training_session = training_log.find_session(session, user, date, session_number)
+    if training_session is not None:
+        training_log.extend_rest(training_session, session, seconds=30)
+    return play_response(
+        request, user, session, grip_type_id, edge_mm, date, hand, session_number
+    )
+
+
+@router.post("/session/rest/end")
+def end_rest(
+    request: Request,
+    grip_type_id: int = Form(),
+    edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
+    date: date_type = Form(),
+    hand: str | None = Form(default=None),
+    session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
+    user: User = Depends(auth.current_user),
+    session: Session = Depends(get_session),
+):
+    """Skip rest (while the ring is counting) and Start set N (once it's hit
+    zero) are the same server action: clear rest_ends_at, moving the play
+    step straight to the next work set."""
+    require_grip_type(session, grip_type_id)
+    training_session = training_log.find_session(session, user, date, session_number)
+    if training_session is not None:
+        training_log.clear_rest(training_session, session)
+    return play_response(
+        request, user, session, grip_type_id, edge_mm, date, hand, session_number
+    )
 
 
 @router.post("/session/update")
@@ -463,15 +576,37 @@ def warmup_page(
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
+    """Session play (#146, docs/adr/0014): /session/warmup is now just a
+    redirect to /session/play, preserving every query parameter."""
+    return play_redirect(grip_type_id, edge_mm, date, hand, session_number)
+
+
+@router.get("/session/play")
+def play_page(
+    request: Request,
+    grip_type_id: int = Query(),
+    edge_mm: int = Query(gt=0, le=MAX_EDGE_MM),
+    date: date_type = Query(),
+    hand: str | None = Query(default=None),
+    session_number: int | None = Query(default=None, ge=1, le=MAX_SESSION_NUMBER),
+    sets: int | None = Query(default=None, ge=1, le=MAX_SET_NUMBER),
+    edit: int | None = Query(default=None, ge=1, le=MAX_SET_NUMBER),
+    user: User = Depends(auth.current_user),
+    session: Session = Depends(get_session),
+):
+    """The whole training session runs on this one page (#146,
+    docs/adr/0014): the server derives which step (warmup rung, work set,
+    rest, summary) to render purely from persisted state, so a reload — or
+    Android killing the app — always lands back on the right step."""
     require_grip_type(session, grip_type_id)
     if needs_creation_confirmation(session, user, date, session_number):
         return confirm_creation_response(
-            request, user, "warmup", grip_type_id, edge_mm, date, hand,
+            request, user, "play", grip_type_id, edge_mm, date, hand,
             session_number,
         )
-    view = training_log.warmup_view(
-        session, user, grip_type_id, edge_mm, date, hand, session_number
+    view = training_log.play_view(
+        session, user, grip_type_id, edge_mm, date, hand, session_number, sets, edit
     )
     return templates.TemplateResponse(
-        request, "warmup.html", {"user": user, **view}
+        request, "play.html", {"user": user, "hide_chrome": True, **view}
     )

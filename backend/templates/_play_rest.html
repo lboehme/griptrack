@@ -1,0 +1,39 @@
+{% set ws = worksets %}
+{% set total_rest = ws.default_rest_seconds %}
+{% set remaining = rest_remaining_seconds if rest_remaining_seconds is not none else total_rest %}
+{% set is_over = remaining <= 0 %}
+{% set circumference = 2 * 3.14159265 * 120 %}
+{% set fraction = (remaining / total_rest) if total_rest else 0 %}
+{% set offset = circumference * (1 - (fraction if fraction < 1 else 1)) %}
+
+<div id="rest-step"
+     class="rest-step"
+     data-rest-ends-at="{{ rest_ends_at.isoformat() if rest_ends_at else '' }}"
+     data-total-rest-seconds="{{ total_rest }}"
+     data-next-set-number="{{ ws.current_set_number }}"
+     data-total-sets="{{ ws.total_sets }}">
+  <div class="rest-ring-wrap">
+    <div class="rest-ring-svg-wrap">
+      <svg class="rest-ring" viewBox="0 0 260 260" aria-hidden="true">
+        <circle class="rest-ring-track" cx="130" cy="130" r="120"></circle>
+        <circle class="rest-ring-progress" id="rest-ring-progress" cx="130" cy="130" r="120"
+                stroke-dasharray="{{ circumference }}" stroke-dashoffset="{{ offset }}"></circle>
+      </svg>
+      <div class="rest-ring-center">
+        <span class="rest-ring-label" id="rest-ring-status">{{ "" if not is_over else "" }}Rest</span>
+        <span class="rest-ring-time{% if is_over %} rest-pull rest-pull-pulse{% endif %}" id="rest-ring-time">{{ "Pull" if is_over else "%d:%02d"|format(remaining // 60, remaining % 60) }}</span>
+      </div>
+    </div>
+  </div>
+  <p class="rest-next-line">Next · set {{ ws.current_set_number }} of {{ ws.total_sets }} · same load</p>
+
+  <form method="post" action="/session/rest/end" class="rest-actions">
+    <input type="hidden" name="grip_type_id" value="{{ grip.id }}">
+    <input type="hidden" name="edge_mm" value="{{ edge_mm }}">
+    <input type="hidden" name="date" value="{{ date }}">
+    <input type="hidden" name="hand" value="{{ hand }}">
+    {% if session_number %}<input type="hidden" name="session_number" value="{{ session_number }}">{% endif %}
+    <button type="submit" class="btn btn-secondary rest-extend-btn" id="rest-extend-btn" formaction="/session/rest/extend" hx-post="/session/rest/extend" hx-include="closest form" hx-target="#play-root" hx-swap="innerHTML"{% if is_over %} hidden{% endif %}>+30 s</button>
+    <button type="submit" class="btn {{ 'rest-start-btn' if is_over else 'rest-skip-btn' }}" hx-post="/session/rest/end" hx-include="closest form" hx-target="#play-root" hx-swap="innerHTML" id="rest-end-btn">{{ "Start set " ~ ws.current_set_number if is_over else "Skip rest" }}</button>
+  </form>
+</div>
