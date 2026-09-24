@@ -92,6 +92,7 @@
           hx-post="/today/lighter" hx-select="#today-root" hx-target="#today-root" hx-swap="outerHTML">
       <input type="hidden" name="date" value="{{ view.today }}" class="local-date-default">
       <input type="hidden" name="on" value="{{ "0" if view.go_lighter.active else "1" }}">
+      {% if view.start_session_number %}<input type="hidden" name="session_number" value="{{ view.start_session_number }}">{% endif %}
       {% if combo_query %}
       <input type="hidden" name="grip_type_id" value="{{ plan.grip.id }}">
       <input type="hidden" name="edge_mm" value="{{ plan.edge_mm }}">

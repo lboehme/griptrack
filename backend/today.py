@@ -512,9 +512,12 @@ def today_view(
             view.recap = _recap(session, user, today_session)
             return view
         # A second session today: plan it against a fresh session slot, not
-        # the finished one (whose deload flag doesn't carry over).
+        # the finished one (whose deload flag doesn't carry over). Go lighter
+        # posts this same slot, so its lighter state reads it too.
         view.start_session_number = view.next_session_number_today
-        today_session = None
+        today_session = training_log.find_session(
+            session, user, today, view.start_session_number
+        )
 
     if combo is None:
         view.state = "no_data"
@@ -549,12 +552,20 @@ def today_view(
 
 
 def set_go_lighter(
-    session: Session, user: User, date: date_type, on: bool
+    session: Session,
+    user: User,
+    date: date_type,
+    on: bool,
+    session_number: int | None = None,
 ) -> TrainingSession:
-    """Toggle Go lighter: marks today's session is_deload (creating the
-    session under the usual start_or_get_session rules if needed). Never
+    """Toggle Go lighter: marks is_deload on the session Start would open --
+    the day's latest (created under the usual start_or_get_session rules
+    if needed), or the explicit second-session slot Today plans (PR #154
+    review MUST-FIX 3: never the already-finished first session). Never
     automatic -- only this explicit toggle writes the flag."""
-    training_session = training_log.start_or_get_session(session, user, date)
+    training_session = training_log.start_or_get_session(
+        session, user, date, session_number
+    )
     training_session.is_deload = on
     session.add(training_session)
     session.commit()

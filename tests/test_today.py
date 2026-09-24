@@ -628,3 +628,57 @@ def test_old_session_new_and_climbs_pages_redirect(client):
 def test_tab_pages_require_login(client):
     for path in ("/progress", "/settings", "/today/change", "/session/new", "/climbs"):
         assert client.get(path, follow_redirects=False).status_code == 401
+
+
+# ---------- Go lighter targets the session Start would open (PR #154 review MUST-FIX 3) ----------
+
+
+def todays_sessions(client, email="lifter@example.com"):
+    session = db_session(client)
+    user = session.exec(select(User).where(User.email == email)).one()
+    rows = session.exec(
+        select(TrainingSession)
+        .where(TrainingSession.user_id == user.id)
+        .where(TrainingSession.date == TODAY)
+        .order_by(TrainingSession.session_number)
+    ).all()
+    session.close()
+    return rows
+
+
+def test_go_lighter_on_a_second_session_never_flags_the_finished_first_one(client):
+    tested_user(client, weight="40")
+    full_session(client, TODAY.isoformat())
+    gid = grip_type_id(client, "half crimp")
+    client.post("/session/finish", data={"date": TODAY.isoformat(), "session_number": 1})
+    client.post("/log/tweak", data={"date": TODAY.isoformat(), "hand": "left", "severity": "1"})
+
+    page = today_page(client, grip_type_id=gid, edge_mm=20)
+    assert state(page) == "plan"
+    lighter = re.search(r'<form method="post" action="/today/lighter".*?</form>', page, re.DOTALL).group(0)
+    assert 'name="session_number" value="2"' in lighter
+
+    client.post(
+        "/today/lighter",
+        data={"date": TODAY.isoformat(), "on": "1", "session_number": "2",
+              "grip_type_id": gid, "edge_mm": 20},
+    )
+
+    first, second = todays_sessions(client)
+    assert first.is_deload is False
+    assert second.is_deload is True
+    page = today_page(client, grip_type_id=gid, edge_mm=20)
+    assert "data-deload" in page
+    assert "Undo lighter" in page
+    # Start opens that same (lighter) session.
+    start = re.search(r'<form method="get" action="/session/play".*?</form>', page, re.DOTALL).group(0)
+    assert 'name="session_number" value="1"' not in start
+
+
+def test_go_lighter_session_number_is_bounded(client):
+    tested_user(client)
+    for bad in ("0", "21", "99999999999999999999"):
+        response = client.post(
+            "/today/lighter", data={"date": TODAY.isoformat(), "on": "1", "session_number": bad}
+        )
+        assert response.status_code == 422

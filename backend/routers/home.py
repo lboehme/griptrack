@@ -6,7 +6,7 @@ from sqlmodel import Session
 
 from backend import auth, climbing, today, training_log
 from backend.db import get_session
-from backend.limits import MAX_EDGE_MM
+from backend.limits import MAX_EDGE_MM, MAX_SESSION_NUMBER
 from backend.models import User
 from backend.templating import templates
 
@@ -100,6 +100,7 @@ def change_picker(
 def toggle_go_lighter(
     date: date_type = Form(),
     on: bool = Form(),
+    session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
     grip_type_id: int | None = Form(default=None),
     edge_mm: int | None = Form(default=None, gt=0, le=MAX_EDGE_MM),
     user: User = Depends(auth.current_user),
@@ -111,6 +112,6 @@ def toggle_go_lighter(
     _require_grip(session, grip_type_id)
     if training_log.is_past_date(date) and training_log.find_session(session, user, date) is None:
         return HTMLResponse("No session on that date.", status_code=400)
-    today.set_go_lighter(session, user, date, on)
+    today.set_go_lighter(session, user, date, on, session_number)
     query = _combo_query(grip_type_id, edge_mm)
     return RedirectResponse("/" + (f"?{query}" if query else ""), status_code=303)
