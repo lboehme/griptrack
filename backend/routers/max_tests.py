@@ -1,6 +1,6 @@
 from datetime import date as date_type
 
-from fastapi import APIRouter, Depends, Form, HTTPException
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlmodel import Session, select
 
@@ -8,6 +8,7 @@ from backend import auth, training_log
 from backend.db import get_session
 from backend.limits import MAX_EDGE_MM, MAX_WEIGHT
 from backend.models import GripType, User
+from backend.routers.settings import saved_response
 
 router = APIRouter()
 
@@ -37,18 +38,19 @@ def log_max_test(
 
 @router.post("/grip-types")
 def add_grip_type(
+    request: Request,
     name: str = Form(min_length=1, max_length=60),
     admin: User = Depends(auth.require_admin),
     session: Session = Depends(get_session),
 ):
     name = name.strip()
     if not name:
-        return RedirectResponse("/profile", status_code=303)
+        return RedirectResponse("/settings/admin", status_code=303)
     existing = session.exec(select(GripType).where(GripType.name == name)).first()
     if existing is None:
         session.add(GripType(name=name))
         session.commit()
-    return RedirectResponse("/profile", status_code=303)
+    return saved_response(request, "grip-type")
 
 
 @router.post("/max-tests/{test_id}/void")

@@ -13,7 +13,6 @@ from backend.limits import (
     MAX_SESSION_NUMBER,
     MAX_SESSION_RPE,
     MAX_SET_NUMBER,
-    MAX_TOGGLE_LENGTH,
     MAX_WEIGHT,
     MIN_SESSION_RPE,
 )
@@ -493,31 +492,6 @@ def end_rest(
     training_session = training_log.find_session(session, user, date, session_number)
     if training_session is not None:
         training_log.clear_rest(training_session, session)
-    return play_response(
-        request, user, session, grip_type_id, edge_mm, date, hand, session_number
-    )
-
-
-@router.post("/session/rest/sound")
-def set_rest_sound(
-    request: Request,
-    grip_type_id: int = Form(),
-    edge_mm: int = Form(gt=0, le=MAX_EDGE_MM),
-    date: date_type = Form(),
-    hand: str | None = Form(default=None),
-    session_number: int | None = Form(default=None, ge=1, le=MAX_SESSION_NUMBER),
-    rest_sound: str = Form(max_length=MAX_TOGGLE_LENGTH),
-    user: User = Depends(auth.current_user),
-    session: Session = Depends(get_session),
-):
-    """The Rest sound toggle on the rest step (#148, docs/adr/0015; moves to
-    Settings in S6): a per-user setting, so it persists even with no session
-    on this date. Answers like every other play action -- the fragment for
-    htmx, a 303 back to /session/play for a plain form post."""
-    if rest_sound not in ("on", "off"):
-        return HTMLResponse("Rest sound must be on or off.", status_code=400)
-    require_grip_type(session, grip_type_id)
-    training_log.set_rest_sound(session, user, rest_sound == "on")
     return play_response(
         request, user, session, grip_type_id, edge_mm, date, hand, session_number
     )

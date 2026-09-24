@@ -3,7 +3,11 @@ docs/adr/0015): the per-user **Rest sound** setting (persisted, bounded,
 isolated per user) and the data attributes the rest step hands the
 feature-detected `window.GripTrackNative.startRest(...)` call -- the rest
 end as epoch milliseconds, the sound flag, and the notification's
-title/detail/ready lines."""
+title/detail/ready lines.
+
+Since #151 the toggle lives in Settings → Rest alerts
+(`POST /settings/rest-sound`, over the same `training_log.set_rest_sound`);
+the rest step only reads the stored flag."""
 
 import re
 from datetime import datetime
@@ -34,13 +38,17 @@ def data_attr(page_text, name):
     return m.group(1) if m else None
 
 
-def post_sound(client, gid, value, htmx=False):
+def post_sound(client, value, htmx=False):
     return client.post(
-        "/session/rest/sound",
-        data={"grip_type_id": gid, "edge_mm": 20, "date": "2026-07-04", "rest_sound": value},
+        "/settings/rest-sound",
+        data={"rest_sound": value},
         headers={"HX-Request": "true"} if htmx else None,
         follow_redirects=False,
     )
+
+
+def settings_switch(client):
+    return data_attr(client.get("/settings").text, 'id="rest-sound-btn"[^>]*aria-checked')
 
 
 # ---------- what the rest step hands the native bridge ----------
@@ -70,46 +78,59 @@ def test_rest_sound_is_off_by_default(client):
     _, page = setup_resting_user(client)
 
     assert data_attr(page.text, "data-rest-sound") == "false"
-    assert 'aria-pressed="false"' in page.text
+    assert settings_switch(client) == "false"
 
 
-# ---------- the sound toggle: persistence, no-JS + htmx ----------
+def test_the_rest_step_no_longer_carries_the_sound_toggle(client):
+    _, page = setup_resting_user(client)
+
+    assert "/session/rest/sound" not in page.text
+    assert 'id="rest-sound-btn"' not in page.text
 
 
-def test_turning_rest_sound_on_persists_and_answers_303_back_to_play(client):
-    gid, _ = setup_resting_user(client)
+# ---------- the Settings toggle: persistence, no-JS + htmx ----------
 
-    response = post_sound(client, gid, "on")
+
+def test_turning_rest_sound_on_persists_and_answers_303_back_to_settings(client):
+    setup_resting_user(client)
+
+    response = post_sound(client, "on")
     assert response.status_code == 303
-    assert response.headers["location"].startswith("/session/play?")
+    assert response.headers["location"] == "/settings?saved=sound"
 
     page = play_page(client)
     assert step_kind(page.text) == "rest"
     assert data_attr(page.text, "data-rest-sound") == "true"
+    assert settings_switch(client) == "true"
 
-    post_sound(client, gid, "off")
+    post_sound(client, "off")
     assert data_attr(play_page(client).text, "data-rest-sound") == "false"
 
 
-def test_rest_sound_toggle_answers_an_htmx_fragment_and_leaves_rest_running(client):
-    gid, page = setup_resting_user(client)
+def test_rest_sound_toggle_answers_htmx_with_the_switch_and_a_toast_and_leaves_rest_running(client):
+    _, page = setup_resting_user(client)
     before = rest_ends_at(page.text)
 
-    response = post_sound(client, gid, "on", htmx=True)
+    response = post_sound(client, "on", htmx=True)
 
     assert response.status_code == 200
-    assert step_kind(response.text) == "rest"
-    assert data_attr(response.text, "data-rest-sound") == "true"
+    assert 'aria-checked="true"' in response.text
+    assert 'hx-swap-oob="innerHTML"' in response.text
+    assert 'class="toast"' in response.text
     # Toggling the setting never touches the pending rest.
-    assert rest_ends_at(response.text) == before
+    assert rest_ends_at(play_page(client).text) == before
 
 
 def test_rest_sound_rejects_anything_but_on_or_off(client):
-    gid, _ = setup_resting_user(client)
+    setup_resting_user(client)
 
-    assert post_sound(client, gid, "maybe").status_code == 400
-    assert post_sound(client, gid, "x" * 500).status_code == 422
+    assert post_sound(client, "maybe").status_code == 400
+    assert post_sound(client, "x" * 500).status_code == 422
     assert data_attr(play_page(client).text, "data-rest-sound") == "false"
+
+
+def test_rest_sound_toggle_requires_login(client):
+    assert post_sound(client, "on").status_code == 401
 
 
 # ---------- isolation ----------
@@ -117,7 +138,7 @@ def test_rest_sound_rejects_anything_but_on_or_off(client):
 
 def test_rest_sound_is_per_user(client):
     gid, _ = setup_resting_user(client)
-    post_sound(client, gid, "on")
+    post_sound(client, "on")
 
     register_second_user(client)
     log_max_test(client, "left", "half crimp", 20, "2026-07-01", "42.5")
@@ -127,7 +148,7 @@ def test_rest_sound_is_per_user(client):
     # User B never inherits user A's setting...
     assert data_attr(b_page.text, "data-rest-sound") == "false"
     # ...and switching B's off again can't reach A's row.
-    post_sound(client, gid, "off")
+    post_sound(client, "off")
 
     client.post("/logout")
     login(client, "lifter@example.com", "test-pw-1234")

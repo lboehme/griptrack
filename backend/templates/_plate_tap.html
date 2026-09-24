@@ -1,0 +1,4 @@
+{# htmx answer to one plate tap (#151): the tapped circle's new count badge,
+   and the rack's "what can I load" line out of band. #}
+{% include "_plate_count.html" %}
+{% with oob=True %}{% include "_plate_summary.html" %}{% endwith %}

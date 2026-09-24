@@ -46,34 +46,39 @@ through an explicit design-interview session (the `grilling` +
 - `CONTEXT.md` — the project glossary (canonical terms, what to avoid). Keep
   it current as the domain model evolves; this is an active discipline, not
   a one-time snapshot.
-- `docs/adr/` — recorded architectural decisions (9 so far). Read these
+- `docs/adr/` — recorded architectural decisions (15 so far). Read these
   before revisiting any of the choices below; each explains a real
   trade-off that was deliberately made.
 
-**Current state (2026-08-19):** the full PRD (issue #1), Waves 0–2 of the
-post-review roadmap, the Focus session-logging redesign (#76), the **Android
-pivot** (runtime slimming #87 + the on-device app #93 and their slices), and
-**CSV import** (#100) are all implemented — auth (with session revocation),
-profile, plates, max tests (guided routine, voidable), session logging
-(multi-session days, notes/deload/pain reports), boulder climb logging with
-loud grade feedback, history, CSV export **and import** (round-trip an archive
-into an empty account), PWA, and the analytics dashboard (deload-aware volume
-trend — now a client-side uPlot chart, plateau, overtraining warning, Spearman
-%BW-vs-grade correlation with an n≥8 floor), plus the Focus session screens
-(one-set-at-a-time hand cards, warmup card ladder, atomic set commit, edit
-mode, throwaway rest countdown) — 304 tests at the HTTP seam plus a thin
-`pytest-playwright` browser-smoke layer (6 specs) and ruff/mypy/pip-audit
-gates. **The app now runs as a self-contained local Android app** (embedded
-CPython/FastAPI on `127.0.0.1` behind a WebView, on-device SQLite, first-run
-migrations — #93–#99); matplotlib/pandas were dropped (#89) and password
-hashing moved to stdlib PBKDF2 (ADR-0009), leaving `pydantic-core` as the only
-native wheel. The Fly/Docker/web deploy was **removed** (2026-08-21) — the app
-is Android on-device only now (see the 2026-08-13 pivot below and ADR-0006). Remaining
-open work: Asymmetry Analytics (#45–#48), the Wave 4 retention PRD (#59, needs
-its own grill), and the deferred injury guardian (#28). (#20 offline WorkSet
-sync was closed as not-planned once the on-device server landed — offline is
-now native, no sync layer needed.) Work test-first (see the `tdd` skill) and
-keep migrations in lockstep with model changes.
+**Current state (2026-09-24):** the full PRD (issue #1), Waves 0–4 of the
+post-review roadmap, the **Android pivot** (runtime slimming #87 + the
+on-device app #93 and their slices), **CSV import** (#100), Asymmetry
+Analytics (#45–#48) and the **2026-09 app redesign** (PRD #142, slices
+S0–S6: #144 look, #145 single-user install, #146/#147 session play, #148
+native rest bridge, #149 Today + navigation, #150 Progress, #151 Settings +
+cleanup) are all implemented. The app is a loop-centred coach: **Today**
+(the plan for today's session, Resume, rest-day suggestion, Go lighter),
+**Session play** (one full-screen, server-driven page: warmup rungs → work
+sets → rest ring → summary with session RPE, tweaks, notes, deload, Finish),
+a **＋ Log** sheet (climb, bodyweight, tweak), **Progress** (story sentences,
+a %BW headline chart with boulder sends, Go deeper pages for volume, L/R
+balance, strength vs grade, maxes and the timeline) and **Settings**
+(grouped list rows with autosaving detail pages; tap-to-count plates;
+rest sound; backup export/restore; About these numbers). Wave 4 shipped
+RPE autoregulation per ProgressionPath (ADR-0011/-0012), retest and estimate
+nudges, the mean-intensity series and the stored rest timer. Tests: 703 at
+the HTTP seam plus a `pytest-playwright` browser layer (39 specs), with
+ruff/mypy/pip-audit gates and `scripts/check-dead-css`. **The app runs as a
+self-contained local Android app** (embedded CPython/FastAPI on `127.0.0.1`
+behind a WebView, on-device SQLite, first-run migrations — #93–#99; a
+single-user install with device sign-in, ADR-0013); matplotlib/pandas were
+dropped (#89) and password hashing moved to stdlib PBKDF2 (ADR-0009),
+leaving `pydantic-core` as the only native wheel. The Fly/Docker/web deploy
+was **removed** (2026-08-21) — the app is Android on-device only now (see
+the 2026-08-13 pivot below and ADR-0006). Remaining open work: the
+progression-module refactor (#135) and the deferred injury guardian (#28).
+Work test-first (see the `tdd` skill) and keep migrations in lockstep with
+model changes.
 
 ## Environment & running
 
@@ -94,9 +99,13 @@ Run tests with `scripts/test` (wraps the conda env; pass pytest args through).
 The full dev loop lives in `scripts/`: `scripts/check-migrations` (the two CI
 migration gates, runnable locally), `scripts/new-migration "msg"` (autogenerate
 a revision against a temp DB at head — never hand-write revision files),
-`scripts/lint` (ruff + mypy + pip-audit; mypy has a pyproject override list
-for modules that build SQLModel query expressions — extend the list, don't
-re-broaden the disabled codes). CI calls the same `scripts/test` /
+`scripts/lint` (ruff + mypy + pip-audit + `scripts/check-dead-css`; mypy has
+a pyproject override list for modules that build SQLModel query expressions —
+extend the list, don't re-broaden the disabled codes; check-dead-css fails on
+any app.css class, template or static JS/CSS file nothing references — delete
+it, or if a class is built dynamically, build it from a `prefix-` +
+interpolation so the check can see it). `scripts/test-browser` runs the
+Playwright layer. CI calls the same `scripts/test` /
 `scripts/lint` / `scripts/check-migrations`, so local and CI behavior can't
 drift. All tests sit at the HTTP seam.
 
@@ -176,46 +185,64 @@ unit-tested in isolation for now.
   default) grants two capabilities only: generating invites, and manually
   resetting another user's forgotten password — not a general role system.
 - **Frontend:** FastAPI + Jinja2 templates + htmx, vanilla JS only where
-  htmx can't reach. No build step, no React/Vue. Logging a
-  `TrainingSession` is **not** a page-per-step wizard — it's two
-  consolidated pages, both built to be used one-handed between hangs (the
-  "Focus" design, `docs/design_handoff_griptrack_focus/`):
-  - **warmup/ramp** — a card ladder, all ramp steps visible at once, each
-    card showing the plate-rounded weight with L/R tick targets.
-  - **work sets** — one set at a time: a Left and a Right hand card, each
-    with tap-to-adjust steppers (weight walks the loadable ladder; reps
-    and RPE step), and a single "Set done" button below both that commits
-    the whole set (see `Set commit` in `CONTEXT.md` and
-    `docs/adr/0007-...md`). Committed sets collapse into a COMPLETED list;
-    tapping one reopens it in the cards (`Edit mode`).
-
-  Both pages share a header spine (exercise title, progress pill,
-  segmented bar) and show both hands together — see `HandOrderPreference`
-  in `CONTEXT.md` for how "sequential" collapses this to one card/column.
+  htmx can't reach. No build step, no React/Vue. Redesigned in 2026-09
+  (PRD #142, `docs/ui-review-2026-09.md` "Visual language"):
+  - **Navigation:** a frosted bottom tab bar — **Today · Progress · ＋ Log ·
+    Settings** (`base.html`). ＋ Log opens a bottom sheet in place (climb,
+    bodyweight, tweak; `/?log=<tab>` is its no-JS path). The session runs
+    with no tab bar.
+  - **Session play** (`/session/play`, ADR-0014) replaced the two Focus
+    pages (`/session/warmup` and `/session/worksets` redirect to it). The
+    server derives the current **step** from persisted state — warmup rung,
+    work set, rest, summary — and renders it as an htmx fragment (a full
+    page without JS), so a reload or Android killing the app resumes on the
+    right step. Work sets keep the one-set-at-a-time Left/Right hand cards
+    with steppers (weight walks the loadable ladder) and a single "Set done"
+    Set commit (ADR-0007); tapping a completed set is Edit mode. The rest
+    ring counts down to a stored `rest_ends_at`, never a client counter.
+  - **Native rest bridge** (ADR-0015): the Android shell injects
+    `window.GripTrackNative` (keep screen on, lock-screen countdown, exact
+    alarm that vibrates — and, with the Rest sound setting, beeps — at rest
+    end); a plain browser falls back to the Screen Wake Lock API.
+  - **Settings** (`/settings`, #151) replaced Profile and Plates: grouped
+    glass list rows opening small detail pages whose forms autosave on
+    change (a "Saved" toast for htmx, a 303 back with `?saved=` without
+    JS). The admin group (invites, grip types, password reset) exists only
+    in the server build.
+  - **Look:** dark-only "gym mode" tokens (`--bg`, `--tx`, `--mu`, `--acc`,
+    `--ok`, `--warn`, … at the top of `app.css`; no raw hex elsewhere), one
+    fixed topographic contour map behind every screen (`_topo_map.html`),
+    and two glass levels over it (`.glass` and `.glass.strong`, blur ≤ 4 px);
+    sheets and overlays are solid. One primary (orange) button per screen.
+    `scripts/check-dead-css` keeps unused CSS classes, templates and static
+    files from piling up.
   Session-level interactions (warmup ticks, notes, deload flag, pain
-  reports) **autosave immediately**; work sets arrive one Set commit at a
-  time. There is no final "submit" step, so a `TrainingSession` can exist,
-  and often briefly does, in a partially-filled state. Screens are
-  progressively enhanced: the server renders real forms with number
-  inputs, and JS upgrades them into steppers.
+  reports, session RPE) **autosave immediately**; work sets arrive one Set
+  commit at a time. There is no final "submit" step (Finish only stamps
+  `finished_at`), so a `TrainingSession` can exist, and often briefly does,
+  in a partially-filled state. Screens are progressively enhanced: the
+  server renders real forms with number inputs, and JS upgrades them into
+  steppers.
 - **Analytics charts:** client-side, drawn with uPlot (MIT, vendored as a
   plain static file — `backend/static/uplot.iife.min.js`/`uplot.min.css`, no
   build step, no CDN) — reversed from the original server-rendered-SVG
-  decision as part of the runtime-slimming work (#87/#88); see
-  `backend/static/dashboard-chart.js`. The server ships the ordered
-  `(date, volume)` series per (hand, grip_type, edge_mm) combo into the
-  dashboard DOM via the JSON-in-DOM idiom (`<script
-  type="application/json">…|tojson…</script>`, the worksets-screen
-  precedent); the client draws one chart per combo into a container div,
-  picking its palette from `prefers-color-scheme`.
-- **Deployment:** local only for now
-  (`conda run -n griptrack fastapi dev backend/main.py`, tested on a phone
-  via the machine's LAN IP). Revisit hosting once the MVP is proven useful.
+  decision as part of the runtime-slimming work (#87/#88). Progress's
+  headline chart (`backend/static/progress-chart.js`) draws CurrentMax as %
+  of bodyweight per hand (Left solid accent, Right dotted chalk) with boulder
+  sends as grade-coloured dots; the Go deeper volume and balance pages use
+  `backend/static/dashboard-chart.js`. The server ships each series into the
+  DOM via the JSON-in-DOM idiom (`<script
+  type="application/json">…|tojson…</script>`).
+- **Deployment:** the Android app only (`android/`, `backend/launcher.py`
+  embeds the backend on-device). For development, run it locally
+  (`conda run -n griptrack fastapi dev backend/main.py`) and, if needed, try
+  it on a phone via the machine's LAN IP.
 - **Testing:** `pytest` + FastAPI `TestClient` against an isolated SQLite DB
-  per test run. Treated as core scope (Phase 4), not optional polish. The
-  Focus redesign moved real logic client-side (stepper, edit mode, rest
-  countdown), so a thin `pytest-playwright` smoke layer covers what the
-  HTTP seam can't see — same conda env, no JS tooling, no build step.
+  per test run. Treated as core scope (Phase 4), not optional polish. Some
+  real logic runs client-side (steppers, the rest ring, the native-bridge
+  calls, autosave toasts, tap-to-count), so a thin `pytest-playwright` layer
+  (`scripts/test-browser`) covers what the HTTP seam can't see — same conda
+  env, no JS tooling, no build step.
 
 ## Domain model
 
@@ -229,7 +256,8 @@ below) and `TrainingVolume` (the primary trend/plateau signal, not
 - **users**: id, email, hashed_password, is_admin, unit_pref (kg/lbs, fixed
   at signup), hand_order_pref (alternating/sequential), name (optional
   display name), session_version (bumped on password reset — revokes all
-  of that user's session cookies), created_at
+  of that user's session cookies), rest_sound (bool, off by default — the
+  rest-over alert also beeps), created_at
 - **invites**: id, code, created_by_user_id (FK), used_by_user_id (FK,
   nullable), created_at, used_at (nullable)
 - **body_weight_logs**: id, user_id (FK), date, weight — a time series, not
@@ -249,7 +277,10 @@ below) and `TrainingVolume` (the primary trend/plateau signal, not
 - **training_sessions**: id, user_id (FK), date, session_number (unique
   (user, date, session_number) — identity-bearing key for two-a-days and
   offline-sync replay), started_at (descriptive only), notes, is_deload
-  (plateau/trend math skips deloads), created_at
+  (plateau/trend math skips deloads), rest_ends_at (nullable — a pending
+  rest; the ring counts down to it), session_rpe (nullable 1–10, the
+  Summary's whole-session rating), finished_at (nullable — stamped once by
+  Finish; Session load = session_rpe × minutes from started_at), created_at
 - **pain_reports**: id, training_session_id (FK), hand, severity (1–3),
   note — at most one row per (session, hand), autosaving; ground truth
   being accumulated for the injury guardian (#28)
@@ -258,19 +289,20 @@ below) and `TrainingVolume` (the primary trend/plateau signal, not
 - **climbs**: id, user_id (FK), date, discipline (form is boulder-only since #55; old sport rows still render in history), grade,
   style (onsight/flash/redpoint/attempt), notes
 - **training_protocols**: id, ramp_percentages (50/65/80/90 default),
-  base_work_set_reps (5 default), user_id (FK, nullable — null means "global
-  default"). Single global row in use today; modeled this way so per-user
-  overrides are additive later, not a rework (`docs/adr/0005-...md`)
+  base_work_set_reps (5 default), default_work_sets (3), default_rest_seconds
+  (180), user_id (FK, nullable — null means "global default"). A per-user row
+  holds the rep target and rest edited in Settings → Training; the ramp
+  percentages stay global (`docs/adr/0005-...md`)
+- **progression_settings**: id, user_id (FK), grip_type_id + edge_mm (both
+  null = the user's default), path (weight/set/double), rep_min, rep_max,
+  max_sets (`docs/adr/0012-...md`)
 
 Derived/computed concepts (not stored, see `CONTEXT.md` for full
 definitions): `CurrentMax`, `TrainingVolume`, `Plateau`, `OvertrainingWarning`.
 
-Progression paths (set-/weight-/advanced-progression from the original
-plan) remain explicitly deferred — users just choose to add weight/reps
-themselves. This isn't a complexity call like the others below; it's a
-shape call: progression logic is a policy layer reading already-logged
-`WorkSet` history, not infrastructure other things depend on, so it can be
-layered on later without reshaping today's schema.
+Progression paths (set-/weight-/double-progression) shipped with Wave 4 as
+a policy layer reading already-logged `WorkSet` history (ADR-0012): only
+the chosen path is stored, the current phase is derived.
 
 ## Roadmap
 
@@ -357,8 +389,8 @@ config (`fly.toml`, `Dockerfile`, `docker-entrypoint.sh`, `deploy/`, the
 The app is Android on-device only. The production env-var seam still lives in
 code should a server deploy ever be revived.
 
-Still open — Wave 3 (Asymmetry, #45–#48) and Wave 4 (retention, #59) stand,
-plus the deferred injury guardian (#28); details below. GitHub issues are the
+Still open — the progression-module refactor (#135) and the deferred injury
+guardian (#28); everything else below has shipped. GitHub issues are the
 source of truth for status.
 
 - **Wave 0 — hardening PR (shipped 2026-07-09, #50/PR #62):** SQLite WAL mode + `busy_timeout`; ruff + mypy +
@@ -392,17 +424,29 @@ source of truth for status.
   session, and real use is the only way to learn whether Focus works
   between hangs. Warmup card-ladder design is invented (no spec) — expect to
   iterate after real use.
-- **Wave 3 — Asymmetry Analytics** (PRD #45, slices #46–#48, ready-for-agent).
-- **Wave 4 — retention wave** (one feature surface, needs its own mini-grill
-  first): RPE-driven Tier-1 deterministic autoregulation (RPE ≤ 7 twice →
+- **Wave 3 — Asymmetry Analytics (shipped, PRD #45 / #46–#48, ADR-0010):**
+  AsymmetryGap and the personal-baseline AsymmetryWarning, now Progress →
+  Left/right balance.
+- **Wave 4 — retention wave (shipped, #59, ADR-0011/-0012):** RPE-driven Tier-1 deterministic autoregulation (RPE ≤ 7 twice →
   suggest smallest loadable increment; RPE ≥ 9 / missed reps → hold or step
   down); retest nudge when work-set history implies `CurrentMax` drift;
   "estimated this combo 3× → guided test?" nudge; mean-intensity series
   (weight ÷ CurrentMax-as-of-date) beside tonnage on the trend chart;
-  in-between-set rest timer (htmx OOB countdown, stored rest durations,
-  wake lock, audio/notification strategy) — replacing the Focus
-  redesign's deliberately throwaway client-only countdown. RPE stepper
-  input ships earlier, with the Focus redesign.
+  in-between-set rest timer (stored `rest_ends_at`, wake lock, native
+  notification/vibration via the rest bridge) — replacing the Focus
+  redesign's deliberately throwaway client-only countdown; progression
+  paths (ADR-0012).
+- **App redesign (shipped 2026-09-24, PRD #142, slices S0–S6 / #144–#151):**
+  from `docs/ui-review-2026-09.md`. S0 look (dark-only tokens, topo map,
+  glass, vendored Barlow fonts), S1 single-user install with device sign-in
+  (ADR-0013), S2 session play (ADR-0014) with summary, session RPE and
+  `finished_at`, S3 native rest bridge (ADR-0015), S4 Today + tab bar + ＋ Log
+  sheet, S5 Progress (%BW headline chart, story sentences, Go deeper,
+  timeline, maxes — absorbing Trends, History and Max tests), S6 Settings
+  (replacing Profile and Plates) plus dead-template/CSS cleanup and the
+  glossary refresh. Old URLs (`/dashboard`, `/history`, `/climbs`,
+  `/session/new`, `/session/warmup`, `/session/worksets`, `/profile`,
+  `/plates`) 303 into the new screens.
 - **Dropped with the hosting removal (2026-08-21):** the Oracle switch,
   Litestream backup enable + restore drill, and the post-Oracle error-tracking
   decision — all tied to the deleted web deploy, no longer relevant to the

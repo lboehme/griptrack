@@ -601,16 +601,18 @@ def test_tab_bar_is_hidden_on_first_run_screens(webview_client):
     assert 'class="tabbar' in webview_client.get("/").text
 
 
-def test_progress_is_a_real_page_and_settings_aliases_profile(client):
+def test_progress_and_settings_are_real_pages(client):
     register(client)
 
-    # Progress shipped (#150): a page of its own, no longer a 303 alias.
+    # Progress shipped (#150) and Settings (#151): pages of their own, no
+    # longer 303 aliases.
     progress = client.get("/progress", follow_redirects=False)
     settings = client.get("/settings", follow_redirects=False)
 
     assert progress.status_code == 200
     assert 'id="progress-root"' in progress.text
-    assert (settings.status_code, settings.headers["location"]) == (303, "/profile")
+    assert settings.status_code == 200
+    assert 'id="settings-root"' in settings.text
 
 
 def test_old_session_new_and_climbs_pages_redirect(client):

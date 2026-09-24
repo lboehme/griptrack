@@ -347,10 +347,10 @@ def test_set_progression_at_cap_suggests_add_weight_and_reset_no_autoswitch(clie
     # Stepper values remain untouched at 40.0
     assert current_set_weight_input(page.text, "left") == "40.0"
 
-    # Verify no auto-switch: profile still shows path="set"
-    prof_resp = client.get("/profile")
+    # Verify no auto-switch: Settings → Progression still shows the combo on "set"
+    prof_resp = client.get("/settings/progression")
     assert prof_resp.status_code == 200
-    assert 'value="set"' in prof_resp.text
+    assert "Add a set · 5–5 reps" in prof_resp.text
 
 
 def test_double_progression_rep_build_increments(client):

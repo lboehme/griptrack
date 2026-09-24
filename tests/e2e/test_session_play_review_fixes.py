@@ -48,13 +48,16 @@ def test_weight_stepper_cannot_walk_down_onto_the_zero_rung(live_server, authent
 
 
 def _remove_all_plates(page, live_server):
-    page.goto(f"{live_server}/plates")
-    remaining = page.locator("select[name='count']").count()
-    while remaining:
-        with page.expect_navigation():
-            page.locator("select[name='count']").first.select_option("0")
-        remaining -= 1
-        expect(page.locator("select[name='count']")).to_have_count(remaining)
+    """Tap every plate on Settings → Plates until it wraps to zero (#151:
+    tap-to-count replaced the per-plate count selects)."""
+    page.goto(f"{live_server}/settings/plates")
+    for plate in page.locator("button.plate").all():
+        count = plate.locator(".plate-count")
+        while count.get_attribute("data-count") != "0":
+            before = count.get_attribute("data-count")
+            plate.click()
+            expect(count).not_to_have_attribute("data-count", before)
+    expect(page.locator(".plate-summary")).to_contain_text("No plates yet")
 
 
 def test_an_empty_ladder_falls_back_to_free_weight_entry(live_server, authenticated_page):

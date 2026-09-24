@@ -147,10 +147,8 @@ body {
    every screen picks it up without new classes in every template. */
 .glass,
 .card,
-.quick-grid a,
 .notice,
-.completed-row,
-.undo-snackbar {
+.completed-row {
   position: relative;
   background: var(--glass-fill);
   border: 1px solid color-mix(in srgb, var(--tx) 14%, transparent);
@@ -163,10 +161,9 @@ body {
 }
 
 /* Level 2: strong glass — content that must read first: the dashboard
-   charts, the Focus work-set hand cards, and the warmup rung cards. */
+   charts, the work-set hand cards, and the warmup rung cards. */
 .glass.strong,
 .hand-card,
-.ramp-card,
 .trend-chart,
 .asymmetry-chart {
   position: relative;
@@ -185,10 +182,8 @@ body {
 .glass::before,
 .card::before,
 .hand-card::before,
-.ramp-card::before,
 .trend-chart::before,
 .asymmetry-chart::before,
-.quick-grid a::before,
 .notice::before {
   content: "";
   position: absolute;
@@ -205,18 +200,9 @@ body {
 
 /* Selected glass tile (ticked warmup hand, a chosen "feel", a checked
    segmented option). */
-.glass.on,
-.ramp-tick:has(input:checked) {
+.glass.on {
   border-color: var(--acc);
   background: color-mix(in srgb, var(--acc) 16%, transparent);
-}
-
-/* Solid overlays (V6 lesson: a translucent sheet lets the primary button
-   and hero numbers behind it smear through). */
-.undo-snackbar {
-  background: var(--s1);
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
 }
 
 /* Frosted chrome bars (V5): header and tab bar, so the map continues
@@ -324,7 +310,6 @@ a,
 /* 2. Prevent double-tap zoom delay and text selection / callout on controls (#141) */
 .stepper-btn,
 .stepper-btn-sm,
-.ramp-tick,
 .tabbar,
 .tabbar a,
 .tab-bar,
@@ -425,10 +410,8 @@ a,
    their original quiet, sentence-case treatment (see "forms" below). */
 
 .hand-heading,
-.ramp-card-percent,
 .completed-heading,
 .summary-overline,
-.rest-countdown-label,
 th,
 .field-label {
   font-family: var(--font-body);
@@ -661,10 +644,6 @@ button, .btn {
   gap: .85rem;
 }
 
-.form-row-full {
-  grid-column: 1 / -1;
-}
-
 /* ---------- tables ---------- */
 
 table {
@@ -693,49 +672,6 @@ tr:last-child td { border-bottom: none; }
 
 ul.plain { list-style: none; margin: 0; padding: 0; }
 
-/* ---------- home ---------- */
-
-.hero-action { margin: .3rem 0 1.05rem; }
-
-.hero-action .btn {
-  min-height: 3.6rem;
-  font-size: 1.3rem;
-}
-
-.quick-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: .85rem;
-}
-
-.quick-grid a {
-  display: flex;
-  flex-direction: column;
-  gap: .32rem;
-  padding: 1rem 1.05rem;
-  border-radius: var(--radius-card);
-  color: var(--tx);
-  text-decoration: none;
-  font-weight: 720;
-  font-size: .95rem;
-  letter-spacing: -0.01em;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .quick-grid a { transition: transform .1s ease, border-color .15s ease; }
-  .quick-grid a:active { transform: scale(.97); }
-}
-
-.quick-grid a small {
-  color: var(--mu);
-  font-weight: 500;
-  font-size: .77rem;
-  text-transform: none;
-  letter-spacing: normal;
-}
-
-.quick-grid a svg { width: 22px; height: 22px; color: var(--acc); }
-
 /* ---------- auth pages ---------- */
 
 .auth-wrap { max-width: 400px; margin: 2rem auto 0; }
@@ -758,88 +694,7 @@ ul.plain { list-style: none; margin: 0; padding: 0; }
 
 .auth-alt a { color: var(--acc); font-weight: 650; }
 
-/* ---------- warmup checklist ---------- */
-
-.session-started {
-  display: inline-block;
-  padding: .28rem .8rem;
-  margin: 0 0 1rem;
-  font-size: .8rem;
-  font-weight: 750;
-  color: var(--ok);
-  background: color-mix(in srgb, var(--ok) 14%, transparent);
-  border-radius: 999px;
-}
-
-.session-started::before { content: "● "; font-size: .6rem; vertical-align: 2px; }
-
-/* ---- card ladder (issue #83) — strong glass (V6) ---- */
-
-.ramp-ladder { display: flex; flex-direction: column; gap: .8rem; margin: 0 0 .6rem; }
-
-.ramp-card {
-  margin-bottom: 0;
-  border-radius: var(--radius-card);
-  padding: 1.15rem 1.15rem;
-}
-
-.ramp-card-header { margin-bottom: .7rem; }
-
-.ramp-card-percent {
-  font-size: .78rem;
-  font-weight: 700;
-}
-
-.ramp-card-hands {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: .6rem;
-}
-
-.ramp-card-hands-single { grid-template-columns: 1fr; }
-
-.ramp-tick {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: .6rem;
-  min-height: var(--touch);
-  padding: .3rem .7rem;
-  background: var(--s2);
-  border: 1px solid transparent;
-  border-radius: 14px;
-}
-
-.ramp-tick-label {
-  display: flex;
-  align-items: center;
-  gap: .6rem;
-  min-width: 0;
-  min-height: var(--touch);
-  margin: 0;
-  cursor: pointer;
-}
-
-.ramp-check-form { margin: 0; display: flex; }
-
-/* The label association (for/id) covers most of the row's tap area; the
-   checkbox itself is enlarged here so its own hit box also clears the
-   44px touch-target floor (the shared custom-checkbox rule elsewhere
-   stays at a smaller default size for denser contexts). */
-.ramp-check-form input[type="checkbox"] { width: 2.75rem; height: 2.75rem; }
-
-.ramp-weight {
-  font-family: var(--font-condensed);
-  font-size: 1.7rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  font-variant-numeric: tabular-nums;
-  color: var(--tx);
-}
-
-.ramp-unit { color: var(--mu); font-size: .78rem; font-weight: 650; text-transform: none; letter-spacing: normal; }
-
-/* ---------- work sets (Focus screen, issue #79) ---------- */
+/* ---------- work sets (session play work-set step) ---------- */
 
 .table-scroll {
   overflow-x: auto;
@@ -855,61 +710,12 @@ input[type="number"]::-webkit-outer-spin-button {
   margin: 0;
 }
 
-.plate-count select {
-  min-height: 2.6rem;
-  margin-top: 0;
-  width: auto;
-  padding-right: 1.6rem;
-}
-
-.add-set { margin: .6rem 0 1rem; display: flex; gap: .6rem; flex-wrap: wrap; }
-
-.add-set .btn {
-  min-height: 2.6rem;
-  font-size: .85rem;
-  width: auto;
-  flex: 1 1 auto;
-}
-
 .hand-heading {
   font-size: .78rem;
   color: var(--acc);
 }
 
-/* ---- header spine ---- */
-
-.focus-header { margin-bottom: clamp(.4rem, 1.4vh, .75rem); }
-
-.focus-header-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: .6rem;
-}
-
-.focus-title {
-  margin: 0;
-  font-family: var(--font-condensed);
-  font-size: clamp(1.2rem, 4vw, 1.35rem);
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  line-height: 1.2;
-  color: var(--tx);
-}
-
-.focus-subtitle { margin: .15rem 0 0; font-size: .85rem; color: var(--mu); }
-
-.focus-pill {
-  flex: none;
-  padding: .25rem .65rem;
-  font-family: var(--font-body);
-  font-size: .75rem;
-  font-weight: 750;
-  color: var(--acc-on);
-  background: var(--acc);
-  border-radius: 999px;
-  white-space: nowrap;
-}
+/* ---- session top bar segments ---- */
 
 .focus-progress-bar {
   display: flex;
@@ -972,7 +778,6 @@ input[type="number"]::-webkit-outer-spin-button {
   padding: .2rem .55rem;
   border-radius: 999px;
 }
-
 
 .weight-stepper {
   display: flex;
@@ -1131,26 +936,6 @@ input[type="number"]::-webkit-outer-spin-button {
 .set-actions .set-done-btn[hidden] { display: none; }
 .set-actions .set-delete-btn[hidden] { display: none; }
 
-.undo-snackbar {
-  position: fixed;
-  bottom: calc(var(--tabbar-h) + 1rem);
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  width: calc(100% - 2rem);
-  max-width: 480px;
-  padding: .75rem 1.1rem;
-  color: var(--tx);
-  border: 1.5px solid var(--line);
-  border-radius: 14px;
-  z-index: 90;
-}
-
-.undo-snackbar[hidden] { display: none; }
-
 .undo-btn {
   min-height: 2.75rem; /* 44px touch target (CLAUDE.md) */
   padding: 0 .9rem;
@@ -1163,37 +948,7 @@ input[type="number"]::-webkit-outer-spin-button {
   border-radius: 999px;
 }
 
-/* ---- rest countdown (issue #82, throwaway pre-Wave-4) ---- */
-
-.rest-countdown {
-  display: flex;
-  align-items: center;
-  gap: .75rem;
-  min-height: 3.5rem;
-  padding: 0 1.1rem;
-  margin: 0 0 .6rem;
-  background: color-mix(in srgb, var(--acc) 14%, transparent);
-  border: 1.5px solid var(--acc);
-  border-radius: 16px;
-}
-
-.rest-countdown[hidden] { display: none; }
-
-.rest-countdown-label {
-  flex: none;
-  font-size: .74rem;
-  color: var(--acc);
-}
-
-.rest-countdown-time {
-  flex: 1 1 auto;
-  text-align: center;
-  font-family: var(--font-condensed);
-  font-size: 1.9rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: var(--acc);
-}
+/* ---- rest step: Skip rest ---- */
 
 .rest-skip-btn {
   flex: none;
@@ -1201,11 +956,6 @@ input[type="number"]::-webkit-outer-spin-button {
   min-height: 2.6rem;
   padding: .4rem 1.05rem;
   font-size: .8rem;
-}
-
-.focus-pill-editing {
-  color: var(--acc-on);
-  background: var(--tx);
 }
 
 /* ---- completed list ---- */
@@ -1411,8 +1161,7 @@ li.climb .meta { color: var(--mu); font-size: .87rem; margin-top: .15rem; }
 }
 
 .pill.overtraining-flag,
-.pill.asymmetry-warning-flag,
-.pill.asymmetry-flag {
+.pill.asymmetry-warning-flag {
   color: var(--warn);
   background: color-mix(in srgb, var(--warn) 16%, transparent);
   border-color: transparent;
@@ -1553,7 +1302,7 @@ code.invite-code {
    Session play (#146, docs/adr/0014). One full-screen page, no tab bar
    (V5/V8) — the whole session runs as a stack of server-rendered steps
    (warmup rung, work set, rest, summary) swapped in by htmx. Reuses the
-   focus-header / hand-card / stepper / completed-row vocabulary above
+   progress-bar / hand-card / stepper / completed-row vocabulary above
    wherever a step's shape matches; only genuinely new shapes (the rung
    readout, the rest ring, the top-bar pause/overflow) get new classes.
    ============================================================ */
@@ -1818,23 +1567,6 @@ code.invite-code {
 .rest-actions .rest-skip-btn,
 .rest-actions .rest-start-btn { flex: 1 1 auto; width: auto; min-height: var(--touch); }
 
-/* Rest sound toggle (#148, docs/adr/0015) -- a quiet text toggle under the
-   rest actions until S6 moves it to Settings. */
-.rest-sound-form { display: flex; justify-content: center; margin-top: .9rem; }
-
-.rest-sound-btn {
-  background: none;
-  border: 0;
-  color: var(--mu);
-  font: inherit;
-  font-size: .85rem;
-  min-height: var(--touch);
-  padding: 0 1rem;
-  cursor: pointer;
-}
-
-.rest-sound-btn[aria-pressed="true"] { color: inherit; }
-
 /* ---- undo-after-delete banner (session play, #146 review item 2) ---- */
 
 .undo-banner {
@@ -1991,7 +1723,6 @@ code.invite-code {
   min-height: 4rem;
   font-size: 1.5rem;
 }
-
 
 /* ============================================================
    Today (#149): the coach home. Headline block, the plan card (strong
@@ -2711,3 +2442,237 @@ ul.plain.timeline-list { padding: .2rem 1rem; }
 .show-data[open] > summary::before { content: "▾"; }
 
 .timeline-list .show-data { margin: -.4rem 0 .4rem; }
+
+/* ============================================================
+   Settings (#151): grouped glass list rows (V7 "List row"), the detail
+   pages' forms, the rest-sound switch, the plate rack (tap-to-count
+   circles, shared with first run) and "About these numbers". Colours come
+   only from the tokens at the top of this file.
+   ============================================================ */
+
+.settings { padding-bottom: 1rem; }
+
+.settings-group { margin-bottom: .4rem; }
+
+.settings-group > .overline { margin-top: .9rem; }
+
+.card.settings-rows { padding: .15rem 1rem; }
+
+.settings-rows > li + li,
+.settings-rows > form + form { border-top: 1px solid var(--line); }
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: .8rem;
+  min-height: 3.5rem;
+  padding: .55rem 0;
+  color: var(--tx);
+  text-decoration: none;
+}
+
+.settings-label {
+  display: flex;
+  flex-direction: column;
+  gap: .1rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: left;
+}
+
+.settings-label small { font-size: .85rem; font-weight: 500; color: var(--mu); }
+
+.settings-value {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 55%;
+  color: var(--mu);
+  font-size: .9rem;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.settings-email { font-size: .85rem; }
+
+.settings-chevron { flex: none; width: 18px; height: 18px; color: var(--mu); }
+
+.settings-switch-form { margin: 0; }
+
+/* The switch row is a submit button; reset the primary-button look. */
+.settings-switch {
+  width: 100%;
+  min-height: 3.5rem;
+  padding: .55rem 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--tx);
+  font-family: var(--font-body);
+  text-transform: none;
+  letter-spacing: normal;
+  justify-content: space-between;
+}
+
+.switch-track {
+  position: relative;
+  flex: none;
+  width: 3.1rem;
+  height: 1.85rem;
+  border-radius: 999px;
+  background: var(--s2);
+  border: 1px solid var(--line);
+}
+
+.switch-thumb {
+  position: absolute;
+  top: 50%;
+  left: .2rem;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 50%;
+  background: var(--mu);
+  transform: translateY(-50%);
+}
+
+.settings-switch[aria-checked="true"] .switch-track { background: var(--acc); border-color: var(--acc); }
+
+.settings-switch[aria-checked="true"] .switch-thumb { left: auto; right: .2rem; background: var(--acc-on); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .switch-track, .switch-thumb { transition: background .15s ease; }
+}
+
+.settings-head { margin: .2rem 0 1rem; }
+
+.settings-head h2 {
+  margin: 0 0 .35rem;
+  font-family: var(--font-condensed);
+  font-size: 2.2rem;
+  font-weight: 700;
+  line-height: .95;
+}
+
+.settings-form > .overline:first-child { margin-top: 0; }
+
+.settings-fieldset { margin: 0; padding: 0; border: none; min-width: 0; }
+
+.settings-choices { display: grid; gap: .55rem; }
+
+.settings-choice .chip-face {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: .1rem;
+  padding: .6rem 1rem;
+  border-radius: var(--radius-btn-sm);
+  white-space: normal;
+  text-align: left;
+}
+
+.settings-choice .chip-face small { font-size: .82rem; font-weight: 500; color: var(--mu); }
+
+.settings-choice .chip-radio:checked + .chip-face small { color: var(--bg); }
+
+.form-row-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .6rem; }
+
+.settings-note { margin: 0 0 .8rem; color: var(--mu); font-size: .9rem; line-height: 1.4; }
+
+.settings-inline-form { margin: 0; flex: none; }
+
+.settings-small-btn { width: auto; min-height: 2.75rem; padding: .3rem .9rem; font-size: .9rem; }
+
+.settings-add > summary {
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.settings-add > summary::-webkit-details-marker { display: none; }
+
+.settings-add-form { margin-top: .8rem; }
+
+.settings-check { display: flex; gap: .6rem; align-items: flex-start; font-size: .9rem; color: var(--tx); }
+
+.settings-check input[type="checkbox"] { flex: none; margin: 0; }
+
+/* Danger action (V7 secondary with a red rim): restore can't be undone. */
+.btn-danger {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 55%, transparent);
+}
+
+/* ---- the plate rack (V7 "Plate") ---- */
+
+.plate-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .9rem;
+  margin: 0 0 1rem;
+}
+
+.plate-form { margin: 0; }
+
+.plate.glass {
+  aspect-ratio: 1;
+  width: 100%;
+  min-height: 0;
+  padding: 0;
+  border-radius: 50%;
+  border-color: var(--acc);
+  color: var(--tx);
+  font-family: var(--font-condensed);
+  font-size: 1.5rem;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.plate.glass:has(.plate-count[data-count="0"]) { border-color: color-mix(in srgb, var(--tx) 14%, transparent); color: var(--mu); }
+
+.plate-weight { font-variant-numeric: tabular-nums; }
+
+.plate-count {
+  position: absolute;
+  top: 2%;
+  right: 2%;
+  min-width: 1.9rem;
+  padding: .15rem .4rem;
+  border-radius: 999px;
+  background: var(--acc);
+  color: var(--acc-on);
+  font-family: var(--font-body);
+  font-size: .8rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.plate-count[data-count="0"] { background: var(--s2); color: var(--mu); }
+
+.card.plate-pin { padding: .6rem 1rem; margin-bottom: .8rem; }
+
+.plate-summary { margin: 0 0 1rem; color: var(--mu); font-size: .95rem; }
+
+.plate-summary strong { color: var(--tx); }
+
+.welcome-continue { margin-top: 1.5rem; }
+
+/* ---- About these numbers ---- */
+
+.about-entry h3 { margin-bottom: .5rem; font-size: 1.1rem; }
+
+.about-entry p { margin: 0 0 .6rem; line-height: 1.45; }
+
+.about-entry p:last-child { margin-bottom: 0; }
+
+.about-entry .overline { margin-bottom: .3rem; }
+
+.about-entry { scroll-margin-top: 4.5rem; }
+
+.about-link { color: var(--acc); font-weight: 650; white-space: nowrap; }
+
+.asymmetry-sub { margin-bottom: .8rem; }

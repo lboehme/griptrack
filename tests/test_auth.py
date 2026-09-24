@@ -7,7 +7,7 @@ def test_first_user_registers_without_invite_and_is_logged_in(client):
     assert response.status_code == 303
 
     assert client.get("/").status_code == 200
-    assert "founder@example.com" in client.get("/profile").text
+    assert "founder@example.com" in client.get("/settings").text
 
 
 def test_second_registration_without_invite_is_rejected(client):
@@ -34,7 +34,7 @@ def test_friend_registers_with_admin_generated_invite(client):
     response = register(client, "friend@example.com", "friend-pw", invite_code=code)
 
     assert response.status_code == 303
-    assert "friend@example.com" in client.get("/profile").text
+    assert "friend@example.com" in client.get("/settings").text
 
 
 def test_used_invite_cannot_be_redeemed_again(client):
@@ -129,7 +129,7 @@ def test_login_and_logout_round_trip(client):
         follow_redirects=False,
     )
     assert right.status_code == 303
-    assert "founder@example.com" in client.get("/profile").text
+    assert "founder@example.com" in client.get("/settings").text
 
 
 def test_session_is_revoked_after_admin_password_reset(client):

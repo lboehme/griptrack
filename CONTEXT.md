@@ -161,6 +161,29 @@ session_number — a finished session lands on its Summary); its raw sets stay
 behind "Show sets". A climb row shows a grade dot and the style.
 _Avoid_: History, log, feed
 
+**Settings**:
+The fourth tab (`/settings`, issue #151), replacing the old Profile and Plates
+pages: grouped glass list rows — **You** (name, bodyweight, and the account
+email in the server build), **Training** (HandOrderPreference, the
+TrainingProtocol's rep target and rest, ProgressionPath default and
+overrides), **Equipment** (the PlateInventory rack; UnitPreference shown
+read-only, "kg · fixed"), **Rest alerts** (Rest sound), **Your data** (Export
+archive download, Account restore, About these numbers) and, in the server
+build only and for an Admin, **Admin** (invites, grip types, password reset —
+hidden in the WebView build, ADR-0013). Each row opens a small detail page.
+Changes **autosave**: forms post on change and answer with a "Saved" toast
+(htmx) or a 303 back to their page with `?saved=` (no JS). `/profile` and
+`/plates` redirect here; their POST endpoints keep their URLs.
+_Avoid_: Profile, preferences, account page
+
+**About these numbers**:
+Settings' static page (`/settings/about`) explaining TrainingVolume,
+Mean-intensity, CurrentMax as % of bodyweight, RPE and Session RPE, Session
+load, the AsymmetryGap and the strength–grade correlation in plain language.
+The technical terms (TrainingVolume, CurrentMax, Spearman ρ) live here; the
+Progress pages use plain labels and link to the matching section instead.
+_Avoid_: Methodology, glossary (this file is the glossary)
+
 **rest_ends_at**:
 A nullable `datetime` on `TrainingSession`: when set, the play step is
 **Rest**, and the ring countdown is always computed from this stored end
@@ -191,7 +214,8 @@ second countdown to keep in sync)
 A per-user boolean (`User.rest_sound`, off by default): when on, the Rest
 bridge's rest-over alert also plays the default notification sound on top
 of the vibration. Off by default because shared gyms are quiet places.
-Toggled on the rest step for now; moves to Settings with S6.
+Toggled in Settings → Rest alerts (`POST /settings/rest-sound`, #151); the
+rest step only hands the stored flag to the bridge's `startRest`.
 _Avoid_: alarm sound, rest beep
 
 **WorkSet**:
@@ -201,8 +225,8 @@ never persisted as WorkSets — they're computed and shown, not logged.
 _Avoid_: Set, Rep set
 
 **Set commit**:
-The single gesture that writes a set — the "Set done" button on the Focus
-screen. Writes both hands' WorkSets for one set_number in one atomic
+The single gesture that writes a set — the "Set done" button on Session
+play's Work set step. Writes both hands' WorkSets for one set_number in one atomic
 request (`POST /session/set`), or one hand's under a sequential
 HandOrderPreference. Until it fires, the stepper values on screen are
 unsaved client state, so the set does not exist. Replaced the old
@@ -211,11 +235,11 @@ per-cell autosave table, where each field saved on its own; see
 _Avoid_: Save, submit (the screen has no form-submit model)
 
 **Edit mode**:
-The Focus screen's correction path. Tapping a row in the COMPLETED list
-reloads that set's values back into the hand cards; the progress pill
-reads "Editing set N" and the commit button becomes "Save" alongside a
-Cancel. Saving takes the same Set commit path and returns focus to the
-set the user was on. Exists so there is exactly one editing surface for a
+The Work set step's correction path. Tapping a row in the COMPLETED list
+reopens that set's values in the hand cards (the row is highlighted) and
+the commit button becomes "Save" alongside a Cancel. Saving takes the same
+Set commit path — without starting a Rest — and returns to the set the
+user was on. Exists so there is exactly one editing surface for a
 WorkSet rather than a second, smaller one embedded in the completed list.
 _Avoid_: Inline edit, edit form
 
@@ -223,7 +247,7 @@ _Avoid_: Inline edit, edit form
 Every total weight a user's PlateInventory can actually make on the single
 pin, in ascending order — the full achievable set that
 `round_down_to_loadable` already computes internally and discards above
-its target. The Focus screen's weight steppers walk this ladder one rung
+its target. The Work set step's weight steppers walk this ladder one rung
 per tap, so every reachable value is physically loadable. Embedded in the
 page as JSON so taps stay instant and work offline. A starting value that
 is off-ladder (a CurrentMax straight from a MaxWeightTest, or older
@@ -287,7 +311,7 @@ _Avoid_: Max (bare), 1RM
 
 **SessionMaxEstimate**:
 An ephemeral, per-TrainingSession stand-in for CurrentMax, entered by the
-user on the warmup page when a (hand, grip_type, edge_mm) combination has
+user on Session play's first warmup step when a (hand, grip_type, edge_mm) combination has
 no MaxWeightTest yet. Feeds that session's ramp suggestions and work-set
 prefills only. Never a MaxWeightTest, never an input to CurrentMax, and
 never feeds the %bodyweight-vs-grade correlation — a combo trained only
@@ -312,16 +336,19 @@ _Avoid_: Effort, difficulty rating
 The set of plates (weight_kg + count owned) a user has available, used to
 round computed ramp/warmup target weights down to the nearest actually
 loadable total. Modeled as a single stack (one loading pin/handle), not
-split two-sided like a barbell. New users get a seeded default inventory,
-editable at any time.
+split two-sided like a barbell; weights are the plates on the pin — the
+pin itself is never counted. New users get a seeded default inventory,
+editable at any time as tap-to-count plate circles (first run and Settings →
+Plates, #151): each tap adds one, wrapping to 0 (removing the plate) past
+10; the unit's starter sizes stay on the rack at ×0.
 _Avoid_: Plate rounding config
 
 **HandOrderPreference**:
-A per-user setting controlling how a TrainingSession's warmup/ramp and
-work-set pages present its two hands. "alternating": both hands shown
-together, one row per step/set with L/R columns. "sequential": the full
-page flow (warmup then work sets) is completed for one hand, then repeated
-for the other.
+A per-user setting (Settings → Training) controlling how Session play
+presents a TrainingSession's two hands. "alternating": both hands shown
+together on every warmup rung and work set. "sequential": the whole flow
+(warmup then work sets) is completed for one hand, then repeated for the
+other — the Summary offers "Start {other} hand".
 _Avoid_: Hand order, session order
 
 **UnitPreference**:
@@ -397,8 +424,8 @@ The ramp percentages (50/65/80/90% of CurrentMax), base work-set rep count
 (the rep target, default 5), and default rest duration applied to a user's
 TrainingSessions. Modeled as its own config concept (a global default row,
 optionally overridden per user) rather than hardcoded constants. Since Wave 4
-the rep target and `default_rest_seconds` are editable per user from the
-"Configure training sessions" settings card (a per-user row); the ramp
+the rep target and `default_rest_seconds` are editable per user in
+Settings → Training (a per-user row); the ramp
 percentages stay global for now. See ADR-0005 and ADR-0011.
 _Avoid_: Settings, config (bare)
 
@@ -419,8 +446,8 @@ RPE trigger says you're ready. One of: **Set progression** (fixed weight/reps, a
 a set up to a cap), **Weight progression** (fixed sets/reps, add a loadable
 increment — the default), or **Double progression** (over a user-set rep range,
 default 5–10: build reps to the top, then build weight until reps fall to the
-minimum, then reset to a heavier baseline). Chosen per (hand, grip, edge) in the
-"Configure training sessions" settings card with a user-level default; never
+minimum, then reset to a heavier baseline). Chosen in Settings → Progression as
+a user-level default plus optional per-(grip, edge) overrides; never
 overridden mid-session, never auto-switched. Config is stored; the current phase
 is derived from WorkSet history. See ADR-0012.
 _Avoid_: Program, plan, periodization (bare)
@@ -482,7 +509,8 @@ combination to "needs test/estimate".
 _Avoid_: Deleted test
 
 **Export archive**:
-The versioned ZIP produced by `GET /profile/export` and consumed by import — a
+The versioned ZIP produced by `GET /profile/export` (Settings → Export backup)
+and consumed by import (Settings → Restore from backup) — a
 `manifest.json` (`format_version`, `unit`, `exported_at`) plus one CSV per
 exported model. Grips are carried by name (`GripType.csv`), not by raw id, and
 weights are stamped in the account's native UnitPreference (see ADR-0003, -0008).

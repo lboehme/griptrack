@@ -685,7 +685,7 @@ def test_ramp_values_step_through_each_rung_rounded_down_to_loadable(client):
 
 
 def clear_inventory(client):
-    rows = re.findall(r'class="plate-weight">([^<]+)<', client.get("/plates").text)
+    rows = re.findall(r'class="plate-weight">([^<]+)<', client.get("/settings/plates").text)
     for weight in rows:
         client.post("/plates", data={"weight": weight, "count": "0"})
 
@@ -1111,7 +1111,8 @@ def test_alternating_summary_has_no_other_hand_button(client):
 def test_no_new_write_route_is_added_beyond_play_and_its_actions(client):
     """Pins the /session/* route surface after #146 -- every write still
     goes through an endpoint that existed before, plus the new play-step
-    actions this issue adds (and #148's Rest sound toggle)."""
+    actions this issue adds (#148's Rest sound toggle lived here until #151
+    moved it to Settings)."""
     from backend.main import create_app
 
     def all_paths(routes):
@@ -1141,8 +1142,8 @@ def test_no_new_write_route_is_added_beyond_play_and_its_actions(client):
         "/session/rung-done",
         "/session/rest/extend",
         "/session/rest/end",
-        # #148 (native rest bridge): the Rest sound toggle on the rest step.
-        "/session/rest/sound",
+        # (#148's /session/rest/sound moved to Settings as
+        # /settings/rest-sound in #151.)
         "/session/update",
         "/session/pain-report",
         # Summary step (#147).

@@ -22,6 +22,7 @@ from backend.routers import plates as plates_router
 from backend.routers import profile as profile_router
 from backend.routers import progress as progress_router
 from backend.routers import pwa as pwa_router
+from backend.routers import settings as settings_router
 from backend.routers import training_session as training_session_router
 from backend.templating import templates
 
@@ -112,6 +113,7 @@ def create_app() -> FastAPI:
         # shared-server concern (ADR-0004) with nothing to protect on a
         # single-user on-device install, so left unregistered there (404).
         app.include_router(auth_router.server_only_router)
+    app.include_router(settings_router.router)
     app.include_router(profile_router.router)
     app.include_router(plates_router.router)
     app.include_router(max_tests_router.router)

@@ -109,17 +109,23 @@ def test_plus_30_s_reschedules_start_rest_30000_ms_later(live_server, authentica
     assert start_rest_calls(page)[-1][1] == first_ms + 30000
 
 
-def test_sound_toggle_passes_sound_true_to_start_rest(live_server, authenticated_page):
+def test_settings_sound_toggle_passes_sound_true_to_start_rest(live_server, authenticated_page):
+    """#151: the Rest sound switch moved from the rest step to Settings →
+    Rest alerts; the rest step still hands the stored flag to startRest."""
     page = authenticated_page
     page.add_init_script(RECORDING_BRIDGE)
+    page.goto(f"{live_server}/settings")
+    switch = page.locator("#rest-sound-btn")
+    expect(switch).to_have_attribute("aria-checked", "false")
+
+    switch.click()
+    expect(page.locator("#rest-sound-btn")).to_have_attribute("aria-checked", "true")
+    expect(page.locator(".toast")).to_be_visible()
+
     reach_rest(page, live_server)
-    count_before = len(start_rest_calls(page))
-
-    page.locator("#rest-sound-btn").click()
-    wait_for_more_start_rest_calls(page, count_before)
-
+    assert start_rest_calls(page), "startRest was never called on the rest step"
     assert start_rest_calls(page)[-1][4] is True
-    expect(page.locator("#rest-sound-btn")).to_have_attribute("aria-pressed", "true")
+    expect(page.locator("#rest-sound-btn")).to_have_count(0)
 
 
 def test_skip_rest_calls_stop_rest(live_server, authenticated_page):

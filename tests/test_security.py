@@ -791,44 +791,70 @@ def test_anonymous_requests_do_not_emit_null_pk_warning(client):
 
 
 def test_rest_sound_toggle_is_bounded_and_rejects_cross_origin_posts(client):
-    """S3 native rest bridge (#148): the Rest sound toggle takes user text,
-    so it's length-capped (422 past the cap) and only "on"/"off" are
-    accepted (400 otherwise); a cross-origin POST is refused like every
-    other state-changing route (CSRF Origin check)."""
+    """S3 native rest bridge (#148), toggled from Settings since #151: the
+    Rest sound toggle takes user text, so it's length-capped (422 past the
+    cap) and only "on"/"off" are accepted (400 otherwise); a cross-origin
+    POST is refused like every other state-changing route (CSRF Origin
+    check)."""
     from backend.limits import MAX_TOGGLE_LENGTH
 
     register(client)
-    grip_id = grip_type_id(client, "half crimp")
-    common = {"grip_type_id": grip_id, "edge_mm": 20, "date": "2026-07-04"}
 
     too_long = client.post(
-        "/session/rest/sound",
-        data={**common, "rest_sound": "o" * (MAX_TOGGLE_LENGTH + 1)},
+        "/settings/rest-sound",
+        data={"rest_sound": "o" * (MAX_TOGGLE_LENGTH + 1)},
         follow_redirects=False,
     )
     assert too_long.status_code == 422
 
     bogus = client.post(
-        "/session/rest/sound",
-        data={**common, "rest_sound": "loud"},
-        follow_redirects=False,
+        "/settings/rest-sound", data={"rest_sound": "loud"}, follow_redirects=False
     )
     assert bogus.status_code == 400
 
     cross_origin = client.post(
-        "/session/rest/sound",
-        data={**common, "rest_sound": "on"},
+        "/settings/rest-sound",
+        data={"rest_sound": "on"},
         headers={"Origin": "https://evil.example"},
         follow_redirects=False,
     )
     assert cross_origin.status_code == 403
 
-    unknown_grip = client.post(
-        "/session/rest/sound",
-        data={**common, "grip_type_id": 999999, "rest_sound": "on"},
+
+def test_plate_tap_is_bounded_and_rejects_cross_origin_posts(client):
+    """Tap-to-count (#151) takes a plate weight (bounded like POST /plates,
+    the subset-sum's DoS-sensitive input) and a `back` path (length-capped,
+    and only ever one of two known pages -- never an open redirect)."""
+    register(client)
+
+    assert client.post(
+        "/plates/tap", data={"weight": "1000000"}, follow_redirects=False
+    ).status_code == 422
+    assert client.post(
+        "/plates/tap", data={"weight": "0"}, follow_redirects=False
+    ).status_code == 422
+    assert client.post(
+        "/plates/tap", data={"weight": "5", "back": "/" + "a" * 200}, follow_redirects=False
+    ).status_code == 422
+    cross_origin = client.post(
+        "/plates/tap",
+        data={"weight": "5"},
+        headers={"Origin": "https://evil.example"},
         follow_redirects=False,
     )
-    assert unknown_grip.status_code == 404
+    assert cross_origin.status_code == 403
+
+
+def test_settings_saved_query_is_bounded_and_never_echoed(client):
+    """`?saved=` only picks one of the fixed toast strings; an unknown key
+    shows no toast, and nothing from the query string reaches the page."""
+    register(client)
+
+    assert client.get("/settings", params={"saved": "x" * 500}).status_code == 422
+    page = client.get("/settings", params={"saved": "<script>alert(1)</script>"})
+    assert page.status_code == 200
+    assert "alert(1)" not in page.text
+    assert 'class="toast"' not in page.text
 
 
 def test_session_rpe_is_bounded_and_numeric(client):

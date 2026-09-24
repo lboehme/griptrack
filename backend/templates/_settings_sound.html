@@ -1,0 +1,15 @@
+{# Rest sound switch (#148 → Settings in #151). A plain form post without
+   JS (303 back to Settings); with htmx it swaps itself and shows the
+   "Saved" toast out of band. #}
+<form id="rest-sound-form" class="settings-switch-form" method="post" action="/settings/rest-sound"
+      hx-post="/settings/rest-sound" hx-target="this" hx-swap="outerHTML">
+  <button type="submit" class="settings-row settings-switch" id="rest-sound-btn"
+          name="rest_sound" value="{{ 'off' if user.rest_sound else 'on' }}"
+          role="switch" aria-checked="{{ 'true' if user.rest_sound else 'false' }}">
+    <span class="settings-label">Sound when rest ends<small>Vibration is always on</small></span>
+    <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+  </button>
+</form>
+{% if oob_toast is defined and oob_toast %}
+<div id="log-sheet-slot" class="log-sheet-slot" hx-swap-oob="innerHTML">{% include "_log_toast.html" %}</div>
+{% endif %}

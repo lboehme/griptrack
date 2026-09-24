@@ -139,15 +139,17 @@ class NavigationLifecycleTest {
         assertFalse(SessionLifecycleHelper.isHomePage("http://127.0.0.1:8000/dashboard"))
         assertFalse(SessionLifecycleHelper.isHomePage("http://127.0.0.1:8000/session/new"))
 
-        // Tab roots (#149: Today, Progress, Settings; Progress is its own
-        // page since #150, Settings still redirects to /profile for now)
+        // Tab roots (#149: Today, Progress, Settings; both real pages since
+        // #150 and #151)
         assertTrue(SessionLifecycleHelper.isTabRoot("http://127.0.0.1:8000/"))
         assertTrue(SessionLifecycleHelper.isTabRoot("http://127.0.0.1:8000/progress"))
         assertTrue(SessionLifecycleHelper.isTabRoot("http://127.0.0.1:8000/progress?range=3m"))
         assertTrue(SessionLifecycleHelper.isTabRoot("http://127.0.0.1:8000/settings"))
-        assertTrue(SessionLifecycleHelper.isTabRoot("http://127.0.0.1:8000/profile"))
-        // /dashboard only 303s to /progress now -- not a root of its own.
+        // /dashboard and /profile only 303 into Progress/Settings now --
+        // not roots of their own; a Settings detail page isn't a root either.
         assertFalse(SessionLifecycleHelper.isTabRoot("http://127.0.0.1:8000/dashboard"))
+        assertFalse(SessionLifecycleHelper.isTabRoot("http://127.0.0.1:8000/profile"))
+        assertFalse(SessionLifecycleHelper.isTabRoot("http://127.0.0.1:8000/settings/plates"))
         // The ＋ Log sheet opens over Today (/?log=...), still the home root.
         assertTrue(SessionLifecycleHelper.isTabRoot("http://127.0.0.1:8000/?log=climb"))
         assertTrue(SessionLifecycleHelper.isHomePage("http://127.0.0.1:8000/?log=climb"))

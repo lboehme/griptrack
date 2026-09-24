@@ -33,8 +33,14 @@ def test_main_pages_have_no_horizontal_overflow_at_360px(live_server, authentica
         "/progress/maxes",
         "/progress/timeline",
         "/progress/timeline?show=climbs",
-        "/profile",
-        "/plates",
+        "/settings",
+        "/settings/name",
+        "/settings/training",
+        "/settings/progression",
+        "/settings/plates",
+        "/settings/restore",
+        "/settings/about",
+        "/settings/admin",
     ]
 
     for route in routes:
@@ -151,11 +157,11 @@ def test_worksets_stepper_buttons_fit_at_130_percent_font_scale(live_server, aut
         assert rpe_plus["x"] + rpe_plus["width"] <= card_box["x"] + card_box["width"] + 1
 
 
-def test_profile_progression_select_has_full_width_at_412px(live_server, authenticated_page):
+def test_settings_progression_select_has_full_width_at_412px(live_server, authenticated_page):
     """Default progression select has a full row and is not squeezed/truncated."""
     page = authenticated_page
     page.set_viewport_size({"width": 412, "height": 844})
-    page.goto(f"{live_server}/profile")
+    page.goto(f"{live_server}/settings/progression")
 
     select = page.locator('select[name="path"]').first
     expect(select).to_be_visible()

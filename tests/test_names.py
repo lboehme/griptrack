@@ -44,8 +44,8 @@ def test_name_can_be_set_later_from_the_profile(client):
 
     assert response.status_code == 200
     assert greeting(client) == "Lukas"
-    # The profile form prefills the saved name for the next edit.
-    assert 'value="Lukas"' in client.get("/profile").text
+    # Settings → Name prefills the saved name for the next edit.
+    assert 'value="Lukas"' in client.get("/settings/name").text
 
 
 def test_name_can_be_changed_again(client):
@@ -107,6 +107,7 @@ def test_email_identity_display_is_unchanged_by_a_name(client):
     register(client, "lifter@example.com", "test-pw-1234", name="Lukas")
 
     # Today dropped its "Logged in as <email>" line (#149 -- it leaked the
-    # device placeholder address on-device); the profile still shows it.
+    # device placeholder address on-device); Settings still shows it
+    # (server build only).
     assert "Logged in as" not in client.get("/").text
-    assert "lifter@example.com" in client.get("/profile").text
+    assert "lifter@example.com" in client.get("/settings").text

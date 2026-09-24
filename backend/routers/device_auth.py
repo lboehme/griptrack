@@ -139,7 +139,8 @@ def welcome_plates(
         "welcome_plates.html",
         {
             "user": user,
-            "items": plates.inventory_for(session, user),
+            "rack": plates.rack_view(session, user),
+            "back": "/welcome/plates",
             # First run is a story, not a tab screen (#149): no tab bar.
             "hide_tabbar": True,
         },
