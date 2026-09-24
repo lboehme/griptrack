@@ -13,7 +13,6 @@ from datetime import date as date_type
 from datetime import datetime, timedelta, timezone
 
 import pytest
-
 from sqlmodel import select
 
 from backend.db import get_session
@@ -22,9 +21,9 @@ from tests.helpers import (
     complete_warmup,
     export_archive,
     generate_invite,
-    import_archive,
     get_session_page,
     grip_type_id,
+    import_archive,
     log_max_test,
     play_step_title,
     register,

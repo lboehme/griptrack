@@ -546,7 +546,7 @@ def _bounded(
     member: "ArchiveMember", row_num: int, kwargs: dict, field: str, low: int, high: int
 ) -> None:
     value = kwargs.get(field)
-    if value is not None and not (low <= value <= high):  # type: ignore[operator]
+    if value is not None and not (low <= value <= high):
         raise ArchiveError(
             f"{member.filename} row {row_num}, column {field!r}: "
             f"must be between {low} and {high}."

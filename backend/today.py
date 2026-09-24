@@ -19,7 +19,6 @@ from datetime import timedelta
 from sqlmodel import Session, select
 
 from backend import analytics, auth, climbing, training_log
-from backend.plan import GO_LIGHTER_FACTOR, HandPlan, combo_plan
 from backend.models import (
     Climb,
     GripType,
@@ -30,6 +29,7 @@ from backend.models import (
     WarmupStepCheck,
     WorkSet,
 )
+from backend.plan import GO_LIGHTER_FACTOR, HandPlan, combo_plan
 
 # ---- tunables (see CONTEXT.md: Today plan / Rest-day suggestion) ----
 # GO_LIGHTER_FACTOR and the plan's weights live in backend.plan -- one
