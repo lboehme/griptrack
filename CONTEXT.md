@@ -32,13 +32,20 @@ ticks recorded, work sets committed against the planned set count, and
 whether a rest is pending — and renders it as an htmx fragment (a full page
 without htmx, or after a plain form POST). The step names are: **Warmup
 rung** (one ramp rung at a time, with tick targets and a "Rung done"
-button), **Work set** (the hand cards and steppers, unchanged Set commit),
-**Rest** (a ring countdown computed from the stored `rest_ends_at`, never a
-decrementing counter — see below), and **Summary** (a minimal "all sets
-done" placeholder pending the real screen, issue #147). The page always
-opens on the right step after a pause, reload, or Android killing the app.
-Replaced the two separate `/session/warmup` and `/session/worksets` pages,
-which now redirect to it.
+button), **Work set** (the hand cards and steppers, unchanged Set commit —
+the "How did it feel?" disclosure and its plate-breakdown readout live
+here too, see below), **Rest** (a ring countdown computed from the stored
+`rest_ends_at`, never a decrementing counter — see below), and **Summary**
+(a minimal "all sets done" placeholder pending the real screen, issue
+#147). The page always opens on the right step after a pause, reload, or
+Android killing the app. Replaced the two separate `/session/warmup` and
+`/session/worksets` pages, which now redirect to it. The Work set step
+also carries a server-rendered **undo-after-delete** banner right after a
+`/session/set/delete`: the deleted set's values ride along as query
+params on the no-JS redirect (or straight in the htmx fragment) so an
+**Undo** button can restore it via the existing `/session/set/restore`
+with no server-side undo state of its own — it shows once, on that one
+response, never on a later unrelated visit.
 _Avoid_: warmup page, worksets page (as separate screens — they're steps of
 one page now)
 
@@ -93,6 +100,14 @@ free-entry history) snaps to the next rung in the direction of travel;
 both ends clamp. Bounded like every other numeric input, since the
 subset-sum behind it is the DoS-sensitive path.
 _Avoid_: Increment, step size (it is not a fixed step)
+
+**Plate breakdown**:
+One concrete combination of plates (`backend.plates.plate_breakdown`,
+largest first) that makes an exactly-loadable weight — the "Pin + 20 +
+1.25" readout under a rung's or work set's weight. Reuses the loadable
+ladder's own bounded subset-sum search rather than a second one; shows
+nothing (not a wrong or partial breakdown) for a weight that isn't itself
+on the ladder, e.g. an off-ladder `CurrentMax` or a free-entry value.
 
 **MaxWeightTest**:
 A dated record of the heaviest weight a user pulled for one specific

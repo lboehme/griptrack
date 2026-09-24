@@ -5,7 +5,7 @@
 <header class="play-topbar">
   <a class="play-pause" href="/" aria-label="Pause and exit">✕</a>
   <div class="play-topbar-mid">
-    <span class="play-overline">{{ step.title if step.kind != "workset" else "WORK SET " ~ worksets.display_set_number ~ " OF " ~ worksets.total_sets }}</span>
+    <span class="play-overline" data-step-title="{{ step.title }}">{{ step.title }}</span>
     <h2 class="play-combo-title">{{ grip.name|display_name }} · {{ edge_mm }} mm {{ grip.dimension_name }}</h2>
   </div>
   <span class="play-step-counter">{{ step.step_number }}/{{ step.total_steps }}</span>

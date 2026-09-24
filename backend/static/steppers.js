@@ -264,6 +264,65 @@
   document.addEventListener("DOMContentLoaded", onSettle);
   document.body.addEventListener("htmx:afterSettle", onSettle);
 
+  // ---- "How did it feel?" disclosure (issue #81, restored on the play
+  // work-set step in #146 review item 1): notes/deload and pain reports
+  // keep autosaving per interaction -- no commit button, no edit-mode dance.
+  // Delegated on document (not bound once at load) since the disclosure is
+  // re-rendered fresh on every htmx swap of #play-root. ----
+  function displayName(str) {
+    if (!str) return "";
+    var s = String(str).replace(/_/g, " ");
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+
+  function upsertPainRow(hand, severity, note) {
+    var body = document.getElementById("pain-reports-body");
+    var table = document.getElementById("pain-reports-table");
+    if (!body) return;
+    var row = body.querySelector('tr[data-hand="' + hand + '"]');
+    if (!row) {
+      row = document.createElement("tr");
+      row.dataset.hand = hand;
+      body.appendChild(row);
+    }
+    row.replaceChildren();
+    [displayName(hand), displayName(severity), note || ""].forEach(function (text) {
+      var td = document.createElement("td");
+      td.textContent = text;
+      row.appendChild(td);
+    });
+    if (table) table.hidden = false;
+  }
+
+  document.addEventListener("change", function (e) {
+    var metaForm = e.target.closest("#session-update-form");
+    if (metaForm) {
+      fetch(metaForm.action, {
+        method: "POST",
+        body: new FormData(metaForm),
+        headers: { "HX-Request": "true" },
+      });
+      return;
+    }
+
+    var painForm = e.target.closest("#pain-report-form");
+    if (painForm) {
+      var severityInput = painForm.querySelector('input[name="severity"]');
+      if (!severityInput || !severityInput.value) return;
+      var handRadio = painForm.querySelector('input[name="hand"]:checked');
+      var hand = handRadio ? handRadio.value : "left";
+      var note = painForm.querySelector('input[name="note"]').value;
+      var severity = severityInput.value;
+      fetch(painForm.action, {
+        method: "POST",
+        body: new FormData(painForm),
+        headers: { "HX-Request": "true" },
+      }).then(function (response) {
+        if (response.ok) upsertPainRow(hand, severity, note);
+      });
+    }
+  });
+
   window.addEventListener("pagehide", function () {
     if (window.GripTrackNative) {
       try {

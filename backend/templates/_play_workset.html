@@ -1,4 +1,23 @@
 {% set ws = worksets %}
+{% if undo %}
+<div class="notice undo-banner" role="status">
+  <span>Set {{ undo.set_number }} deleted.</span>
+  <form method="post" action="/session/set/restore" class="undo-form">
+    <input type="hidden" name="grip_type_id" value="{{ grip.id }}">
+    <input type="hidden" name="edge_mm" value="{{ edge_mm }}">
+    <input type="hidden" name="date" value="{{ date }}">
+    <input type="hidden" name="hand" value="{{ hand }}">
+    {% if session_number %}<input type="hidden" name="session_number" value="{{ session_number }}">{% endif %}
+    <input type="hidden" name="set_number" value="{{ undo.set_number }}">
+    {% for uh, uvals in undo.hands.items() %}
+    <input type="hidden" name="{{ uh }}_weight" value="{{ uvals.weight }}">
+    <input type="hidden" name="{{ uh }}_reps" value="{{ uvals.reps }}">
+    {% if uvals.rpe is not none %}<input type="hidden" name="{{ uh }}_rpe" value="{{ uvals.rpe }}">{% endif %}
+    {% endfor %}
+    <button type="submit" class="btn btn-secondary undo-btn" hx-post="/session/set/restore" hx-include="closest form" hx-target="#play-root" hx-swap="innerHTML">Undo</button>
+  </form>
+</div>
+{% endif %}
 {% if ws.nudge %}
 <div class="notice nudge-banner nudge-{{ ws.nudge.type }}" data-nudge="{{ ws.nudge.type }}">
   <div class="nudge-content">
@@ -44,6 +63,10 @@
         <input type="number" name="{{ hnd }}_weight" value="{{ ws.seed[hnd].weight }}" step="0.25" min="0.25" required class="raw-input" data-role="weight-input" data-hand="{{ hnd }}">
       </label>
     </div>
+    {% set breakdown = plate_breakdown(ws.seed[hnd].weight, inventory) %}
+    {% if breakdown %}
+    <div class="rung-tile-plates muted" data-role="plate-breakdown" data-hand="{{ hnd }}">Pin{% for p in breakdown %} + {{ p|num_trim }}{% endfor %}</div>
+    {% endif %}
     <div class="reps-rpe-grid">
       <div class="field-group">
         <span class="field-label">Reps</span>
@@ -60,7 +83,7 @@
         <span class="field-label">RPE</span>
         <div class="mini-stepper">
           <button type="button" class="stepper-btn-sm stepper-minus" data-field="rpe" data-hand="{{ hnd }}" aria-label="Decrease {{ hnd }} RPE">−</button>
-          <span class="mini-value{% if ws.seed[hnd].rpe is none %} rpe-inactive{% endif %}" data-role="rpe-display" data-hand="{{ hnd }}">{{ ws.seed[hnd].rpe if ws.seed[hnd].rpe is not none else "7" }}</span>
+          <span class="mini-value{% if ws.seed[hnd].rpe is none %} rpe-inactive{% endif %}" data-role="rpe-display" data-hand="{{ hnd }}">{{ ws.seed[hnd].rpe|num_trim if ws.seed[hnd].rpe is not none else "7" }}</span>
           <button type="button" class="stepper-btn-sm stepper-plus" data-field="rpe" data-hand="{{ hnd }}" aria-label="Increase {{ hnd }} RPE">＋</button>
         </div>
         <label class="raw-input-label">RPE
@@ -113,3 +136,46 @@
 <script type="application/json" id="ladder-data">{{ ws.ladder|tojson }}</script>
 
 </div><!-- #focus-screen -->
+
+<section class="card how-it-felt-card">
+  <details id="how-it-felt">
+    <summary>How did it feel?</summary>
+    <div class="how-it-felt-body">
+      <form id="session-update-form" method="post" action="/session/update">
+        {% include "_combo_fields.html" %}
+        <input type="hidden" name="session_number" value="{{ session_number if session_number else '' }}">
+        <label class="deload-toggle">
+          <input type="checkbox" name="is_deload" {% if ws.training_session and ws.training_session.is_deload %}checked{% endif %}>
+          Planned light session (deload)
+        </label>
+        <label>Session notes
+          <textarea name="notes" rows="3" placeholder="How did it feel?">{{ ws.training_session.notes if ws.training_session and ws.training_session.notes else '' }}</textarea>
+        </label>
+      </form>
+
+      <div class="pain-reports">
+        <h4 class="pain-reports-heading">Any tweaks? (Pain reports)</h4>
+        <table class="pain-reports-table" id="pain-reports-table"{% if not ws.pain_reports %} hidden{% endif %}>
+          <thead><tr><th>Hand</th><th>Severity</th><th>Note</th></tr></thead>
+          <tbody id="pain-reports-body">
+            {% for pr in ws.pain_reports %}
+            <tr data-hand="{{ pr.hand }}"><td>{{ pr.hand|display_name }}</td><td>{{ pr.severity|display_name }}</td><td>{{ pr.note or '' }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <!-- Auto-saves when severity is selected (if hand is set) or note is changed -->
+        <form id="pain-report-form" method="post" action="/session/pain-report">
+          {% include "_combo_fields.html" %}
+          <input type="hidden" name="session_number" value="{{ session_number if session_number else '' }}">
+          <div class="form-row">
+            {% with hand_options = ["left", "right", "both"] %}{% include "_hand_segmented.html" %}{% endwith %}
+            <label>Severity (1-3)
+              <input type="number" name="severity" min="1" max="3" required placeholder="e.g. 1">
+            </label>
+          </div>
+          <label>Note <input type="text" name="note" placeholder="Optional"></label>
+        </form>
+      </div>
+    </div>
+  </details>
+</section>

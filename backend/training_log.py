@@ -338,7 +338,12 @@ def delete_set_and_renumber(
 ) -> dict[str, dict]:
     """Delete all in-play hands' WorkSets for the given set_number and
     renumber any higher sets down by 1 in a single transaction, keeping the
-    1..N sequence contiguous with no gaps. Returns the deleted hands' data."""
+    1..N sequence contiguous with no gaps. Returns the deleted hands' data.
+
+    Session play (#146): also clears any pending rest_ends_at -- deleting a
+    set invalidates whatever "rest before set N" plan was in flight, and
+    the play step must land back on the work-set step (with its undo
+    banner) rather than a stale rest countdown."""
     deleted_rows = session.exec(
         select(WorkSet)
         .where(WorkSet.training_session_id == training_session.id)
@@ -357,6 +362,10 @@ def delete_set_and_renumber(
 
     for ws in deleted_rows:
         session.delete(ws)
+
+    if training_session.rest_ends_at is not None:
+        training_session.rest_ends_at = None
+        session.add(training_session)
 
     # Shift higher sets down by 1
     higher_rows = session.exec(
@@ -606,6 +615,7 @@ def play_view(
         session, user, grip_type_id, edge_mm, date, hand, sets_hint,
         session_number, edit_set,
     )
+    inventory = plates.inventory_for(session, user)
     total_rungs = len(w["steps"])
     total_sets = ws["total_sets"]
     total_steps = total_rungs + total_sets
@@ -645,9 +655,14 @@ def play_view(
         kind = "workset"
         step_number = total_rungs + ws["display_set_number"]
 
+    workset_title = (
+        f"Editing set {ws['display_set_number']}"
+        if ws["editing"]
+        else f"Work set {ws['display_set_number']} of {total_sets}"
+    )
     titles = {
         "warmup": "Warmup",
-        "workset": f"Work set {ws['display_set_number']} of {total_sets}",
+        "workset": workset_title,
         "rest": "Rest",
         "summary": "Session",
     }
@@ -678,6 +693,7 @@ def play_view(
         "session_number": w["session_number"],
         "training_session": training_session,
         "sets_hint": sets_hint,
+        "inventory": inventory,
     }
 
 

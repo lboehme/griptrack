@@ -154,6 +154,29 @@ def restore_focus_set(
     return client.post("/session/set/restore", data=data, follow_redirects=True)
 
 
+def checked_steps(page_text):
+    """The (hand, step_index) pairs ticked on whichever rung tile(s) are
+    currently rendered -- session play (#146) shows one rung at a time, so
+    this only ever reflects the current rung, unlike the pre-#146 warmup
+    card ladder's all-rungs-at-once version."""
+    return {
+        (h, int(s))
+        for h, s, attrs in re.findall(
+            r'class="step-check" data-hand="(\w+)" data-step="(\d+)"([^>]*)>',
+            page_text,
+        )
+        if "checked" in attrs
+    }
+
+
+def play_step_title(page_text):
+    """The play top bar's overline text ("Work set 1 of 3", "Editing set 2",
+    "Warmup", "Rest", "Session") -- session play's (#146) equivalent of the
+    pre-#146 Focus screens' progress-pill text."""
+    match = re.search(r'class="play-overline" data-step-title="([^"]*)"', page_text)
+    return match.group(1) if match else None
+
+
 def pill_text(page_text):
     """The Focus screen's progress-pill text ("Set 1 of 3"), read off its
     data-pill-text attribute rather than the rendered HTML (which splits
@@ -246,6 +269,33 @@ def complete_warmup(
             data={**params, "step_index": step_index},
             follow_redirects=True,
         )
+        page = get_session_page(client, "/session/play", params)
+    return page
+
+
+def workset_step(
+    client, grip="half crimp", edge_mm=20, date="2026-07-04", hand=None, edit=None,
+    session_number=None,
+):
+    """The work-set step's page, advancing past any unticked warmup rungs
+    and past a pending rest first (session play, #146). Mirrors the old
+    pre-#146 `worksets_page()` helper each test file had of its own -- a
+    plain GET to the work-set step regardless of where the derived step
+    would otherwise currently land."""
+    from tests.helpers import grip_type_id as _grip_type_id
+
+    gid = _grip_type_id(client, grip)
+    complete_warmup(client, gid, edge_mm, date=date, hand=hand, session_number=session_number)
+    params = {"grip_type_id": gid, "edge_mm": edge_mm, "date": date}
+    if hand:
+        params["hand"] = hand
+    if edit is not None:
+        params["edit"] = edit
+    if session_number is not None:
+        params["session_number"] = session_number
+    page = get_session_page(client, "/session/play", params)
+    if 'id="rest-step"' in page.text:
+        client.post("/session/rest/end", data=params, follow_redirects=True)
         page = get_session_page(client, "/session/play", params)
     return page
 

@@ -1755,6 +1755,11 @@ code.invite-code {
   margin-top: .5rem;
 }
 
+.rung-tile-plates {
+  font-size: .72rem;
+  margin-top: .2rem;
+}
+
 .rung-unit {
   font-family: var(--font-body);
   font-size: .68rem;
@@ -1853,6 +1858,24 @@ code.invite-code {
 
 .rest-actions .rest-skip-btn,
 .rest-actions .rest-start-btn { flex: 1 1 auto; width: auto; min-height: var(--touch); }
+
+/* ---- undo-after-delete banner (session play, #146 review item 2) ---- */
+
+.undo-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+}
+
+.undo-form { margin: 0; flex: none; }
+
+.undo-form .undo-btn {
+  width: auto;
+  min-height: 2.4rem;
+  padding: .3rem .9rem;
+  font-size: .85rem;
+}
 
 /* ---- summary placeholder (S2b builds the real screen, #147) ---- */
 

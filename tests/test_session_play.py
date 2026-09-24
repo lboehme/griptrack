@@ -22,15 +22,22 @@ from backend.models import (
     WorkSet,
 )
 from tests.helpers import (
+    checked_steps,
     complete_warmup,
+    completed_detail,
+    current_maxes,
+    current_set_field,
     delete_focus_set,
     get_session_page,
     grip_type_id,
     log_max_test,
+    play_step_title,
     register,
     register_second_user,
     restore_focus_set,
     save_focus_set,
+    save_work_set,
+    workset_step,
 )
 
 
@@ -627,3 +634,935 @@ def test_restore_focus_set_rejects_unknown_grip_type():
     date = date_type(2026, 7, 4)
     with pytest.raises(training_log.UnknownGripTypeError):
         training_log.restore_focus_set(session, user, 999999, 20, date, 1, None, {"left": (42.5, 5, 8.0)})
+
+
+# ============================================================
+# Ported from the pre-#146 tests/test_warmup.py and tests/test_worksets.py
+# (see the final report for the full per-test disposition list: ported vs.
+# dropped-with-reason). All go through /session/play; workset_step() and
+# complete_warmup() (tests/helpers.py) stand in for the old direct
+# GET /session/warmup / GET /session/worksets calls, advancing through any
+# unticked rungs and a pending rest first, since session play (#146) now
+# gates the work-set step behind them.
+# ============================================================
+
+
+def rung_weights(page_text):
+    """The current rung's weight per hand (one rung shown at a time, #146)."""
+    result = {}
+    for hnd, weight in re.findall(
+        r'rung-tile[^"]*"\s*data-hand="(\w+)">.*?<div class="rung-tile-weight">([\d.]+)',
+        page_text,
+        re.DOTALL,
+    ):
+        result[hnd] = float(weight)
+    return result
+
+
+def rung_done(client, grip_id, step_index, hand=None, date="2026-07-04"):
+    data = {"grip_type_id": grip_id, "edge_mm": 20, "date": date, "step_index": step_index}
+    if hand:
+        data["hand"] = hand
+    return client.post("/session/rung-done", data=data, follow_redirects=True)
+
+
+# ---------- warmup ramp values (ported from test_warmup.py) ----------
+
+
+def test_ramp_values_step_through_each_rung_rounded_down_to_loadable(client):
+    setup_tested_user(client)
+    gid = grip_type_id(client, "half crimp")
+    expected = [
+        {"left": 21.25, "right": 20.0},
+        {"left": 27.5, "right": 26.0},
+        {"left": 33.75, "right": 31.75},
+        {"left": 38.0, "right": 36.0},
+    ]
+    for i, exp in enumerate(expected):
+        page = play_page(client)
+        assert rung_weights(page.text) == exp
+        rung_done(client, gid, i)
+
+
+def clear_inventory(client):
+    rows = re.findall(r'class="plate-weight">([^<]+)<', client.get("/plates").text)
+    for weight in rows:
+        client.post("/plates", data={"weight": weight, "count": "0"})
+
+
+def test_empty_plate_inventory_suggests_zero_for_every_rung(client):
+    setup_tested_user(client)
+    gid = grip_type_id(client, "half crimp")
+    clear_inventory(client)
+    for i in range(4):
+        page = play_page(client)
+        assert set(rung_weights(page.text).values()) == {0.0}
+        rung_done(client, gid, i)
+
+
+def test_sequential_hand_order_shows_one_rung_tile_at_a_time(client):
+    setup_tested_user(client)
+    client.post("/profile", data={"hand_order_pref": "sequential"})
+    page = play_page(client)
+    assert set(rung_weights(page.text)) == {"left"}
+
+
+def test_checking_a_rung_tick_autosaves_and_advances_once_both_hands_are_done(client):
+    setup_tested_user(client)
+    gid = grip_type_id(client, "half crimp")
+    today = date_type.today().isoformat()
+
+    before = play_page(client, date=today)
+    assert checked_steps(before.text) == set()
+
+    client.post(
+        "/session/check",
+        data={"grip_type_id": gid, "edge_mm": 20, "date": today, "hand": "left", "step_index": 0},
+        follow_redirects=True,
+    )
+    after = play_page(client, date=today)
+    assert checked_steps(after.text) == {("left", 0)}  # still on rung 0
+
+    client.post(
+        "/session/check",
+        data={"grip_type_id": gid, "edge_mm": 20, "date": today, "hand": "right", "step_index": 0},
+        follow_redirects=True,
+    )
+    advanced = play_page(client, date=today)
+    # Both hands ticked for rung 0 -> derivation moves on to rung 1.
+    assert "65%" in advanced.text
+    assert checked_steps(advanced.text) == set()  # rung 1's own (unticked) tile
+
+
+def test_unchecking_a_rung_tick_persists_too(client):
+    setup_tested_user(client)
+    gid = grip_type_id(client, "half crimp")
+
+    client.post(
+        "/session/check",
+        data={"grip_type_id": gid, "edge_mm": 20, "date": "2026-07-04", "hand": "left", "step_index": 0},
+        follow_redirects=True,
+    )
+    assert checked_steps(play_page(client).text) == {("left", 0)}
+
+    # The same action on a checked step unchecks it (accidental tap).
+    client.post(
+        "/session/check",
+        data={"grip_type_id": gid, "edge_mm": 20, "date": "2026-07-04", "hand": "left", "step_index": 0},
+        follow_redirects=True,
+    )
+    assert checked_steps(play_page(client).text) == set()
+
+
+def test_one_untested_hand_still_renders_the_tested_hands_rung(client):
+    register(client)
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "42.5")
+
+    page = play_page(client)
+
+    assert page.status_code == 200
+    grip_id = grip_type_id(client, "half crimp")
+    assert (
+        f'href="/max-tests/guided?grip_type_id={grip_id}&amp;edge_mm=20'
+        f'&amp;date=2026-07-04&amp;hand=right"' in page.text
+    )
+    assert 'class="estimate-form" data-hand="right"' in page.text
+    assert set(rung_weights(page.text)) == {"left"}
+
+
+def test_session_start_page_lists_previous_sessions(client):
+    setup_tested_user(client)
+    gid = grip_type_id(client, "half crimp")
+    rung_done(client, gid, 0)  # starts the session
+
+    page = client.get("/session/new").text
+    assert 'class="history-session" data-date="2026-07-04"' in page
+
+
+def test_session_start_form_defaults_to_the_last_used_combination(client):
+    register(client)
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "42.5")
+    log_max_test(client, "left", "open hand", 10, "2026-07-02", "35")
+
+    page = client.get("/session/new")
+
+    assert page.status_code == 200
+    grip_id = grip_type_id(client, "open hand")
+    assert f'value="{grip_id}" selected' in page.text
+    assert 'name="edge_mm" value="10"' in page.text
+
+
+# ---------- work-set step rendering (ported from test_worksets.py) ----------
+
+
+def test_worksets_step_renders_hand_cards_ladder_and_prefills(client):
+    setup_tested_user(client)
+    page = workset_step(client)
+    assert play_step_title(page.text) == "Work set 1 of 3"
+    assert page.text.count('class="progress-segment') == 4 + 3  # 4 rungs + 3 sets
+    assert 'data-hand="left"' in page.text and 'data-hand="right"' in page.text
+    assert 'id="ladder-data"' in page.text
+    assert current_set_field(page.text, "left", "weight") == "42.5"
+    assert current_set_field(page.text, "right", "weight") == "40.0"
+    assert current_set_field(page.text, "left", "reps") == "5"
+
+
+def test_caption_shows_the_users_own_unit(client):
+    register(client, unit_pref="lbs")
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "90")
+    log_max_test(client, "right", "half crimp", 20, "2026-07-01", "85")
+
+    page = workset_step(client)
+    assert "lbs · plate-loadable" in page.text
+    assert "kg · plate-loadable" not in page.text
+
+
+def test_add_a_set_extends_the_denominator(client):
+    setup_tested_user(client)
+    page = workset_step(client)
+    assert play_step_title(page.text) == "Work set 1 of 3"
+
+    add_link = re.search(r'href="([^"]*sets=4[^"]*)"', page.text).group(1)
+    extended = client.get(add_link.replace("&amp;", "&")).text
+    assert play_step_title(extended) == "Work set 1 of 4"
+
+
+def test_sequential_hand_order_shows_one_card_and_commits_one_hand(client):
+    setup_tested_user(client)
+    client.post("/profile", data={"hand_order_pref": "sequential"})
+
+    page = workset_step(client)
+    assert page.text.count('<div class="hand-card ') == 1
+    assert 'data-hand="left"' in page.text
+    assert 'data-hand="right"' not in page.text
+
+    response = save_focus_set(client, 1, left=("42.5", "5", "8"))
+    assert response.status_code == 200
+
+    page = workset_step(client)
+    assert completed_detail(page.text, 1) == "42.5 kg × 5 @ 8.0"
+
+    right = workset_step(client, hand="right")
+    assert 'data-hand="right"' in right.text
+    assert 'data-hand="left"' not in right.text
+
+
+def test_worksets_step_defaults_to_three_sets_with_protocol_prefills(client):
+    setup_tested_user(client)
+    page = workset_step(client)
+    assert play_step_title(page.text) == "Work set 1 of 3"
+    assert current_set_field(page.text, "left", "weight") == "42.5"
+    assert current_set_field(page.text, "left", "reps") == "5"
+    assert current_set_field(page.text, "right", "weight") == "40.0"
+
+
+# ---------- session-level fields: notes/deload/pain (unchanged endpoints) ----------
+
+
+def test_session_notes_over_the_length_ceiling_are_rejected(client):
+    setup_tested_user(client)
+    save_work_set(client, "left", 1, "40", "5", date="2026-07-04")
+    response = client.post(
+        "/session/update",
+        data={"date": "2026-07-04", "notes": "x" * 2001},
+        headers={"HX-Request": "true"},
+    )
+    assert response.status_code == 422
+
+
+def test_pain_report_note_over_the_length_ceiling_is_rejected(client):
+    setup_tested_user(client)
+    save_work_set(client, "left", 1, "40", "5", date="2026-07-04")
+    response = client.post(
+        "/session/pain-report",
+        data={"date": "2026-07-04", "hand": "left", "severity": "2", "note": "x" * 2001},
+        headers={"HX-Request": "true"},
+    )
+    assert response.status_code == 422
+
+
+def test_pain_report_with_an_invalid_hand_is_rejected(client):
+    setup_tested_user(client)
+    save_work_set(client, "left", 1, "40", "5", date="2026-07-04")
+    response = client.post(
+        "/session/pain-report",
+        data={"date": "2026-07-04", "hand": "left'; DROP TABLE users;--", "severity": "2"},
+        headers={"HX-Request": "true"},
+    )
+    assert response.status_code in (400, 422)
+
+
+def test_session_notes_and_deload_autosave(client):
+    setup_tested_user(client)
+    save_work_set(client, "left", 1, "40", "5", date="2026-07-04")
+    response = client.post(
+        "/session/update",
+        data={"date": "2026-07-04", "notes": "Felt tired today.", "is_deload": "on"},
+        headers={"HX-Request": "true"},
+    )
+    assert response.status_code == 204
+
+    page = workset_step(client, date="2026-07-04")
+    assert "Felt tired today." in page.text
+    assert 'name="is_deload" checked' in page.text or 'checked name="is_deload"' in page.text
+
+
+def test_pain_report_autosaves_and_displays(client):
+    setup_tested_user(client)
+    save_work_set(client, "left", 1, "40", "5", date="2026-07-04")
+    response = client.post(
+        "/session/pain-report",
+        data={"date": "2026-07-04", "hand": "left", "severity": "2", "note": "Tweaked a pulley"},
+        headers={"HX-Request": "true"},
+    )
+    assert response.status_code == 204
+
+    page = workset_step(client, date="2026-07-04")
+    assert "Tweaked a pulley" in page.text
+    assert re.search(r"<td>Left</td>\s*<td>2</td>", page.text)
+
+
+def test_pain_report_save_is_an_upsert_keyed_on_hand(client):
+    setup_tested_user(client)
+    save_work_set(client, "left", 1, "40", "5", date="2026-07-04")
+
+    client.post(
+        "/session/pain-report",
+        data={"date": "2026-07-04", "hand": "left", "severity": "2"},
+        headers={"HX-Request": "true"},
+    )
+    response = client.post(
+        "/session/pain-report",
+        data={"date": "2026-07-04", "hand": "left", "severity": "2", "note": "Tweaked a pulley"},
+        headers={"HX-Request": "true"},
+    )
+    assert response.status_code == 204
+
+    page = workset_step(client, date="2026-07-04")
+    assert page.text.count("Tweaked a pulley") == 1
+    assert page.text.count("<td>Left</td>") == 1
+
+    client.post(
+        "/session/pain-report",
+        data={"date": "2026-07-04", "hand": "right", "severity": "1"},
+        headers={"HX-Request": "true"},
+    )
+    page = workset_step(client, date="2026-07-04")
+    assert page.text.count("<td>Left</td>") == 1
+    assert page.text.count("<td>Right</td>") == 1
+
+
+def test_pain_reports_and_session_meta_are_isolated_per_user(client):
+    setup_tested_user(client)
+    save_work_set(client, "left", 1, "40", "5", date="2026-07-04")
+    client.post(
+        "/session/pain-report",
+        data={"date": "2026-07-04", "hand": "left", "severity": "2", "note": "User A pulley tweak"},
+        headers={"HX-Request": "true"},
+    )
+    client.post(
+        "/session/update",
+        data={"date": "2026-07-04", "notes": "User A notes", "is_deload": "on"},
+        headers={"HX-Request": "true"},
+    )
+
+    register_second_user(client)
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "35")
+    log_max_test(client, "right", "half crimp", 20, "2026-07-01", "35")
+    save_work_set(client, "left", 1, "35", "5", date="2026-07-04")
+    client.post(
+        "/session/pain-report",
+        data={"date": "2026-07-04", "hand": "left", "severity": "3", "note": "User B own tweak"},
+        headers={"HX-Request": "true"},
+    )
+    client.post(
+        "/session/update",
+        data={"date": "2026-07-04", "notes": "User B notes"},
+        headers={"HX-Request": "true"},
+    )
+    b_page = workset_step(client, date="2026-07-04").text
+    assert "User B own tweak" in b_page
+    assert "User A pulley tweak" not in b_page
+    assert "User A notes" not in b_page
+
+    from tests.helpers import login
+
+    login(client, "lifter@example.com", "test-pw-1234")
+    a_page = workset_step(client, date="2026-07-04").text
+    assert "User A pulley tweak" in a_page
+    assert "User A notes" in a_page
+    assert 'name="is_deload" checked' in a_page or 'checked name="is_deload"' in a_page
+    assert "User B own tweak" not in a_page
+    assert "User B notes" not in a_page
+
+
+def test_pain_report_severity_out_of_bounds_is_rejected(client):
+    setup_tested_user(client)
+    save_work_set(client, "left", 1, "40", "5", date="2026-07-04")
+    for severity in ("0", "4", "-1"):
+        response = client.post(
+            "/session/pain-report",
+            data={"date": "2026-07-04", "hand": "left", "severity": severity},
+            headers={"HX-Request": "true"},
+        )
+        assert response.status_code == 422, f"severity {severity} was accepted"
+
+
+# ---------- "How did it feel?" disclosure, restored on the work-set step ----------
+
+
+def test_how_it_felt_disclosure_sits_below_completed_and_holds_notes_deload_pain(client):
+    setup_tested_user(client)
+    save_work_set(client, "left", 1, "40", "5", date="2026-07-04")
+
+    page = workset_step(client, date="2026-07-04").text
+
+    completed_idx = page.index('class="completed-section"')
+    disclosure_idx = page.index('id="how-it-felt"')
+    assert disclosure_idx > completed_idx
+
+    details_open = page.index("<details", disclosure_idx - 20)
+    details_close = page.index("</details>", details_open)
+    disclosure_html = page[details_open:details_close]
+
+    assert "How did it feel?" in disclosure_html
+    assert 'id="session-update-form"' in disclosure_html
+    assert 'name="is_deload"' in disclosure_html
+    assert 'name="notes"' in disclosure_html
+    assert 'id="pain-report-form"' in disclosure_html
+    assert 'name="hand"' in disclosure_html
+    assert 'name="severity"' in disclosure_html
+    assert disclosure_html.count("<details") == 1
+    assert disclosure_html.count("<summary") == 1
+
+
+def test_pain_report_hand_uses_segmented_group(client):
+    setup_tested_user(client)
+    save_work_set(client, "left", 1, "40", "5", date="2026-07-04")
+    page = workset_step(client, date="2026-07-04").text
+    assert 'select name="hand"' not in page
+    assert 'input type="radio" name="hand" value="left"' in page
+    assert 'input type="radio" name="hand" value="right"' in page
+    assert 'input type="radio" name="hand" value="both"' in page
+
+
+def test_switch_hand_link_absent_for_alternating_hand_order(client):
+    setup_tested_user(client)
+    page = workset_step(client)
+    assert "Switch to" not in page.text
+
+
+# NOTE: the old "Switch to Right hand" link (sequential mode) doesn't exist
+# on the play work-set step -- the hand switch now happens via the `hand`
+# query param a player would only reach through the warmup step's own
+# per-hand flow. This is a real, deliberate scope gap: sequential-mode
+# players have no in-page way to switch hands from the work-set step
+# itself. See the report's dropped-tests list.
+
+
+def test_no_new_write_route_is_added_beyond_play_and_its_actions(client):
+    """Pins the /session/* route surface after #146 -- every write still
+    goes through an endpoint that existed before, plus the new play-step
+    actions this issue adds."""
+    from backend.main import create_app
+
+    def all_paths(routes):
+        for route in routes:
+            path = getattr(route, "path", None)
+            if path is not None:
+                yield path
+            nested = getattr(route, "original_router", None)
+            if nested is not None:
+                yield from all_paths(nested.routes)
+
+    app = create_app()
+    session_paths = {path for path in all_paths(app.routes) if path.startswith("/session/")}
+    assert session_paths == {
+        "/session/create",
+        "/session/new",
+        "/session/play",
+        "/session/warmup",
+        "/session/worksets",
+        "/session/workset",
+        "/session/workset/delete",
+        "/session/set",
+        "/session/set/delete",
+        "/session/set/restore",
+        "/session/estimate",
+        "/session/check",
+        "/session/rung-done",
+        "/session/rest/extend",
+        "/session/rest/end",
+        "/session/update",
+        "/session/pain-report",
+    }
+
+
+# ---------- Edit mode (ported from test_worksets.py issue #80 section) ----------
+
+
+def test_edit_param_prefills_the_cards_with_that_sets_saved_values(client):
+    setup_tested_user(client)
+    save_focus_set(client, 1, left=("42.5", "5", "8"), right=("40.0", "5", "7.5"))
+    workset_step(client)  # skip past rest
+    save_focus_set(client, 2, left=("45.0", "5", "9"), right=("41.0", "5", "8"))
+
+    page = workset_step(client, edit=1)
+
+    assert play_step_title(page.text) == "Editing set 1"
+    assert current_set_field(page.text, "left", "weight") == "42.5"
+    assert current_set_field(page.text, "left", "reps") == "5"
+    assert current_set_field(page.text, "left", "rpe") == "8.0"
+    assert current_set_field(page.text, "right", "weight") == "40.0"
+    assert 'name="set_number" value="1" id="set-number-field"' in page.text
+    assert re.search(r'class="set-done-btn">Save</button>', page.text)
+    assert re.search(r'set-cancel-btn" href="[^"]*">Cancel</a>', page.text)
+
+
+def test_saving_an_edited_set_updates_in_place_with_no_duplicate(client):
+    setup_tested_user(client)
+    save_focus_set(client, 1, left=("42.5", "5", "8"), right=("40.0", "5", "7.5"))
+    workset_step(client)
+    save_focus_set(client, 2, left=("45.0", "5", "9"), right=("41.0", "5", "8"))
+
+    edit_page = workset_step(client, edit=1)
+    assert play_step_title(edit_page.text) == "Editing set 1"
+
+    response = save_focus_set(client, 1, left=("40.0", "4", "9"))
+    assert response.status_code == 200
+
+    history = client.get("/history").text
+    assert history.count('data-hand="left" data-set="1"') == 1
+    assert history.count('data-hand="right" data-set="1"') == 1
+    assert history.count('data-hand="left" data-set="2"') == 1
+
+    detail = completed_detail(workset_step(client).text, 1)
+    assert "L 40.0 × 4 @ 9" in detail
+
+
+def test_saving_an_edited_set_returns_to_the_prior_in_progress_set(client):
+    setup_tested_user(client)
+    save_focus_set(client, 1, left=("42.5", "5", "8"), right=("40.0", "5", "7.5"))
+    workset_step(client)
+    save_focus_set(client, 2, left=("45.0", "5", "9"), right=("41.0", "5", "8"))
+    assert play_step_title(workset_step(client).text) == "Work set 3 of 3"
+
+    workset_step(client, edit=1)
+    save_focus_set(client, 1, left=("40.0", "4", "9"))
+
+    assert play_step_title(workset_step(client).text) == "Work set 3 of 3"
+
+
+def test_cancel_writes_nothing_and_returns_to_the_prior_set(client):
+    setup_tested_user(client)
+    save_focus_set(client, 1, left=("42.5", "5", "8"), right=("40.0", "5", "7.5"))
+    workset_step(client)
+    save_focus_set(client, 2, left=("45.0", "5", "9"), right=("41.0", "5", "8"))
+
+    edit_page = workset_step(client, edit=1)
+    assert play_step_title(edit_page.text) == "Editing set 1"
+
+    # Cancel (no-JS) is just a plain link back -- no write happens.
+    normal_page = workset_step(client)
+    assert play_step_title(normal_page.text) == "Work set 3 of 3"
+    assert "L 42.5 × 5 @ 8" in completed_detail(normal_page.text, 1)
+
+
+def test_completed_row_href_degrades_to_the_edit_param_no_js(client):
+    setup_tested_user(client)
+    save_focus_set(client, 1, left=("42.5", "5", "8"), right=("40.0", "5", "7.5"))
+    workset_step(client)
+    save_focus_set(client, 2, left=("45.0", "5", "9"), right=("41.0", "5", "8"))
+
+    page = workset_step(client)
+    match = re.search(r'<a class="completed-row[^"]*" data-set="1" href="([^"]*)"', page.text)
+    assert match, "no href found on the set-1 completed row"
+    href = match.group(1).replace("&amp;", "&")
+    assert "edit=1" in href
+
+    followed = client.get(href, follow_redirects=True).text
+    assert play_step_title(followed) == "Editing set 1"
+    assert current_set_field(followed, "left", "weight") == "42.5"
+
+
+def test_sequential_hand_order_edit_scopes_to_one_hand(client):
+    setup_tested_user(client)
+    client.post("/profile", data={"hand_order_pref": "sequential"})
+    save_focus_set(client, 1, left=("42.5", "5", "8"))
+
+    page = workset_step(client, edit=1)
+
+    assert play_step_title(page.text) == "Editing set 1"
+    assert page.text.count('<div class="hand-card ') == 1
+    assert 'data-hand="left"' in page.text
+    assert 'data-hand="right"' not in page.text
+    assert current_set_field(page.text, "left", "weight") == "42.5"
+
+
+def test_editing_a_set_that_was_never_saved_falls_back_to_the_normal_view(client):
+    setup_tested_user(client)
+    save_focus_set(client, 1, left=("42.5", "5", "8"), right=("40.0", "5", "7.5"))
+
+    page = workset_step(client, edit=99)
+    assert play_step_title(page.text) == "Work set 2 of 3"
+
+
+def test_edit_mode_still_works_once_every_default_set_is_logged(client):
+    setup_tested_user(client)
+    save_focus_set(client, 1, left=("42.5", "5", "8"), right=("40.0", "5", "7.5"))
+    workset_step(client)
+    save_focus_set(client, 2, left=("43.0", "5", "8"), right=("40.5", "5", "8"))
+    workset_step(client)
+    save_focus_set(client, 3, left=("44.0", "5", "8"), right=("41.0", "5", "8"))
+
+    all_done_page = workset_step(client)
+    # All 3 default sets logged and the final commit skips rest, so this
+    # actually lands on the summary step -- not "focus-all-done" (that
+    # fallback only fires when editing an out-of-range set on a page that
+    # still has a form). Confirm the summary instead.
+    assert step_kind(all_done_page.text) == "summary"
+
+    page = workset_step(client, edit=2)
+    assert play_step_title(page.text) == "Editing set 2"
+    assert current_set_field(page.text, "left", "weight") == "43.0"
+
+    response = save_focus_set(client, 2, left=("46.0", "4", "9"))
+    assert response.status_code == 200
+    detail = completed_detail(workset_step(client, edit=2).text, 2)
+    assert "L 46.0 × 4 @ 9" in detail
+
+
+# ---------- RPE stepper defaults and carry-down (ported, issue #114) ----------
+
+
+def test_rpe_stepper_defaults_to_greyed_7_and_blank_raw_input(client):
+    setup_tested_user(client)
+    page = workset_step(client)
+    assert current_set_field(page.text, "left", "rpe") == ""
+    assert current_set_field(page.text, "right", "rpe") == ""
+    assert re.search(
+        r'<span class="mini-value rpe-inactive" data-role="rpe-display" data-hand="left">\s*7\s*</span>',
+        page.text,
+    )
+
+
+def test_rpe_carries_down_from_prior_committed_set(client):
+    setup_tested_user(client)
+    save_focus_set(client, 1, left=("42.5", "5", "8"), right=("40.0", "5", "7.5"))
+
+    page = workset_step(client)
+    assert play_step_title(page.text) == "Work set 2 of 3"
+    assert current_set_field(page.text, "left", "rpe") == "8.0"
+    assert current_set_field(page.text, "right", "rpe") == "7.5"
+
+
+def test_rpe_stays_unset_when_prior_set_had_no_rpe(client):
+    setup_tested_user(client)
+    save_focus_set(client, 1, left=("42.5", "5", None), right=("40.0", "5", None))
+
+    page = workset_step(client)
+    assert play_step_title(page.text) == "Work set 2 of 3"
+    assert current_set_field(page.text, "left", "rpe") == ""
+
+
+# ---------- delete/restore renumbering (ported, issue #115) ----------
+
+
+def test_delete_set_renumbers_remaining_sets_without_gaps_ported(client):
+    setup_tested_user(client)
+    save_focus_set(client, 1, left=("40.0", "5", "7"), right=("38.0", "5", "7"))
+    workset_step(client)
+    save_focus_set(client, 2, left=("42.5", "5", "8"), right=("40.0", "5", "8"))
+    workset_step(client)
+    save_focus_set(client, 3, left=("45.0", "5", "9"), right=("42.0", "5", "9"))
+
+    response = delete_focus_set(client, 2)
+    assert response.status_code == 200
+
+    page = workset_step(client)
+    assert completed_detail(page.text, 1) == "L 40.0 × 5 @ 7.0 · R 38.0 × 5 @ 7.0 kg"
+    assert completed_detail(page.text, 2) == "L 45.0 × 5 @ 9.0 · R 42.0 × 5 @ 9.0 kg"
+    assert completed_detail(page.text, 3) is None
+
+    history = client.get("/history").text
+    assert history.count('data-hand="left" data-set="1"') == 1
+    assert history.count('data-hand="left" data-set="2"') == 1
+    assert history.count('data-hand="left" data-set="3"') == 0
+
+
+def test_restore_set_inserts_and_shifts_higher_sets_back_up_ported(client):
+    setup_tested_user(client)
+    save_focus_set(client, 1, left=("40.0", "5", "7"), right=("38.0", "5", "7"))
+    workset_step(client)
+    save_focus_set(client, 2, left=("42.5", "5", "8"), right=("40.0", "5", "8"))
+    workset_step(client)
+    save_focus_set(client, 3, left=("45.0", "5", "9"), right=("42.0", "5", "9"))
+
+    delete_focus_set(client, 2)
+    response = restore_focus_set(client, 2, left=("42.5", "5", "8"), right=("40.0", "5", "8"))
+    assert response.status_code == 200
+
+    # All 3 default sets are filled again -- the step is now "summary", so
+    # view the completed list through edit= (see
+    # test_edit_mode_still_works_once_every_default_set_is_logged).
+    page = workset_step(client, edit=1)
+    assert completed_detail(page.text, 1) == "L 40.0 × 5 @ 7.0 · R 38.0 × 5 @ 7.0 kg"
+    assert completed_detail(page.text, 2) == "L 42.5 × 5 @ 8.0 · R 40.0 × 5 @ 8.0 kg"
+    assert completed_detail(page.text, 3) == "L 45.0 × 5 @ 9.0 · R 42.0 × 5 @ 9.0 kg"
+
+
+def test_delete_only_remaining_set_leaves_combo_empty_cleanly(client):
+    setup_tested_user(client)
+    save_focus_set(client, 1, left=("40.0", "5", "7"), right=("38.0", "5", "7"))
+
+    response = delete_focus_set(client, 1)
+    assert response.status_code == 200
+
+    page = workset_step(client)
+    assert completed_detail(page.text, 1) is None
+    assert play_step_title(page.text) == "Work set 1 of 3"
+    assert current_set_field(page.text, "left", "weight") == "42.5"
+
+
+def test_sequential_hand_delete_and_restore(client):
+    setup_tested_user(client)
+    client.post("/profile", data={"hand_order_pref": "sequential"})
+
+    save_focus_set(client, 1, left=("40.0", "5", "7"))
+    workset_step(client)
+    save_focus_set(client, 2, left=("42.5", "5", "8"))
+    workset_step(client)
+    save_focus_set(client, 3, left=("45.0", "5", "9"))
+
+    delete_focus_set(client, 2)
+
+    page = workset_step(client)
+    assert completed_detail(page.text, 1) == "40.0 kg × 5 @ 7.0"
+    assert completed_detail(page.text, 2) == "45.0 kg × 5 @ 9.0"
+    assert completed_detail(page.text, 3) is None
+
+    restore_focus_set(client, 2, left=("42.5", "5", "8"))
+    # All 3 default sets are filled again -- step is "summary"; view via edit=.
+    restored_page = workset_step(client, edit=1)
+    assert completed_detail(restored_page.text, 1) == "40.0 kg × 5 @ 7.0"
+    assert completed_detail(restored_page.text, 2) == "42.5 kg × 5 @ 8.0"
+    assert completed_detail(restored_page.text, 3) == "45.0 kg × 5 @ 9.0"
+
+
+# ---------- current_max / /session/workset legacy endpoint (ported) ----------
+
+
+def test_current_max_rises_with_a_heavier_work_set_since_the_last_test(client):
+    setup_tested_user(client)
+    save_work_set(client, "left", 1, "45", "3", date="2026-07-04")
+
+    combo = ("left", "half crimp", 20)
+    assert current_maxes(client)[combo] == 45.0
+    assert current_maxes(client)[("right", "half crimp", 20)] == 40.0
+
+    log_max_test(client, "left", "half crimp", 20, "2026-07-05", "41")
+    assert current_maxes(client)[combo] == 41.0
+
+
+def test_session_start_defaults_prefer_the_last_trained_combination(client):
+    setup_tested_user(client)
+    log_max_test(client, "left", "open hand", 10, "2026-07-02", "35")
+    save_work_set(client, "left", 1, "42.5", "5", date="2026-07-03")
+
+    page = client.get("/session/new")
+    grip_id = grip_type_id(client, "half crimp")
+    assert f'value="{grip_id}" selected' in page.text
+    assert 'name="edge_mm" value="20"' in page.text
+
+
+def test_per_hand_workset_endpoint_still_upserts_in_place(client):
+    setup_tested_user(client)
+    save_work_set(client, "left", 1, "42.5", "5", rpe="8.5")
+
+    page = workset_step(client)
+    assert current_set_field(page.text, "left", "weight") == "42.5"
+    assert current_set_field(page.text, "left", "reps") == "5"
+    assert current_set_field(page.text, "left", "rpe") == "8.5"
+
+    save_work_set(client, "left", 1, "40.0", "4", rpe="9.0")
+    page = workset_step(client)
+    assert current_set_field(page.text, "left", "weight") == "40.0"
+
+
+def test_unknown_grip_type_is_rejected_and_writes_nothing_on_workset(client):
+    setup_tested_user(client)
+    response = client.post(
+        "/session/workset",
+        data={
+            "grip_type_id": 999999, "edge_mm": 20, "date": "2026-07-04",
+            "hand": "left", "set_number": 1, "weight": "42.5", "reps": 5,
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 404
+    assert completed_detail(workset_step(client).text, 1) is None
+
+
+def test_an_accidentally_added_set_can_be_deleted_via_legacy_endpoint(client):
+    setup_tested_user(client)
+    save_work_set(client, "left", 3, "42.5", "5")
+    save_work_set(client, "left", 4, "30", "2")
+
+    response = client.post(
+        "/session/workset/delete",
+        data={
+            "grip_type_id": grip_type_id(client, "half crimp"), "edge_mm": 20,
+            "date": "2026-07-04", "hand": "left", "set_number": 4,
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+
+    history = client.get("/history").text
+    assert 'data-set="3"' in history
+    assert 'data-set="4"' not in history
+
+
+# ---------- undo after delete (review item 2) ----------
+
+
+def test_undo_after_delete_restores_the_set_via_303_no_js(client):
+    setup_tested_user(client)
+    gid = grip_type_id(client, "half crimp")
+    complete_warmup(client, gid, 20)
+    save_focus_set(client, 1, left=("40.0", "5", "7"), right=("38.0", "5", "7"))
+
+    response = delete_focus_set(client, 1)
+    assert response.status_code == 200
+    assert "undo-banner" in response.text
+    assert 'action="/session/set/restore"' in response.text
+    assert 'name="left_weight" value="40.0"' in response.text
+    assert 'name="right_weight" value="38.0"' in response.text
+
+    # Following the undo form's own values restores the set.
+    restored = restore_focus_set(client, 1, left=("40.0", "5", "7.0"), right=("38.0", "5", "7.0"))
+    assert restored.status_code == 200
+    detail = completed_detail(workset_step(client).text, 1)
+    assert "L 40.0 × 5 @ 7" in detail
+
+
+def test_undo_banner_appears_on_the_htmx_fragment_too(client):
+    setup_tested_user(client)
+    gid = grip_type_id(client, "half crimp")
+    complete_warmup(client, gid, 20)
+    save_focus_set(client, 1, left=("40.0", "5", "7"), right=("38.0", "5", "7"))
+
+    response = client.post(
+        "/session/set/delete",
+        data={"grip_type_id": gid, "edge_mm": 20, "date": "2026-07-04", "set_number": 1},
+        headers={"HX-Request": "true"},
+    )
+    assert response.status_code == 200
+    assert "<html" not in response.text
+    assert "undo-banner" in response.text
+
+
+def test_undo_banner_does_not_appear_on_a_later_unrelated_visit(client):
+    setup_tested_user(client)
+    gid = grip_type_id(client, "half crimp")
+    complete_warmup(client, gid, 20)
+    save_focus_set(client, 1, left=("40.0", "5", "7"), right=("38.0", "5", "7"))
+    delete_focus_set(client, 1)
+
+    # A plain revisit with no undo_* query params never shows the banner --
+    # it's a one-shot affordance carried in that one redirect only.
+    page = workset_step(client)
+    assert "undo-banner" not in page.text
+
+
+# ---------- plate breakdown (review item 3) ----------
+
+
+def test_plate_breakdown_renders_on_the_warmup_rung(client):
+    setup_tested_user(client)
+    page = play_page(client)
+    assert "Pin + 20 + 1.25" in page.text  # 21.25 kg, left hand's first rung
+
+
+def test_plate_breakdown_renders_on_the_work_set_card(client):
+    setup_tested_user(client)
+    page = workset_step(client)
+    assert 'data-role="plate-breakdown" data-hand="left"' in page.text
+    assert "Pin + 20 + 10 + 10" in page.text  # 40.0 kg default seed, kg starter inventory
+
+
+def test_plate_breakdown_shows_nothing_for_an_off_ladder_weight(client):
+    setup_tested_user(client)
+    gid = grip_type_id(client, "half crimp")
+    complete_warmup(client, gid, 20)
+    save_focus_set(client, 1, left=("42.55", "5", None))  # off-ladder value
+    page = workset_step(client, edit=1)
+    left_card = page.text[page.text.index('data-hand="left"'):]
+    left_card = left_card[: left_card.index("reps-rpe-grid")]
+    assert "plate-breakdown" not in left_card
+
+
+# ---------- a few more direct ports (batch 2) ----------
+
+
+def test_rpe_blank_persists_as_null(client):
+    setup_tested_user(client)
+    save_focus_set(client, 1, left=("42.5", "5", None), right=("40.0", "5", None))
+    detail = completed_detail(workset_step(client).text, 1)
+    assert "@" not in detail
+
+
+def test_reposting_the_same_session_hand_set_updates_in_place(client):
+    setup_tested_user(client)
+    save_focus_set(client, 1, left=("42.5", "5", "8"))
+    save_focus_set(client, 1, left=("40.0", "4", "9"))
+
+    page = workset_step(client)
+    assert current_set_field(page.text, "left", "weight") == "40.0"
+    assert current_set_field(page.text, "left", "reps") == "4"
+    assert current_set_field(page.text, "left", "rpe") == "9.0"
+
+    history = client.get("/history").text
+    assert history.count('data-set="1"') == 1
+
+
+def test_user_b_cannot_write_into_user_as_session_via_set_commit(client):
+    setup_tested_user(client)
+    save_focus_set(client, 1, left=("42.5", "5", "8"), right=("40.0", "5", "7"))
+
+    register_second_user(client)
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "30")
+    log_max_test(client, "right", "half crimp", 20, "2026-07-01", "30")
+    save_focus_set(client, 1, left=("30.0", "5", "6"))
+
+    from tests.helpers import login
+
+    login(client, "lifter@example.com", "test-pw-1234")
+    detail = completed_detail(workset_step(client).text, 1)
+    assert "L 42.5" in detail
+    assert "L 30.0" not in detail
+
+
+def test_rest_countdown_renders_configured_default_rest_seconds_on_workset(client):
+    register(client, "timeruser@example.com", "test-pw-1234")
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "40")
+    log_max_test(client, "right", "half crimp", 20, "2026-07-01", "40")
+    client.post(
+        "/profile/protocol",
+        data={"base_work_set_reps": "5", "default_rest_seconds": "150"},
+        follow_redirects=True,
+    )
+
+    page = workset_step(client)
+    assert 'data-rest-seconds="150"' in page.text
+
+
+def test_up_next_row_renders_singular_and_range_labels(client):
+    setup_tested_user(client)
+    page = workset_step(client, date="2026-07-04")
+    assert "Sets 2–3 up next · same load carries down" in page.text
+
+    save_focus_set(client, 1, left=("42.5", "5", "8"), right=("40.0", "5", "7.5"))
+    page = workset_step(client, date="2026-07-04")
+    assert "Set 3 up next · same load carries down" in page.text
+    assert "Sets 3–3" not in page.text

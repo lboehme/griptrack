@@ -38,6 +38,23 @@ def combo_redirect(
     return RedirectResponse(url, status_code=303)
 
 
+def _undo_query_suffix(undo: dict | None) -> str:
+    """The undo-after-delete affordance (issue #146 review item 2) has no
+    server-side state of its own -- the deleted set's values ride along in
+    the redirect's query string so the no-JS 303 -> GET /session/play round
+    trip can still render the "Set N deleted [Undo]" banner once, from
+    query params alone."""
+    if not undo:
+        return ""
+    parts = [f"undo_set={undo['set_number']}"]
+    for hand, vals in undo["hands"].items():
+        parts.append(f"undo_{hand}_weight={vals['weight']}")
+        parts.append(f"undo_{hand}_reps={vals['reps']}")
+        if vals["rpe"] is not None:
+            parts.append(f"undo_{hand}_rpe={vals['rpe']}")
+    return "&" + "&".join(parts)
+
+
 def play_redirect(
     grip_type_id: int,
     edge_mm: int,
@@ -46,6 +63,7 @@ def play_redirect(
     session_number: int | None = None,
     sets: int | None = None,
     edit: int | None = None,
+    undo: dict | None = None,
 ) -> RedirectResponse:
     """Back to /session/play for the same combo, preserving every query
     parameter a step might have been rendered with (issue #146: the no-JS
@@ -60,6 +78,7 @@ def play_redirect(
         url += f"&sets={sets}"
     if edit is not None:
         url += f"&edit={edit}"
+    url += _undo_query_suffix(undo)
     return RedirectResponse(url, status_code=303)
 
 
@@ -74,6 +93,7 @@ def play_response(
     session_number: int | None,
     sets: int | None = None,
     edit: int | None = None,
+    undo: dict | None = None,
 ):
     """Every play action answers the same way (ADR-0014): with HX-Request,
     the next step's fragment; without it, a 303 back to /session/play so a
@@ -84,9 +104,11 @@ def play_response(
             sets, edit,
         )
         return templates.TemplateResponse(
-            request, "_play_fragment.html", {"user": user, **view}
+            request, "_play_fragment.html", {"user": user, "undo": undo, **view}
         )
-    return play_redirect(grip_type_id, edge_mm, date, hand, session_number, sets, edit)
+    return play_redirect(
+        grip_type_id, edge_mm, date, hand, session_number, sets, edit, undo
+    )
 
 
 def require_grip_type(session: Session, grip_type_id: int) -> None:
@@ -275,12 +297,15 @@ def delete_focus_set(
 ):
     require_grip_type(session, grip_type_id)
     training_session = training_log.find_session(session, user, date, session_number)
+    deleted: dict = {}
     if training_session is not None:
-        training_log.delete_set_and_renumber(
+        deleted = training_log.delete_set_and_renumber(
             session, training_session, grip_type_id, edge_mm, set_number
         )
+    undo = {"set_number": set_number, "hands": deleted} if deleted else None
     return play_response(
-        request, user, session, grip_type_id, edge_mm, date, hand, session_number
+        request, user, session, grip_type_id, edge_mm, date, hand, session_number,
+        undo=undo,
     )
 
 
@@ -591,22 +616,48 @@ def play_page(
     session_number: int | None = Query(default=None, ge=1, le=MAX_SESSION_NUMBER),
     sets: int | None = Query(default=None, ge=1, le=MAX_SET_NUMBER),
     edit: int | None = Query(default=None, ge=1, le=MAX_SET_NUMBER),
+    undo_set: int | None = Query(default=None, ge=1, le=MAX_SET_NUMBER),
+    undo_left_weight: float | None = Query(default=None, gt=0, le=MAX_WEIGHT),
+    undo_left_reps: int | None = Query(default=None, ge=1, le=MAX_REPS),
+    undo_left_rpe: float | None = Query(default=None, ge=1, le=10),
+    undo_right_weight: float | None = Query(default=None, gt=0, le=MAX_WEIGHT),
+    undo_right_reps: int | None = Query(default=None, ge=1, le=MAX_REPS),
+    undo_right_rpe: float | None = Query(default=None, ge=1, le=10),
     user: User = Depends(auth.current_user),
     session: Session = Depends(get_session),
 ):
     """The whole training session runs on this one page (#146,
     docs/adr/0014): the server derives which step (warmup rung, work set,
     rest, summary) to render purely from persisted state, so a reload — or
-    Android killing the app — always lands back on the right step."""
+    Android killing the app — always lands back on the right step.
+
+    The undo_* params (review item 2) are the no-JS carrier for the
+    undo-after-delete banner: /session/set/delete's plain-form 303 redirect
+    encodes the just-deleted set's values here so this GET can render the
+    "Set N deleted [Undo]" affordance once, from the URL alone, with no
+    server-side undo state to clean up afterwards."""
     require_grip_type(session, grip_type_id)
     if needs_creation_confirmation(session, user, date, session_number):
         return confirm_creation_response(
             request, user, "play", grip_type_id, edge_mm, date, hand,
             session_number,
         )
+    undo: dict | None = None
+    if undo_set is not None:
+        undo_hands: dict[str, dict] = {}
+        if undo_left_weight is not None and undo_left_reps is not None:
+            undo_hands["left"] = {
+                "weight": undo_left_weight, "reps": undo_left_reps, "rpe": undo_left_rpe,
+            }
+        if undo_right_weight is not None and undo_right_reps is not None:
+            undo_hands["right"] = {
+                "weight": undo_right_weight, "reps": undo_right_reps, "rpe": undo_right_rpe,
+            }
+        if undo_hands:
+            undo = {"set_number": undo_set, "hands": undo_hands}
     view = training_log.play_view(
         session, user, grip_type_id, edge_mm, date, hand, session_number, sets, edit
     )
     return templates.TemplateResponse(
-        request, "play.html", {"user": user, "hide_chrome": True, **view}
+        request, "play.html", {"user": user, "hide_chrome": True, "undo": undo, **view}
     )

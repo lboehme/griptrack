@@ -57,6 +57,10 @@
       </form>
     </div>
     <div class="rung-tile-weight">{{ w.plans[hnd][idx]["weight"] }}<span class="rung-unit">{{ user.unit_pref }}</span></div>
+    {% set breakdown = plate_breakdown(w.plans[hnd][idx]["weight"], inventory) %}
+    {% if breakdown %}
+    <div class="rung-tile-plates muted">Pin{% for p in breakdown %} + {{ p|num_trim }}{% endfor %}</div>
+    {% endif %}
   </div>
   {% endfor %}
 </div>
