@@ -65,11 +65,25 @@ def css_classes(css: str) -> set[str]:
     return classes
 
 
+# Attributes that name ids/targets, not classes: stripped before grepping so
+# an element's id="rest-sound-btn" can't keep a dead `.rest-sound-btn` rule
+# alive. Likewise `#id` selectors and getElementById("...") in JS.
+ID_ATTRS = re.compile(r'\b(?:id|for|href|action|hx-target|hx-select|aria-controls|aria-labelledby|form)="[^"]*"')
+ID_SELECTORS = re.compile(r"#[A-Za-z_][\w-]*")
+GET_BY_ID = re.compile(r"getElementById\(\s*[\"'][^\"']*[\"']\s*\)")
+
+
 def corpus() -> str:
-    files = list(TEMPLATES.rglob("*.html"))
-    files += [p for p in (BACKEND / "static").glob("*.js") if p.name not in VENDORED]
-    files += list(BACKEND.glob("*.py")) + list((BACKEND / "routers").glob("*.py"))
-    return "\n".join(p.read_text(encoding="utf-8") for p in files)
+    texts = []
+    for p in TEMPLATES.rglob("*.html"):
+        texts.append(ID_SELECTORS.sub("", ID_ATTRS.sub("", p.read_text(encoding="utf-8"))))
+    for p in (BACKEND / "static").glob("*.js"):
+        if p.name not in VENDORED:
+            text = GET_BY_ID.sub("", p.read_text(encoding="utf-8"))
+            texts.append(ID_SELECTORS.sub("", text))
+    for p in list(BACKEND.glob("*.py")) + list((BACKEND / "routers").glob("*.py")):
+        texts.append(p.read_text(encoding="utf-8"))
+    return "\n".join(texts)
 
 
 def class_is_used(name: str, text: str) -> bool:
