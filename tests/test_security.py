@@ -1116,6 +1116,7 @@ def test_estimate_and_check_refuse_an_unknown_grip_so_export_stays_importable(cl
 
 
 
+@pytest.mark.usefixtures("session_date_is_today")
 def test_rest_extend_is_capped_server_side(client):
     """PR #154 review MUST-FIX 7: +30 s taps can't push rest_ends_at more
     than MAX_REST_SECONDS + MAX_REST_EXTENSION_SECONDS ahead (the native

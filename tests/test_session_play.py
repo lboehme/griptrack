@@ -101,6 +101,7 @@ def test_completing_every_rung_reaches_the_first_work_set(client):
     assert "hand-card" in page.text
 
 
+@pytest.mark.usefixtures("session_date_is_today")
 def test_a_non_final_set_commit_moves_to_the_rest_step(client):
     setup_tested_user(client)
     gid = grip_type_id(client, "half crimp")
@@ -126,6 +127,7 @@ def test_skip_rest_moves_straight_to_the_next_set(client):
     assert rest_ends_at(response.text) is None
 
 
+@pytest.mark.usefixtures("session_date_is_today")
 def test_plus_30_seconds_moves_rest_ends_at_by_exactly_30(client):
     setup_tested_user(client)
     gid = grip_type_id(client, "half crimp")
@@ -210,6 +212,7 @@ def test_resume_after_reload_lands_on_the_same_rung(client):
     assert "65%" in page.text
 
 
+@pytest.mark.usefixtures("session_date_is_today")
 def test_resume_after_reload_during_rest_keeps_the_same_set_number_and_lands_on_rest(client):
     setup_tested_user(client)
     gid = grip_type_id(client, "half crimp")
@@ -254,6 +257,7 @@ def test_rung_done_answers_303_without_htmx_and_a_fragment_with_it(client):
     assert "<html" not in htmx.text
 
 
+@pytest.mark.usefixtures("session_date_is_today")
 def test_set_commit_answers_303_without_htmx_and_a_fragment_with_it(client):
     setup_tested_user(client)
     gid = grip_type_id(client, "half crimp")
@@ -334,6 +338,7 @@ def test_legacy_worksets_redirects_to_play_preserving_sets_and_edit(client):
 # ---------- isolation and bounds ----------
 
 
+@pytest.mark.usefixtures("session_date_is_today")
 def test_user_b_cannot_reach_or_mutate_user_as_session_through_play(client):
     setup_tested_user(client)
     gid = grip_type_id(client, "half crimp")
@@ -437,6 +442,7 @@ def test_rest_step_shows_pull_once_the_stored_end_time_has_passed(client):
 # ---------- POST /session/set (Set commit, docs/adr/0007) -- unchanged behavior ----------
 
 
+@pytest.mark.usefixtures("session_date_is_today")
 def test_set_commit_writes_both_hands_in_one_atomic_request(client):
     setup_tested_user(client)
     gid = grip_type_id(client, "half crimp")
@@ -598,6 +604,7 @@ def test_commit_focus_set_rejects_unknown_grip_type():
         training_log.commit_focus_set(session, user, 999999, 20, date, 1, None, {"left": (42.5, 5, 8.0)})
 
 
+@pytest.mark.usefixtures("session_date_is_today")
 def test_commit_focus_set_starts_rest_only_on_a_non_final_normal_commit():
     session, user, gid = make_test_db()
     date = date_type(2026, 7, 4)

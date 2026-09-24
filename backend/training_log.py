@@ -670,7 +670,9 @@ def commit_focus_set(
         total_sets = planned_set_count(
             session, user, grip_type_id, edge_mm, date, session_number, sets_hint
         )
-        if set_number < total_sets:
+        # Retro-logging a past session (PR #154 review) never starts a real
+        # rest -- and so never schedules a native alarm.
+        if set_number < total_sets and not is_past_date(date):
             protocol = get_protocol(session, user)
             training_session.rest_ends_at = utcnow() + timedelta(
                 seconds=protocol.default_rest_seconds
@@ -1172,7 +1174,13 @@ def is_past_date(date: date_type, today: date_type | None = None) -> bool:
     creation). The client-local "today" used for the on-page warning
     banner is a separate, JS-side comparison; this one only needs to be
     right to the day, not the client's timezone."""
-    return date < (today if today is not None else date_type.today())
+    return date < (today if today is not None else server_today())
+
+
+def server_today() -> date_type:
+    """The server's own date -- the one clock is_past_date reads (a seam
+    tests pin when a fixed session date must count as "today")."""
+    return date_type.today()
 
 
 def toggle_warmup_check(

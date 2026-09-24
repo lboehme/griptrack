@@ -12,6 +12,8 @@ the rest step only reads the stored flag."""
 import re
 from datetime import datetime
 
+import pytest
+
 from tests.helpers import (
     complete_warmup,
     grip_type_id,
@@ -22,6 +24,10 @@ from tests.helpers import (
     save_focus_set,
 )
 from tests.test_session_play import play_page, rest_ends_at, step_kind
+
+# Every test here reaches the rest step on the fixed 2026-07-04 session date,
+# which must count as "today" (a past date never starts a rest).
+pytestmark = pytest.mark.usefixtures("session_date_is_today")
 
 
 def setup_resting_user(client):

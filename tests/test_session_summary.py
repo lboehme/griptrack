@@ -488,6 +488,7 @@ def test_import_rejects_a_session_rpe_outside_1_to_10(client, bad_rpe):
     assert export_sessions(client) == []
 
 
+@pytest.mark.usefixtures("session_date_is_today")
 def test_import_does_not_restore_a_pending_rest(client):
     """rest_ends_at is transient play state: a restored session must never
     reopen on a stale rest step (PR #154 review)."""
@@ -578,3 +579,4 @@ def test_session_load_mixes_naive_and_aware_datetimes_as_utc():
     assert analytics.session_load(ts) == pytest.approx(80.0)
     ts2 = _ts(rpe=4, started=START, finished=(START + timedelta(minutes=20)).replace(tzinfo=None))
     assert analytics.session_load(ts2) == pytest.approx(80.0)
+

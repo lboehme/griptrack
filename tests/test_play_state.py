@@ -10,6 +10,9 @@ derivation never depends on a URL hint surviving every round trip.
 
 import re
 from datetime import date as date_type
+from datetime import datetime, timedelta, timezone
+
+import pytest
 
 from sqlmodel import select
 
@@ -94,6 +97,7 @@ def test_a_get_with_a_sets_hint_never_writes_state(client):
     assert sessions(client) == []
 
 
+@pytest.mark.usefixtures("session_date_is_today")
 def test_todays_extra_set_survives_every_set_commit_and_a_bare_reload(client):
     setup_tested_user(client)
     params = combo(client)
@@ -112,6 +116,7 @@ def test_todays_extra_set_survives_every_set_commit_and_a_bare_reload(client):
     assert sessions(client)[0].planned_sets == 4
 
 
+@pytest.mark.usefixtures("session_date_is_today")
 def test_the_rest_step_and_native_bridge_title_name_the_persisted_count(client):
     setup_tested_user(client)
     params = combo(client)
@@ -142,6 +147,7 @@ def test_a_set_commit_carrying_the_initialiser_persists_it(client):
     assert sessions(client)[0].planned_sets == 5
 
 
+@pytest.mark.usefixtures("session_date_is_today")
 def test_add_a_set_is_a_post_that_persists_and_remove_takes_it_back(client):
     setup_tested_user(client)
     params = combo(client)
@@ -251,6 +257,7 @@ def test_a_bare_get_never_stamps_the_play_combo(client):
 # ---------- nice-to-have: a pending rest belongs to the play combo ----------
 
 
+@pytest.mark.usefixtures("session_date_is_today")
 def test_a_pending_rest_does_not_leak_onto_another_combo(client):
     setup_tested_user(client)
     log_max_test(client, "left", "open hand", 10, "2026-07-01", "30")
@@ -281,3 +288,30 @@ def test_export_import_round_trips_the_play_state(client):
     restored = sessions(client)[-1]
     assert restored.planned_sets == 5
     assert (restored.play_grip_type_id, restored.play_edge_mm) == (int(params["grip_type_id"]), 20)
+
+
+# ---------- nice-to-have: retro-logging never starts a real rest ----------
+
+
+def test_a_set_committed_on_a_past_date_starts_no_rest(client):
+    setup_tested_user(client)
+    params = combo(client, date="2026-07-04")
+    complete_warmup(client, params["grip_type_id"], 20, date="2026-07-04")
+
+    response = save_focus_set(client, 1, date="2026-07-04", left=(30, 5, 7), right=(28, 5, 7))
+
+    assert step_kind(response.text) == "workset"
+    assert play_step_title(response.text) == "Work set 2 of 3"
+    assert 'id="rest-step"' not in response.text
+    assert sessions(client)[0].rest_ends_at is None
+
+
+def test_a_set_committed_today_still_starts_the_rest(client):
+    setup_tested_user(client)
+    params = combo(client, date=TODAY)
+    complete_warmup(client, params["grip_type_id"], 20, date=TODAY)
+
+    response = save_focus_set(client, 1, date=TODAY, left=(30, 5, 7), right=(28, 5, 7))
+
+    assert step_kind(response.text) == "rest"
+
