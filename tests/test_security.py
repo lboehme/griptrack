@@ -959,3 +959,41 @@ def test_log_sheet_and_today_actions_require_login(client):
     assert client.post(
         "/log/tweak", data={"date": "2026-07-04", "hand": "left", "severity": 1}
     ).status_code == 401
+
+
+def test_progress_query_params_are_bounded_and_validated(client):
+    from backend.limits import MAX_EDGE_MM, MAX_ROW_ID
+    register(client)
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "40")
+    grip_id = grip_type_id(client, "half crimp")
+
+    def status(path, **params):
+        return client.get(path, params=params, follow_redirects=False).status_code
+
+    assert status("/progress", grip_type_id=grip_id, edge_mm=20, range="all") == 200
+    assert status("/progress", range="1y") == 422
+    assert status("/progress", range="x" * 10_000) == 422
+    assert status("/progress", grip_type_id=grip_id, edge_mm=MAX_EDGE_MM + 1) == 422
+    assert status("/progress", grip_type_id=grip_id, edge_mm=0) == 422
+    assert status("/progress", grip_type_id=0, edge_mm=20) == 422
+    assert status("/progress", grip_type_id=MAX_ROW_ID + 1, edge_mm=20) == 422
+    assert status("/progress", grip_type_id=10**40, edge_mm=20) == 422
+    assert status("/progress", grip_type_id="1 OR 1=1", edge_mm=20) == 422
+    assert status("/progress", grip_type_id=99999, edge_mm=20) == 404
+    assert status("/progress/timeline", show="sessions") == 422
+    assert status("/progress/nope") == 422
+
+
+def test_progress_pages_require_login(client):
+    for path in (
+        "/progress",
+        "/progress/volume",
+        "/progress/balance",
+        "/progress/grade",
+        "/progress/maxes",
+        "/progress/timeline",
+        "/dashboard",
+        "/history",
+        "/max-tests",
+    ):
+        assert client.get(path, follow_redirects=False).status_code == 401, path
