@@ -581,6 +581,37 @@ def clear_rest(training_session: TrainingSession, session: Session) -> None:
         session.commit()
 
 
+def set_rest_sound(session: Session, user: User, on: bool) -> None:
+    """The per-user Rest sound setting (#148, docs/adr/0015): whether the
+    native rest-over alert also plays a sound. Never touches a pending
+    rest."""
+    user.rest_sound = on
+    session.add(user)
+    session.commit()
+
+
+def rest_bridge_payload(
+    user: User, ws: dict, rest_ends_at: datetime | None
+) -> dict | None:
+    """What the rest step hands `window.GripTrackNative.startRest(...)`
+    (#148, docs/adr/0015): the rest end as epoch milliseconds plus the
+    lock-screen notification's lines -- the countdown title, the next set's
+    loads (hands in play order, native unit), and the rest-over line. None
+    when no rest is pending."""
+    if rest_ends_at is None:
+        return None
+    next_set = ws["current_set_number"]
+    weights = [ws["seed"][h]["weight"] for h in ws["hands"]]
+    loads = " / ".join("–" if w is None else f"{w:g}" for w in weights)
+    return {
+        "ends_at_ms": int(rest_ends_at.timestamp() * 1000),
+        "title": f"Rest · set {next_set} of {ws['total_sets']} next",
+        "detail": f"{loads} {user.unit_pref}",
+        "ready": f"Pull. Set {next_set} is ready",
+        "sound": bool(user.rest_sound),
+    }
+
+
 @dataclass
 class PlayStep:
     """The one thing /session/play's step derivation hands the router: what
@@ -682,6 +713,7 @@ def play_view(
         "step": step,
         "rest_ends_at": rest_ends_at,
         "rest_remaining_seconds": remaining_seconds,
+        "rest_bridge": rest_bridge_payload(user, ws, rest_ends_at),
         "grip": w["grip"],
         "edge_mm": edge_mm,
         "date": date,

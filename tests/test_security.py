@@ -788,3 +788,44 @@ def test_anonymous_requests_do_not_emit_null_pk_warning(client):
 
     null_pk = [w for w in caught if "NULL primary key" in str(w.message)]
     assert not null_pk, f"unexpected NULL-PK warning(s): {[str(w.message) for w in null_pk]}"
+
+
+def test_rest_sound_toggle_is_bounded_and_rejects_cross_origin_posts(client):
+    """S3 native rest bridge (#148): the Rest sound toggle takes user text,
+    so it's length-capped (422 past the cap) and only "on"/"off" are
+    accepted (400 otherwise); a cross-origin POST is refused like every
+    other state-changing route (CSRF Origin check)."""
+    from backend.limits import MAX_TOGGLE_LENGTH
+
+    register(client)
+    grip_id = grip_type_id(client, "half crimp")
+    common = {"grip_type_id": grip_id, "edge_mm": 20, "date": "2026-07-04"}
+
+    too_long = client.post(
+        "/session/rest/sound",
+        data={**common, "rest_sound": "o" * (MAX_TOGGLE_LENGTH + 1)},
+        follow_redirects=False,
+    )
+    assert too_long.status_code == 422
+
+    bogus = client.post(
+        "/session/rest/sound",
+        data={**common, "rest_sound": "loud"},
+        follow_redirects=False,
+    )
+    assert bogus.status_code == 400
+
+    cross_origin = client.post(
+        "/session/rest/sound",
+        data={**common, "rest_sound": "on"},
+        headers={"Origin": "https://evil.example"},
+        follow_redirects=False,
+    )
+    assert cross_origin.status_code == 403
+
+    unknown_grip = client.post(
+        "/session/rest/sound",
+        data={**common, "grip_type_id": 999999, "rest_sound": "on"},
+        follow_redirects=False,
+    )
+    assert unknown_grip.status_code == 404

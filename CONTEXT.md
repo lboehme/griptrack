@@ -63,6 +63,25 @@ silently skipped.
 _Avoid_: rest timer state, countdown seconds (nothing is stored as a
 plain remaining-seconds counter)
 
+**Rest bridge**:
+The small feature-detected native interface the Android shell injects as
+`window.GripTrackNative` (`docs/adr/0015-native-rest-bridge.md`, #148):
+keep the screen on during **Session play**, a lock-screen countdown
+notification to `rest_ends_at`, and an exact alarm that vibrates at the rest
+end ("Pull. Set N is ready"). The web ring stays the source of truth for
+what the app shows; the alarm is the source of truth for the alert. Without
+the bridge (a plain browser) the page falls back to the Screen Wake Lock API
+and has no alert.
+_Avoid_: rest service, native timer (there's no foreground service and no
+second countdown to keep in sync)
+
+**Rest sound**:
+A per-user boolean (`User.rest_sound`, off by default): when on, the Rest
+bridge's rest-over alert also plays the default notification sound on top
+of the vibration. Off by default because shared gyms are quiet places.
+Toggled on the rest step for now; moves to Settings with S6.
+_Avoid_: alarm sound, rest beep
+
 **WorkSet**:
 One set of the tracked work-set portion of a TrainingSession (hand,
 grip_type, edge_mm, weight_kg, reps, set_number, rpe). Warmup/ramp sets are

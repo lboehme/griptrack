@@ -38,6 +38,10 @@ class User(SQLModel, table=True):
     # hand's full flow, then the other (see HandOrderPreference in CONTEXT.md).
     hand_order_pref: str = "alternating"
     session_version: int = Field(default=1, sa_column_kwargs={"server_default": "1"})
+    # Rest sound (#148, docs/adr/0015): whether the native rest-over alert
+    # also plays the default notification sound. Off by default -- vibration
+    # alone, since shared gyms are quiet places.
+    rest_sound: bool = Field(default=False, sa_column_kwargs={"server_default": "0"})
     created_at: datetime = Field(default_factory=utcnow)
 
 
