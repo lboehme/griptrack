@@ -264,6 +264,13 @@ def worksets_view(
         }
     else:
         seed = resume_seed
+    # The hand cards the form renders. Edit mode edits a saved set, so only
+    # the hands that logged it (PR #154 review MUST-FIX 5: after a
+    # sequential -> alternating switch, the other hand may have no row --
+    # and no max -- for that set, and must not render an empty card).
+    card_hands = (
+        [h for h in hands if (h, edit_set) in saved] if editing else list(hands)
+    )
     saved_json: dict[int, dict[str, dict]] = {}
     for (h, n), ws in saved.items():
         saved_json.setdefault(n, {})[h] = {
@@ -307,6 +314,7 @@ def worksets_view(
         "seed": seed,
         "ladder": plates.loadable_ladder(inventory),
         "editing": editing,
+        "card_hands": card_hands,
         "display_set_number": display_set_number,
         "resume_seed": resume_seed,
         "saved_json": saved_json,

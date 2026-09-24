@@ -44,7 +44,8 @@
   <input type="hidden" name="set_number" value="{{ ws.display_set_number }}" id="set-number-field">
   <input type="hidden" name="editing" value="{{ 'true' if ws.editing else 'false' }}">
 
-  {% for hnd in ws.hands %}
+  {% for hnd in ws.card_hands %}
+  {% set seed_weight = ws.seed[hnd].weight %}
   <div class="hand-card glass strong" data-hand="{{ hnd }}">
     <div class="hand-card-header">
       <span class="hand-badge hand-badge-{{ hnd }}">{{ hnd[0]|upper }}</span>
@@ -56,15 +57,15 @@
     <div class="weight-stepper">
       <button type="button" class="stepper-btn stepper-minus" data-field="weight" data-hand="{{ hnd }}" aria-label="Decrease {{ hnd }} weight">−</button>
       <div class="weight-display">
-        <span class="weight-value" data-role="weight-display" data-hand="{{ hnd }}">{{ ws.seed[hnd].weight }}</span>
+        <span class="weight-value" data-role="weight-display" data-hand="{{ hnd }}">{{ seed_weight if seed_weight is not none else "–" }}</span>
         <span class="weight-caption">{{ user.unit_pref }} · plate-loadable</span>
       </div>
       <button type="button" class="stepper-btn stepper-plus" data-field="weight" data-hand="{{ hnd }}" aria-label="Increase {{ hnd }} weight">＋</button>
       <label class="raw-input-label">{{ user.unit_pref }}
-        <input type="number" name="{{ hnd }}_weight" value="{{ ws.seed[hnd].weight }}" step="0.25" min="0.25" required class="raw-input" data-role="weight-input" data-hand="{{ hnd }}">
+        <input type="number" name="{{ hnd }}_weight" value="{{ seed_weight if seed_weight is not none else '' }}" step="0.25" min="0.25" required class="raw-input" data-role="weight-input" data-hand="{{ hnd }}">
       </label>
     </div>
-    {% set breakdown = plate_breakdown(ws.seed[hnd].weight, inventory) %}
+    {% set breakdown = plate_breakdown(seed_weight, inventory) %}
     {% if breakdown %}
     <div class="rung-tile-plates muted" data-role="plate-breakdown" data-hand="{{ hnd }}">Pin{% for p in breakdown %} + {{ p|num_trim }}{% endfor %}</div>
     {% endif %}

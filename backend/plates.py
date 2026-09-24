@@ -68,14 +68,17 @@ def loadable_ladder(inventory: list[PlateInventoryItem]) -> list[float]:
 
 
 def plate_breakdown(
-    weight: float, inventory: list[PlateInventoryItem]
+    weight: float | None, inventory: list[PlateInventoryItem]
 ) -> list[float] | None:
     """One concrete combination of plates (descending) that makes exactly
     `weight` on the single pin, for the "Pin + 20 + 2.5" style readout on
     the warmup rung and work-set cards (session play, #146). None when
     `weight` isn't itself on the loadable ladder (off-ladder history, a
     raw free-entry value, or simply 0) -- callers show nothing in that case,
-    never a wrong or partial breakdown."""
+    never a wrong or partial breakdown. A missing weight (an untested hand
+    with no estimate) has no breakdown either."""
+    if weight is None:
+        return None
     target = int(round(weight * 100))
     if target <= 0:
         return None

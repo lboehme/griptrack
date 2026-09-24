@@ -90,4 +90,5 @@ templates.env.globals["display_name"] = display_name
 templates.env.filters["display_name"] = display_name
 templates.env.filters["grade_color"] = grade_color
 templates.env.globals["plate_breakdown"] = plate_breakdown
-templates.env.filters["num_trim"] = lambda v: f"{v:g}"
+# A missing number renders as nothing, never "None".
+templates.env.filters["num_trim"] = lambda v: "" if v is None else f"{v:g}"

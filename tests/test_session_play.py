@@ -1626,3 +1626,25 @@ def test_up_next_row_renders_singular_and_range_labels(client):
     page = workset_step(client, date="2026-07-04")
     assert "Set 3 up next · same load carries down" in page.text
     assert "Sets 3–3" not in page.text
+
+
+# ---------- Edit mode with an untested hand (PR #154 review MUST-FIX 5) ----------
+
+
+def test_edit_mode_with_an_untested_in_play_hand_renders_without_a_none_weight(client):
+    register(client)
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "40")
+    client.post("/profile", data={"hand_order_pref": "sequential"})
+    workset_step(client, hand="left")
+    save_focus_set(client, 1, left=(35, 5, 7))
+    client.post("/profile", data={"hand_order_pref": "alternating"})
+
+    page = play_page(client, edit=1)
+
+    assert page.status_code == 200
+    assert 'value="None"' not in page.text
+    assert ">None<" not in page.text
+    # Editing set 1 shows the saved left hand's values.
+    assert current_set_field(page.text, "left", "weight") == "35.0"
+    # The untested right hand logged nothing in set 1: no empty card.
+    assert current_set_field(page.text, "right", "weight") is None
