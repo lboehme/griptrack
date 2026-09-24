@@ -1,0 +1,96 @@
+{# The ＋ Log sheet (#149, V7 bottom sheet): solid, three tabs, htmx-driven.
+   Opened into base.html's #log-sheet-slot without a history entry; the
+   same markup renders server-side for `/?log=<tab>` (the no-JS path, where
+   Close is a plain link back to Today). #}
+<a class="sheet-scrim" href="/" data-sheet-close tabindex="-1" aria-hidden="true"></a>
+<section class="log-sheet" role="dialog" aria-modal="true" aria-label="Log" data-tab="{{ sheet.tab }}">
+  <div class="sheet-top">
+    <span class="sheet-handle" aria-hidden="true"></span>
+    <a class="sheet-close" href="/" data-sheet-close aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    </a>
+  </div>
+  <nav class="sheet-tabs tab-bar" role="tablist" aria-label="What to log">
+    {% for key, label in [("climb", "Climb"), ("bodyweight", "Bodyweight"), ("tweak", "Tweak")] %}
+    <a class="tab-item sheet-tab{% if sheet.tab == key %} active{% endif %}" role="tab" aria-selected="{{ "true" if sheet.tab == key else "false" }}"
+       href="/?log={{ key }}" hx-get="/log/sheet?tab={{ key }}" hx-target="#log-sheet-slot" hx-swap="innerHTML">{{ label }}</a>
+    {% endfor %}
+  </nav>
+  <p class="sheet-error" id="sheet-error" role="alert" hidden></p>
+
+  {% if sheet.tab == "climb" %}
+  <form class="sheet-form sheet-climb" method="post" action="/log/climb"
+        hx-post="/log/climb" hx-target="#log-sheet-slot" hx-swap="innerHTML">
+    <input type="hidden" name="today" value="{{ sheet.today }}" class="local-date-default">
+    <p class="overline">Grade</p>
+    <div class="grade-chips" role="radiogroup" aria-label="Grade">
+      {% for g in sheet.primary_grades %}
+      <label class="chip grade-chip"><input type="radio" name="grade" value="{{ g }}" class="chip-radio" required><span class="chip-face"><span class="grade-dot" style="--dot: {{ g|grade_color or "var(--mu)" }}" aria-hidden="true"></span>{{ g }}</span></label>
+      {% endfor %}
+    </div>
+    <div class="grade-chips-more" role="radiogroup" aria-label="More grades">
+      {% for g in sheet.more_grades %}
+      <label class="chip grade-chip"><input type="radio" name="grade" value="{{ g }}" class="chip-radio"><span class="chip-face"><span class="grade-dot" style="--dot: {{ g|grade_color or "var(--mu)" }}" aria-hidden="true"></span>{{ g }}</span></label>
+      {% endfor %}
+      <label class="chip grade-chip grade-chip-other"><input type="radio" name="grade" value="{{ sheet.other_grade }}" class="chip-radio"><span class="chip-face">Other…</span></label>
+    </div>
+    <label class="grade-other-field">Grade
+      <input type="text" name="grade_other" maxlength="32" placeholder="e.g. V5 or 6B+" autocomplete="off">
+    </label>
+
+    <p class="overline">Style</p>
+    <div class="chip-row" role="radiogroup" aria-label="Style">
+      {% for value, label in sheet.styles %}
+      <label class="chip"><input type="radio" name="style" value="{{ value }}" class="chip-radio"{% if value == sheet.default_style %} checked{% endif %}><span class="chip-face">{{ label }}</span></label>
+      {% endfor %}
+    </div>
+
+    <p class="overline">When</p>
+    <div class="chip-row" role="radiogroup" aria-label="When">
+      <label class="chip"><input type="radio" name="when" value="today" class="chip-radio" checked><span class="chip-face">Today</span></label>
+      <label class="chip"><input type="radio" name="when" value="yesterday" class="chip-radio"><span class="chip-face">Yesterday</span></label>
+      <label class="chip"><input type="radio" name="when" value="date" class="chip-radio"><span class="chip-face">Pick date</span></label>
+    </div>
+    <label class="pick-date-field">Date <input type="date" name="pick_date"></label>
+
+    <button type="submit" class="sheet-submit" data-label="Log climb">Log climb</button>
+  </form>
+
+  {% elif sheet.tab == "bodyweight" %}
+  <form class="sheet-form sheet-bodyweight" method="post" action="/log/bodyweight"
+        hx-post="/log/bodyweight" hx-target="#log-sheet-slot" hx-swap="innerHTML">
+    <input type="hidden" name="date" value="{{ sheet.today }}" class="local-date-default">
+    <p class="overline">Bodyweight</p>
+    <div class="bw-stepper">
+      <button type="button" class="stepper-btn stepper-minus" data-step="-0.1" data-target="bw-weight" data-min="0.1" data-max="1000" aria-label="Decrease bodyweight">−</button>
+      <label class="bw-value">
+        <input id="bw-weight" type="number" name="weight" value="{{ "%.1f"|format(sheet.bodyweight) }}" step="0.1" min="0.1" max="1000" inputmode="decimal" required aria-label="Bodyweight in {{ sheet.unit }}">
+        <span class="bw-unit">{{ sheet.unit }}</span>
+      </label>
+      <button type="button" class="stepper-btn stepper-plus" data-step="0.1" data-target="bw-weight" data-min="0.1" data-max="1000" aria-label="Increase bodyweight">+</button>
+    </div>
+    <p class="sheet-hint">{% if sheet.last_bodyweight %}Last logged {{ sheet.last_bodyweight.date|human_date }}.{% else %}Hold + or − to move faster.{% endif %}</p>
+    <button type="submit" class="sheet-submit">Save bodyweight</button>
+  </form>
+
+  {% else %}
+  <form class="sheet-form sheet-tweak" method="post" action="/log/tweak"
+        hx-post="/log/tweak" hx-target="#log-sheet-slot" hx-swap="innerHTML">
+    <input type="hidden" name="date" value="{{ sheet.today }}" class="local-date-default">
+    <p class="overline">Hand</p>
+    <div class="chip-row" role="radiogroup" aria-label="Hand">
+      {% for hand in sheet.hands %}
+      <label class="chip"><input type="radio" name="hand" value="{{ hand }}" class="chip-radio"{% if loop.first %} checked{% endif %}><span class="chip-face">{{ hand|display_name }}</span></label>
+      {% endfor %}
+    </div>
+    <p class="overline">How bad?</p>
+    <div class="severity-chips" role="radiogroup" aria-label="Severity">
+      {% for severity, label, description in sheet.severities %}
+      <label class="chip severity-chip"><input type="radio" name="severity" value="{{ severity }}" class="chip-radio" required><span class="chip-face"><strong>{{ label }}</strong><small>{{ description }}</small></span></label>
+      {% endfor %}
+    </div>
+    <label>Note <input type="text" name="note" maxlength="2000" placeholder="optional" autocomplete="off"></label>
+    <button type="submit" class="sheet-submit">Save tweak</button>
+  </form>
+  {% endif %}
+</section>

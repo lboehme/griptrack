@@ -21,10 +21,13 @@ def test_main_pages_have_no_horizontal_overflow_at_360px(live_server, authentica
 
     routes = [
         "/",
+        "/?change=1",
+        "/?log=climb",
+        "/?log=bodyweight",
+        "/?log=tweak",
         "/max-tests",
-        "/session/new",
-        "/climbs",
         "/dashboard",
+        "/history",
         "/profile",
         "/plates",
     ]
@@ -155,3 +158,45 @@ def test_profile_progression_select_has_full_width_at_412px(live_server, authent
     assert select_box is not None
     # In a full-row layout, select spans almost the whole card width (> 250px on 412px viewport)
     assert select_box["width"] > 250, f"Progression select width {select_box['width']} is too narrow, likely half-row"
+
+
+def _no_horizontal_overflow(page, where):
+    scroll_width = page.evaluate("() => document.documentElement.scrollWidth")
+    inner_width = page.evaluate("() => window.innerWidth")
+    assert scroll_width <= inner_width, (
+        f"Horizontal overflow on {where}: scrollWidth {scroll_width} > innerWidth {inner_width}"
+    )
+
+
+def test_today_and_log_sheet_fit_360px(live_server, authenticated_page):
+    """Today (#149) with a real plan, and each ＋ Log sheet tab opened via
+    htmx, stay inside a 360 px viewport: no horizontal page scroll, the
+    sheet and its grade chips inside the screen, Start above the tab bar."""
+    page = authenticated_page
+    page.set_viewport_size({"width": 360, "height": 740})
+    start_session_play(page, live_server)
+    page.goto(f"{live_server}/")
+    expect(page.locator(".today-plan")).to_be_visible()
+    _no_horizontal_overflow(page, "Today")
+
+    start = page.get_by_role("button", name="Start session")
+    tabbar = page.locator(".tabbar").bounding_box()
+    start_box = start.bounding_box()
+    assert start_box is not None and tabbar is not None
+    assert start_box["y"] + start_box["height"] <= tabbar["y"] + 1, "Start is hidden behind the tab bar"
+
+    page.locator(".tabbar-log").click()
+    sheet = page.locator(".log-sheet")
+    expect(sheet).to_be_visible()
+    for tab in ("Climb", "Bodyweight", "Tweak"):
+        page.locator(".sheet-tab", has_text=tab).click()
+        expect(page.locator(f".sheet-{tab.lower()}")).to_be_visible()
+        _no_horizontal_overflow(page, f"sheet {tab}")
+        box = sheet.bounding_box()
+        assert box is not None
+        assert box["x"] >= 0 and box["x"] + box["width"] <= 360 + 1
+        if tab == "Climb":
+            for chip in page.locator(".grade-chips .grade-chip").all():
+                chip_box = chip.bounding_box()
+                assert chip_box is not None
+                assert chip_box["x"] + chip_box["width"] <= 360 + 1

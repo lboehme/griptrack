@@ -770,12 +770,14 @@ def test_one_untested_hand_still_renders_the_tested_hands_rung(client):
     assert set(rung_weights(page.text)) == {"left"}
 
 
-def test_session_start_page_lists_previous_sessions(client):
+def test_started_session_is_listed_in_history(client):
+    # The session-start page's "Previous sessions" card went with
+    # /session/new (#149); the list itself lives on /history.
     setup_tested_user(client)
     gid = grip_type_id(client, "half crimp")
     rung_done(client, gid, 0)  # starts the session
 
-    page = client.get("/session/new").text
+    page = client.get("/history").text
     assert 'class="history-session" data-date="2026-07-04"' in page
 
 
@@ -784,7 +786,7 @@ def test_session_start_form_defaults_to_the_last_used_combination(client):
     log_max_test(client, "left", "half crimp", 20, "2026-07-01", "42.5")
     log_max_test(client, "left", "open hand", 10, "2026-07-02", "35")
 
-    page = client.get("/session/new")
+    page = client.get("/today/change")
 
     assert page.status_code == 200
     grip_id = grip_type_id(client, "open hand")
@@ -1420,7 +1422,7 @@ def test_session_start_defaults_prefer_the_last_trained_combination(client):
     log_max_test(client, "left", "open hand", 10, "2026-07-02", "35")
     save_work_set(client, "left", 1, "42.5", "5", date="2026-07-03")
 
-    page = client.get("/session/new")
+    page = client.get("/today/change")
     grip_id = grip_type_id(client, "half crimp")
     assert f'value="{grip_id}" selected' in page.text
     assert 'name="edge_mm" value="20"' in page.text

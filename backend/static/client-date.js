@@ -19,19 +19,28 @@
 
   window.GripTrackClientDate = { localISODate: localISODate };
 
-  document.addEventListener("DOMContentLoaded", function () {
+  function apply(root) {
     var today = localISODate();
 
-    document.querySelectorAll("input[type=date].local-date-default").forEach(
-      function (input) {
-        input.value = today;
-      }
-    );
+    // Visible date inputs and hidden ones (Today's Start form, the ＋ Log
+    // sheet) alike.
+    root.querySelectorAll("input.local-date-default").forEach(function (input) {
+      input.value = today;
+    });
 
-    document.querySelectorAll("[data-session-date]").forEach(function (el) {
+    root.querySelectorAll("[data-session-date]").forEach(function (el) {
       if (el.dataset.sessionDate < today) {
         el.hidden = false;
       }
     });
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    apply(document);
+  });
+  // htmx-swapped fragments (the ＋ Log sheet, Today re-rendering in place,
+  // #149) need the same correction as a fresh page load.
+  document.addEventListener("htmx:afterSettle", function () {
+    apply(document);
   });
 })();

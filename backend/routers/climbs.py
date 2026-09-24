@@ -1,43 +1,22 @@
 from datetime import date as date_type
 
-from fastapi import APIRouter, Depends, Form, Query, Request
+from fastapi import APIRouter, Depends, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlmodel import Session
 
 from backend import auth, climbing
 from backend.db import get_session
 from backend.limits import MAX_GRADE_LENGTH, MAX_NOTES_LENGTH
-from backend.models import CLIMB_STYLES, User
-from backend.templating import templates
+from backend.models import User
 
 router = APIRouter()
 
-GRADE_NOT_RECOGNIZED_MESSAGE = (
-    "Climb logged, but the grade wasn't recognized — this climb won't "
-    "appear in the strength/grade correlation."
-)
-
 
 @router.get("/climbs")
-def climbs_page(
-    request: Request,
-    grade_warning: bool = Query(default=False),
-    user: User = Depends(auth.current_user),
-    session: Session = Depends(get_session),
-):
-    return templates.TemplateResponse(
-        request,
-        "climbs.html",
-        {
-            "user": user,
-            "climbs": climbing.climbs_newest_first(session, user),
-            "styles": CLIMB_STYLES,
-            "today": date_type.today().isoformat(),
-            # The flag rides across the POST-redirect-GET; the message text
-            # is a server-side constant, never echoed from the query string.
-            "grade_warning": GRADE_NOT_RECOGNIZED_MESSAGE if grade_warning else None,
-        },
-    )
+def climbs_page(user: User = Depends(auth.current_user)):
+    """The climb form moved into the ＋ Log sheet (#149); the climb list
+    lives on /history."""
+    return RedirectResponse("/?log=climb", status_code=303)
 
 
 @router.post("/climbs")
@@ -65,6 +44,6 @@ def log_climb(
         # Loud feedback per issue #55, without breaking POST-redirect-GET
         # (a refresh must not re-POST a duplicate climb): redirect with a
         # flag that the GET handler turns into the banner.
-        return RedirectResponse("/climbs?grade_warning=1", status_code=303)
-    return RedirectResponse("/climbs", status_code=303)
+        return RedirectResponse("/?saved=climb&grade_warning=1", status_code=303)
+    return RedirectResponse("/?saved=climb", status_code=303)
 

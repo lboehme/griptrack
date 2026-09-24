@@ -47,6 +47,7 @@ module = [
     "backend.routers.max_tests",
     "backend.routers.profile",
     "backend.routers.history",
+    "backend.today",
     "backend.training_log",
 ]
 disable_error_code = ["attr-defined", "union-attr", "call-overload"]

@@ -25,7 +25,7 @@ def test_cross_origin_posts_are_rejected(client):
     assert response.status_code == 403
     # The climb must not have been created (the page's grade placeholder
     # also contains "V5", so check the logged-climb data attribute).
-    assert 'data-grade="V5"' not in client.get("/climbs").text
+    assert 'data-grade="V5"' not in client.get("/history").text
 
 
 def test_same_origin_posts_pass(client):
@@ -265,7 +265,7 @@ def test_oversized_climb_text_inputs_are_rejected(client):
     assert novel_notes.status_code == 422
 
     # Nothing was saved.
-    assert 'data-grade=' not in client.get("/climbs").text
+    assert 'data-grade=' not in client.get("/history").text
 
 
 def test_session_number_is_bounded(client):
@@ -380,14 +380,14 @@ def test_import_discards_a_spoofed_file_supplied_user_id(client):
     assert response.status_code == 303
 
     # Landed under the importing user (friend) ...
-    assert "founders climb" in client.get("/climbs").text
+    assert "founders climb" in client.get("/history").text
 
     # ... and founder's own data was neither duplicated nor overwritten.
     client.post("/logout")
     from tests.helpers import login
 
     login(client, "founder@example.com", "test-pw-1234")
-    founder_climbs = client.get("/climbs").text
+    founder_climbs = client.get("/history").text
     assert founder_climbs.count("founders climb") == 1
 
 
@@ -859,3 +859,103 @@ def test_session_rpe_is_bounded_and_numeric(client):
         follow_redirects=False,
     )
     assert ok.status_code == 303
+
+
+# ---------- Today + ＋ Log sheet (#149) ----------
+
+
+def test_log_sheet_inputs_are_bounded(client):
+    from backend.limits import MAX_GRADE_LENGTH, MAX_NOTES_LENGTH, MAX_WEIGHT
+    register(client)
+    base = {"style": "flash", "when": "today", "today": "2026-07-04"}
+
+    too_long_grade = client.post("/log/climb", data={**base, "grade": "V" * (MAX_GRADE_LENGTH + 1)})
+    assert too_long_grade.status_code == 422
+    too_long_other = client.post(
+        "/log/climb",
+        data={**base, "grade": "__other__", "grade_other": "V" * (MAX_GRADE_LENGTH + 1)},
+    )
+    assert too_long_other.status_code == 422
+    too_long_notes = client.post(
+        "/log/climb", data={**base, "grade": "7A", "notes": "x" * (MAX_NOTES_LENGTH + 1)}
+    )
+    assert too_long_notes.status_code == 422
+    too_long_when = client.post("/log/climb", data={**base, "grade": "7A", "when": "t" * 100})
+    assert too_long_when.status_code == 422
+
+    heavy = client.post("/log/bodyweight", data={"date": "2026-07-04", "weight": MAX_WEIGHT + 1})
+    assert heavy.status_code == 422
+    negative = client.post("/log/bodyweight", data={"date": "2026-07-04", "weight": -5})
+    assert negative.status_code == 422
+
+    long_note = client.post(
+        "/log/tweak",
+        data={"date": "2026-07-04", "hand": "left", "severity": 1, "note": "x" * (MAX_NOTES_LENGTH + 1)},
+    )
+    assert long_note.status_code == 422
+    long_hand = client.post(
+        "/log/tweak", data={"date": "2026-07-04", "hand": "l" * 100, "severity": 1}
+    )
+    assert long_hand.status_code == 422
+    big_severity = client.post(
+        "/log/tweak", data={"date": "2026-07-04", "hand": "left", "severity": 10**9}
+    )
+    assert big_severity.status_code == 422
+
+    # Nothing was saved.
+    assert 'data-grade=' not in client.get("/history").text
+
+
+def test_today_query_and_form_numbers_are_bounded(client):
+    from backend.limits import MAX_EDGE_MM
+    register(client)
+    log_max_test(client, "left", "half crimp", 20, "2026-07-01", "40")
+    grip_id = grip_type_id(client, "half crimp")
+
+    assert client.get("/", params={"grip_type_id": grip_id, "edge_mm": MAX_EDGE_MM + 1}).status_code == 422
+    assert client.get("/", params={"grip_type_id": grip_id, "edge_mm": 0}).status_code == 422
+    assert client.get("/today/change", params={"grip_type_id": grip_id, "edge_mm": MAX_EDGE_MM + 1}).status_code == 422
+    assert client.get("/", params={"log": "x" * 100}).status_code == 422
+    assert client.get("/", params={"saved": "x" * 100}).status_code == 422
+    assert client.get("/log/sheet", params={"tab": "x" * 100}).status_code == 422
+    lighter = client.post(
+        "/today/lighter",
+        data={"date": "2026-07-04", "on": "1", "grip_type_id": grip_id, "edge_mm": MAX_EDGE_MM + 1},
+    )
+    assert lighter.status_code == 422
+
+
+def test_saved_toast_never_echoes_the_query_string(client):
+    register(client)
+
+    response = client.get("/", params={"saved": "<b>x</b>"})
+    page = response.text
+
+    assert response.status_code == 200
+    assert "<b>x</b>" not in page
+    assert 'class="toast"' not in page
+
+
+def test_cross_origin_log_sheet_posts_are_rejected(client):
+    register(client)
+    evil = {"Origin": "https://evil.example"}
+
+    assert client.post(
+        "/log/climb",
+        data={"grade": "7A", "style": "flash", "when": "today", "today": "2026-07-04"},
+        headers=evil,
+    ).status_code == 403
+    assert client.post("/log/bodyweight", data={"date": "2026-07-04", "weight": 70}, headers=evil).status_code == 403
+    assert client.post(
+        "/log/tweak", data={"date": "2026-07-04", "hand": "left", "severity": 1}, headers=evil
+    ).status_code == 403
+    assert client.post("/today/lighter", data={"date": "2026-07-04", "on": "1"}, headers=evil).status_code == 403
+    assert 'data-grade=' not in client.get("/history").text
+
+
+def test_log_sheet_and_today_actions_require_login(client):
+    assert client.get("/log/sheet").status_code == 401
+    assert client.post("/today/lighter", data={"date": "2026-07-04", "on": "1"}).status_code == 401
+    assert client.post(
+        "/log/tweak", data={"date": "2026-07-04", "hand": "left", "severity": 1}
+    ).status_code == 401

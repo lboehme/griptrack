@@ -78,7 +78,29 @@
     return down < 1 ? 1 : down;
   }
 
+  // A fixed-increment stepper outside the work-set form (the ＋ Log
+  // sheet's bodyweight, #149): data-step is the signed increment,
+  // data-target the <input> id, data-min/data-max the clamps. Same
+  // hold-to-repeat as the set steppers below.
+  function doFixedStep(btn) {
+    var input = document.getElementById(btn.dataset.target);
+    if (!input) return;
+    var step = parseFloat(btn.dataset.step);
+    var min = parseFloat(btn.dataset.min);
+    var max = parseFloat(btn.dataset.max);
+    var value = parseFloat(input.value);
+    if (isNaN(value)) value = isNaN(min) ? 0 : min;
+    var next = Math.round((value + step) * 10) / 10;
+    if (!isNaN(min) && next < min) next = min;
+    if (!isNaN(max) && next > max) next = max;
+    input.value = next.toFixed(1);
+  }
+
   function doStep(btn) {
+    if (btn.dataset.step) {
+      doFixedStep(btn);
+      return;
+    }
     var form = btn.closest("#set-form");
     if (!form) return;
     var field = btn.dataset.field;
