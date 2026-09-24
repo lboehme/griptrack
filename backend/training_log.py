@@ -690,6 +690,13 @@ def play_view(
         # carries: the sequential-mode active hand, or "" in alternating
         # mode (mirrors the pre-#146 warmup/worksets combo_redirect usage).
         "hand": w["hands"][0] if len(w["hands"]) == 1 else "",
+        # Sequential HandOrderPreference runs one hand's whole flow at a
+        # time; the other hand is where the "Switch to"/"Start" links go.
+        "other_hand": (
+            ("right" if w["hands"][0] == "left" else "left")
+            if len(w["hands"]) == 1
+            else None
+        ),
         "session_number": w["session_number"],
         "training_session": training_session,
         "sets_hint": sets_hint,

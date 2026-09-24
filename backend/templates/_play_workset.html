@@ -179,3 +179,9 @@
     </div>
   </details>
 </section>
+
+{% if other_hand %}
+<div class="flow-next">
+  <a class="btn btn-secondary" href="/session/play?grip_type_id={{ grip.id }}&amp;edge_mm={{ edge_mm }}&amp;date={{ date }}&amp;hand={{ other_hand }}{% if session_number %}&amp;session_number={{ session_number }}{% endif %}">Switch to {{ other_hand|display_name }} hand</a>
+</div>
+{% endif %}

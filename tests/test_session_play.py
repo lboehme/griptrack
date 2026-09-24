@@ -1052,12 +1052,55 @@ def test_switch_hand_link_absent_for_alternating_hand_order(client):
     assert "Switch to" not in page.text
 
 
-# NOTE: the old "Switch to Right hand" link (sequential mode) doesn't exist
-# on the play work-set step -- the hand switch now happens via the `hand`
-# query param a player would only reach through the warmup step's own
-# per-hand flow. This is a real, deliberate scope gap: sequential-mode
-# players have no in-page way to switch hands from the work-set step
-# itself. See the report's dropped-tests list.
+def test_switch_hand_link_present_for_sequential_hand_order(client):
+    setup_tested_user(client)
+    client.post("/profile", data={"hand_order_pref": "sequential"})
+    page = workset_step(client)
+    assert "Switch to Right hand" in page.text
+    assert "hand=right" in page.text
+
+
+def _finish_three_sets(client, **hands):
+    gid = grip_type_id(client, "half crimp")
+    complete_warmup(client, gid, 20)
+    combo = {"grip_type_id": gid, "edge_mm": 20, "date": "2026-07-04"}
+    for n in (1, 2):
+        save_focus_set(client, n, **hands)
+        client.post("/session/rest/end", data=combo, follow_redirects=True)
+    return save_focus_set(client, 3, **hands)
+
+
+def test_sequential_summary_offers_the_other_hand(client):
+    """Sequential order runs one hand's whole flow; finishing the left
+    hand's sets must lead on to the right hand, not dead-end at summary."""
+    setup_tested_user(client)
+    client.post("/profile", data={"hand_order_pref": "sequential"})
+    page = _finish_three_sets(client, left=(30, 5, 7))
+    assert step_kind(page.text) == "summary"
+    assert "Start Right hand" in page.text
+    assert "hand=right" in page.text
+
+
+def test_sequential_summary_on_the_right_hand_offers_left(client):
+    setup_tested_user(client)
+    client.post("/profile", data={"hand_order_pref": "sequential"})
+    gid = grip_type_id(client, "half crimp")
+    complete_warmup(client, gid, 20, hand="right")
+    combo = {"grip_type_id": gid, "edge_mm": 20, "date": "2026-07-04", "hand": "right"}
+    for n in (1, 2, 3):
+        save_focus_set(client, n, right=(28, 5, 7))
+        client.post("/session/rest/end", data=combo, follow_redirects=True)
+    page = play_page(client, hand="right")
+    assert step_kind(page.text) == "summary"
+    assert "Start Left hand" in page.text
+
+
+def test_alternating_summary_has_no_other_hand_button(client):
+    setup_tested_user(client)
+    page = _finish_three_sets(client, left=(30, 5, 7), right=(28, 5, 7))
+    assert step_kind(page.text) == "summary"
+    assert "Start Right hand" not in page.text
+    assert "Start Left hand" not in page.text
 
 
 def test_no_new_write_route_is_added_beyond_play_and_its_actions(client):
