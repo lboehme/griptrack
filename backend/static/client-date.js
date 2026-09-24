@@ -23,9 +23,13 @@
     var today = localISODate();
 
     // Visible date inputs and hidden ones (Today's Start form, the ＋ Log
-    // sheet) alike.
+    // sheet) alike -- but only while still pristine: once filled (or edited
+    // by the user) an input is marked, so a later unrelated htmx swap never
+    // resets a date the user picked (PR #154 review).
     root.querySelectorAll("input.local-date-default").forEach(function (input) {
+      if (input.dataset.localDateSet) return;
       input.value = today;
+      input.dataset.localDateSet = "1";
     });
 
     root.querySelectorAll("[data-session-date]").forEach(function (el) {
@@ -34,6 +38,13 @@
       }
     });
   }
+
+  document.addEventListener("input", function (e) {
+    var input = e.target;
+    if (input.classList && input.classList.contains("local-date-default")) {
+      input.dataset.localDateSet = "1";
+    }
+  });
 
   document.addEventListener("DOMContentLoaded", function () {
     apply(document);

@@ -379,10 +379,13 @@
   // is re-rendered fresh on every htmx swap of #play-root. Session RPE
   // chips need no JS of their own: they're htmx form buttons. ----
   function postForm(form) {
+    // keepalive: a note typed right before Finish (a full-page POST that
+    // unloads this page) still reaches the server (PR #154 review).
     return fetch(form.action, {
       method: "POST",
       body: new FormData(form),
       headers: { "HX-Request": "true" },
+      keepalive: true,
     });
   }
 

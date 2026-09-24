@@ -70,7 +70,11 @@
     var el = document.getElementById("sheet-error");
     if (!el) return;
     var xhr = evt.detail && evt.detail.xhr;
-    el.textContent = (xhr && xhr.responseText) || "Could not save. Please try again.";
+    // The app's own 400s are plain sentences; FastAPI's 422 (a field that
+    // failed validation) is JSON meant for machines, never shown raw.
+    var type = (xhr && xhr.getResponseHeader("Content-Type")) || "";
+    var text = xhr && xhr.status !== 422 && type.indexOf("json") === -1 ? xhr.responseText : "";
+    el.textContent = text || "Some of those values didn't look right. Check them and try again.";
     el.hidden = false;
   });
 

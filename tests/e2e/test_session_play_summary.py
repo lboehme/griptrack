@@ -46,7 +46,8 @@ def test_summary_chips_notes_deload_and_tweaks_autosave(live_server, authenticat
     expect(left_form).to_be_visible()
     left_form.locator('label:has(#tweak-left-severity-2)').click()
     expect(left_form.locator('[data-role="tweak-status"]')).to_have_text("Saved")
-    page.locator('label:has(#tweak-hand-none)').click()
+    # Hiding the severity form again by picking Right keeps the saved tweak.
+    page.locator('label:has(#tweak-hand-right)').click()
     expect(left_form).to_be_hidden()
 
     # Reload: no client-side state left, so this proves every change above
@@ -57,6 +58,13 @@ def test_summary_chips_notes_deload_and_tweaks_autosave(live_server, authenticat
     expect(page.locator('input[name="is_deload"]')).to_be_checked()
     expect(page.locator("#tweak-hand-left")).to_be_checked()
     expect(page.locator("#tweak-left-severity-2")).to_be_checked()
+
+    # "None" clears the tweak (PR #154 review): gone after a reload.
+    page.locator('label:has(#tweak-hand-none)').click()
+    page.wait_for_timeout(300)
+    page.goto(summary_url)
+    expect(page.locator("#tweak-hand-none")).to_be_checked()
+    expect(page.locator("#tweak-left-severity-2")).not_to_be_checked()
 
     # Finish goes home; reopening the session resumes on its summary.
     page.locator(".summary-finish-btn").click()
