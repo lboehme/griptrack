@@ -73,6 +73,7 @@ Set the phone's screen timeout short first (Settings → Display → Screen time
 | # | Step | Expected Result | Device Verification | Status |
 |---|------|-----------------|---------------------|--------|
 | 17 | **Still vibrates without notifications** | Settings → Apps → GripTrack → Notifications → off (or deny the permission dialog on a fresh install). Start a rest, turn the screen off, wait. | No notification anywhere, but the phone still vibrates at 0:00. The app doesn't crash or show an error. | **PENDING DEVICE** |
+| 17a | **Granting the permission on the first rest shows its countdown** | Fresh install (or clear app data). Start a session and finish a set, so the first rest starts and the permission dialog opens. Tap **Allow**. | The lock-screen countdown for *that* rest appears right away. It must not wait for the next rest (PR #154 review fix). | **PENDING DEVICE** |
 
 ---
 

@@ -37,7 +37,12 @@ import android.webkit.JavascriptInterface
  * loopback server ([pageIsTrusted], maintained by MainActivity), and all
  * inputs are validated/capped, since this is callable from page script.
  */
-class RestBridge(private val activity: Activity) {
+class RestBridge(
+    private val activity: Activity,
+    /** Launches the Android 13+ POST_NOTIFICATIONS request (MainActivity's result launcher,
+     * which calls [repostPendingCountdown] on a grant). Called on the UI thread. */
+    private val requestNotificationPermission: () -> Unit
+) {
 
     companion object {
         private const val TAG = "GripTrackRest"
@@ -57,7 +62,6 @@ class RestBridge(private val activity: Activity) {
         const val MAX_REST_AHEAD_MS = 30 * 60 * 1000L
 
         private const val KEY_ASKED_NOTIFICATIONS = "asked_notification_permission"
-        private const val NOTIFICATION_PERMISSION_REQUEST_CODE = 1480
 
         /** Caps page-supplied text: at most [MAX_TEXT_LENGTH] chars, no control characters. */
         fun cleanText(value: String?): String {
@@ -132,6 +136,13 @@ class RestBridge(private val activity: Activity) {
 
     private val appContext: Context = activity.applicationContext
 
+    private data class Countdown(val endsAtEpochMs: Long, val title: String, val detail: String)
+
+    /** The countdown of the rest in progress, kept so a notification permission granted from the
+     * dialog the first rest opens can still post it (the first post saw the permission as denied). */
+    @Volatile
+    private var pendingCountdown: Countdown? = null
+
     /** Set by MainActivity on every page start: true only for the loopback server's own pages. */
     @Volatile
     var pageIsTrusted: Boolean = false
@@ -159,6 +170,7 @@ class RestBridge(private val activity: Activity) {
         val cleanDetail = cleanText(detail)
         val cleanReady = cleanText(readyTitle).ifEmpty { "Pull. Rest is over" }
 
+        pendingCountdown = Countdown(endsAtEpochMs, cleanTitle, cleanDetail)
         requestNotificationPermissionOnce()
         ensureChannel(appContext)
         postCountdown(endsAtEpochMs, cleanTitle, cleanDetail)
@@ -168,9 +180,19 @@ class RestBridge(private val activity: Activity) {
     @JavascriptInterface
     fun stopRest() {
         if (!pageIsTrusted) return
+        pendingCountdown = null
         val alarmManager = appContext.getSystemService(AlarmManager::class.java)
         alarmManager?.cancel(alarmIntent(appContext, "", "", "", false))
         appContext.getSystemService(NotificationManager::class.java)?.cancel(NOTIFICATION_ID)
+    }
+
+    /** Called by MainActivity when the notification permission is granted: posts the countdown of
+     * the rest still in progress, if any (not after stopRest, and not once its end has passed). */
+    fun repostPendingCountdown() {
+        val countdown = pendingCountdown ?: return
+        if (!isValidRestEnd(countdown.endsAtEpochMs)) return
+        ensureChannel(appContext)
+        postCountdown(countdown.endsAtEpochMs, countdown.title, countdown.detail)
     }
 
     private fun postCountdown(endsAtEpochMs: Long, title: String, detail: String) {
@@ -212,18 +234,14 @@ class RestBridge(private val activity: Activity) {
     }
 
     /** Android 13+: ask for the notification permission once, the first time a rest starts.
-     * Denied means no countdown notification -- the alarm's vibration still happens. */
+     * Granted reposts this rest's countdown ([repostPendingCountdown]); denied means no countdown
+     * notification -- the alarm's vibration still happens. */
     private fun requestNotificationPermissionOnce() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
         if (appContext.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
         val prefs = appContext.getSharedPreferences(SessionLifecycleHelper.PREFS_NAME, Context.MODE_PRIVATE)
         if (prefs.getBoolean(KEY_ASKED_NOTIFICATIONS, false)) return
         prefs.edit().putBoolean(KEY_ASKED_NOTIFICATIONS, true).apply()
-        activity.runOnUiThread {
-            activity.requestPermissions(
-                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-                NOTIFICATION_PERMISSION_REQUEST_CODE
-            )
-        }
+        activity.runOnUiThread { requestNotificationPermission() }
     }
 }

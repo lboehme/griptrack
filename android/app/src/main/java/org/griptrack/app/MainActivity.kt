@@ -1,5 +1,6 @@
 package org.griptrack.app
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
@@ -67,6 +68,14 @@ class MainActivity : AppCompatActivity() {
         val uri = if (result.resultCode == RESULT_OK) result.data?.data else null
         fileChooserCallback?.onReceiveValue(if (uri != null) arrayOf(uri) else null)
         fileChooserCallback = null
+    }
+
+    // Android 13+ notification permission, asked by the rest bridge on the first rest (#148).
+    // A grant posts that rest's lock-screen countdown, which the bridge couldn't show while asking.
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) restBridge.repostPendingCountdown()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -179,7 +188,9 @@ class MainActivity : AppCompatActivity() {
         CookieManager.getInstance().setAcceptCookie(true)
 
         // S3 native rest bridge (#148, docs/adr/0015): window.GripTrackNative.
-        restBridge = RestBridge(this)
+        restBridge = RestBridge(this) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
         webView.addJavascriptInterface(restBridge, RestBridge.JS_NAME)
 
         webView.webViewClient = object : WebViewClient() {
