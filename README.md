@@ -11,14 +11,26 @@ computes plate-accurate loading suggestions from your tested max, and
 tells you whether the training actually shows up in your climbing.
 
 <p align="center">
-  <img src="docs/screenshots/ui-review-2026-09/prototype-today.jpg" width="30%" alt="Today: the plan for today's session, with per-hand weights and the reason for each">
-  &nbsp;
-  <img src="docs/screenshots/ui-review-2026-09/prototype-workset.jpg" width="30%" alt="Session play, work set step: left and right hand cards with steppers and one Set done button">
-  &nbsp;
-  <img src="docs/screenshots/ui-review-2026-09/prototype-progress.jpg" width="30%" alt="Progress: story sentences over a strength-as-%-of-bodyweight chart with boulder sends">
+  <a href="docs/marketing/griptrack-promo.mp4"><img src="docs/marketing/griptrack-promo-poster.jpg" width="92%" alt="GripTrack promo video: 18 seconds, from today's plan through a session to the progress chart (click to play)"></a>
 </p>
-<p align="center"><sub>Screens from the 2026-09 redesign prototype, which the app now follows
-(<a href="docs/ui-review-2026-09.md">docs/ui-review-2026-09.md</a>).</sub></p>
+<p align="center"><sub>▶ <a href="docs/marketing/griptrack-promo.mp4">Watch the 18-second promo</a>
+(<a href="docs/marketing/griptrack-promo-portrait.mp4">portrait cut</a>)</sub></p>
+
+<p align="center">
+  <img src="docs/screenshots/app/today.png" width="24%" alt="Today: the plan for today's session, with per-hand weights and the reason for each">
+  <img src="docs/screenshots/app/work-set.png" width="24%" alt="Session play, work set step: left and right hand cards with steppers and one Set done button">
+  <img src="docs/screenshots/app/rest.png" width="24%" alt="Session play, rest step: the rest ring counting down between sets">
+  <img src="docs/screenshots/app/progress.png" width="24%" alt="Progress: story sentences over a strength-as-%-of-bodyweight chart with boulder sends">
+</p>
+<p align="center">
+  <img src="docs/screenshots/app/warmup.png" width="24%" alt="Session play, warmup rung: 50% of current max, per-hand weight with its plate breakdown">
+  <img src="docs/screenshots/app/summary.png" width="24%" alt="Session summary: volume, sets, average RPE, session rating, tweaks and notes">
+  <img src="docs/screenshots/app/log-sheet.png" width="24%" alt="The + Log sheet: log a boulder by grade, style and day">
+  <img src="docs/screenshots/app/settings.png" width="24%" alt="Settings: grouped rows for you, training, equipment, rest alerts and your data">
+</p>
+<p align="center"><sub>The on-device app with a demo account (16 weeks of seeded history).
+More screens in <a href="docs/screenshots/app/">docs/screenshots/app/</a>; how they and the video are made:
+<a href="docs/marketing/">docs/marketing/</a>.</sub></p>
 
 Finger strength isn't one number. Pulling on a 20&nbsp;mm edge in half
 crimp is a different capacity than a 10&nbsp;mm edge in open hand, and
@@ -72,9 +84,9 @@ the right property for low-rep strength work where any of the three is a
 legitimate way to progress. Sessions marked as deloads are excluded.
 
 <p align="center">
-  <img src="docs/screenshots/trend-plateau.png" width="42%" alt="Volume trend with plateau flag">
+  <img src="docs/screenshots/app/volume.png" width="30%" alt="Training volume per session with mean intensity, per hand">
   &nbsp;&nbsp;
-  <img src="docs/screenshots/correlation.png" width="42%" alt="Spearman correlation between strength and boulder grade">
+  <img src="docs/screenshots/app/balance.png" width="30%" alt="Left/right balance: strength and training-load gap between hands">
 </p>
 
 - **Current max** is not simply your last test. It's the heavier of the

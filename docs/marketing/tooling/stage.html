@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>GripTrack promo stage</title>
+<!--
+  The marketing video's composition. render_video.py opens this page
+  (file://, next to the assets it prepares), calls window.stageReady(),
+  then window.renderFrame(t) for every frame and screenshots the page.
+  Everything on screen is a pure function of t: no CSS transitions, no
+  timers, so every frame is deterministic.
+  Layout comes from the URL hash: #landscape (1920x1080) or #portrait
+  (1080x1920).
+-->
+<style>
+  @font-face { font-family: "Barlow"; font-weight: 400; src: url("fonts/barlow-latin-400.woff2") format("woff2"); }
+  @font-face { font-family: "Barlow"; font-weight: 500; src: url("fonts/barlow-latin-500.woff2") format("woff2"); }
+  @font-face { font-family: "Barlow"; font-weight: 600; src: url("fonts/barlow-latin-600.woff2") format("woff2"); }
+  @font-face { font-family: "Barlow"; font-weight: 700; src: url("fonts/barlow-latin-700.woff2") format("woff2"); }
+  @font-face { font-family: "Barlow Condensed"; font-weight: 600; src: url("fonts/barlow-condensed-latin-600.woff2") format("woff2"); }
+  @font-face { font-family: "Barlow Condensed"; font-weight: 700; src: url("fonts/barlow-condensed-latin-700.woff2") format("woff2"); }
+
+  /* The app's own tokens (backend/static/app.css). */
+  :root {
+    --bg: #14120F;
+    --s1: #1D1A16;
+    --line: #383229;
+    --tx: #F4EFE7;
+    --mu: #A89F92;
+    --acc: #FF6A3D;
+    --ok: #4CC38A;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); overflow: hidden; }
+  body { font-family: "Barlow", sans-serif; color: var(--tx); -webkit-font-smoothing: antialiased; }
+  #stage { position: relative; overflow: hidden; background: var(--bg); }
+  .abs { position: absolute; left: 0; top: 0; will-change: transform, opacity; }
+
+  #topo { color: var(--tx); }
+  #topo svg { display: block; width: 100%; height: 100%; }
+  #topo path { stroke-opacity: .16; }
+  #glow { border-radius: 50%; background: radial-gradient(closest-side, rgba(255,106,61,.20), rgba(255,106,61,.06) 55%, rgba(255,106,61,0)); }
+  #vignette { background: radial-gradient(ellipse at 50% 45%, rgba(20,18,15,0) 45%, rgba(8,7,6,.78) 100%); }
+
+  /* ---- wordmark */
+  .wordmark { font-family: "Barlow Condensed"; font-weight: 700; letter-spacing: -.01em; line-height: 1; white-space: nowrap; }
+  .wordmark .ch { display: inline-block; }
+  .wordmark .clip { display: inline-block; overflow: hidden; padding: 0 .02em .06em; vertical-align: bottom; }
+  .wordmark .dot { color: var(--acc); display: inline-block; }
+  .tagline { font-weight: 500; color: var(--mu); letter-spacing: .01em; white-space: nowrap; }
+
+  /* ---- scene copy */
+  .copy .overline { font-family: "Barlow Condensed"; font-weight: 600; color: var(--acc); letter-spacing: .22em; text-transform: uppercase; display: flex; align-items: center; gap: .7em; }
+  .copy .overline .num { color: var(--mu); }
+  .copy .overline .rule { display: inline-block; height: 2px; background: var(--acc); }
+  .copy .headline { font-family: "Barlow Condensed"; font-weight: 700; line-height: .98; letter-spacing: -.005em; }
+  .copy .line { display: block; overflow: hidden; padding-bottom: .06em; }
+  .copy .line > span { display: inline-block; }
+  .copy .headline .dot { color: var(--acc); }
+  .copy .body { color: var(--mu); line-height: 1.38; font-weight: 400; }
+  .copy .body b { color: var(--tx); font-weight: 600; }
+
+  .stat { display: flex; flex-direction: column; }
+  .stat .v { font-family: "Barlow Condensed"; font-weight: 700; line-height: 1; }
+  .stat .v small { font-size: .5em; color: var(--mu); margin-left: .08em; }
+  .stat .k { color: var(--mu); font-weight: 500; margin-top: .35em; }
+  .stat .v.ok { color: var(--ok); }
+
+  /* ---- phone */
+  .phone { border-radius: var(--r-outer); background: #0c0b0a;
+    box-shadow:
+      0 0 0 1.5px #4a4238,
+      0 0 0 3px #16130f,
+      inset 0 0 0 1px rgba(255,255,255,.06),
+      0 70px 120px -30px rgba(0,0,0,.85),
+      0 30px 60px -10px rgba(0,0,0,.55); }
+  .phone .screen { position: absolute; overflow: hidden; border-radius: var(--r-inner); background: var(--bg); }
+  .phone canvas { position: absolute; left: 0; top: 0; }
+  .phone .cam { position: absolute; border-radius: 50%; background: #050505; box-shadow: 0 0 0 2px rgba(255,255,255,.05), inset 0 0 3px rgba(80,120,160,.35); }
+  .phone .btn { position: absolute; background: #2b2620; border-radius: 3px; }
+  .phone .shade { position: absolute; inset: 0; border-radius: var(--r-outer); background: var(--bg); pointer-events: none; }
+  .phone .gloss { position: absolute; inset: 0; border-radius: var(--r-inner); pointer-events: none;
+    background: linear-gradient(115deg, rgba(255,255,255,.07) 0%, rgba(255,255,255,0) 32%); }
+
+  .tap { position: absolute; border-radius: 50%; pointer-events: none; }
+  .tap.core { background: rgba(244,239,231,.55); box-shadow: 0 0 0 1px rgba(255,255,255,.35); }
+  .tap.ring { border: 2px solid rgba(244,239,231,.8); }
+
+  /* ---- callouts */
+  .callout { display: flex; align-items: center; gap: 14px; padding: 14px 20px 14px 16px; border-radius: 18px;
+    background: rgba(33,29,25,.82); border: 1px solid rgba(244,239,231,.12);
+    box-shadow: 0 20px 40px -12px rgba(0,0,0,.6); white-space: nowrap; }
+  .callout .ico { width: 10px; height: 10px; border-radius: 50%; background: var(--acc); flex: none; box-shadow: 0 0 0 4px rgba(255,106,61,.2); }
+  .callout .t { font-weight: 600; line-height: 1.15; }
+  .callout .s { color: var(--mu); font-weight: 500; line-height: 1.2; margin-top: 3px; }
+  .anchor { width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: var(--acc); box-shadow: 0 0 0 5px rgba(255,106,61,.25), 0 0 18px rgba(255,106,61,.6); }
+  .leader { height: 2px; transform-origin: 0 50%; background: linear-gradient(90deg, rgba(255,106,61,.95), rgba(244,239,231,.35)); }
+
+  #fade { background: #000; }
+  .play { display: inline-flex; align-items: center; gap: 16px; padding: 14px 26px 14px 14px; border-radius: 999px;
+    background: var(--acc); color: #1B0D06; font-family: "Barlow Condensed"; font-weight: 700; font-size: 30px;
+    letter-spacing: .08em; text-transform: uppercase; box-shadow: 0 18px 40px -10px rgba(255,106,61,.45); }
+  .play i { width: 44px; height: 44px; border-radius: 50%; background: #1B0D06; position: relative; }
+  .play i::after { content: ""; position: absolute; left: 17px; top: 13px; border-left: 15px solid var(--acc);
+    border-top: 9px solid transparent; border-bottom: 9px solid transparent; }
+  .play span { opacity: .7; font-weight: 600; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script>
+"use strict";
+// ------------------------------------------------------------------ easing
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, p) => a + (b - a) * p;
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+const ease = {
+  linear: p => p,
+  outCubic: p => 1 - Math.pow(1 - p, 3),
+  inCubic: p => p * p * p,
+  inOutCubic: p => p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2,
+  outExpo: p => p === 1 ? 1 : 1 - Math.pow(2, -10 * p),
+  inOutQuint: p => p < .5 ? 16 * Math.pow(p, 5) : 1 - Math.pow(-2 * p + 2, 5) / 2,
+  outBack: (p, s = 1.5) => 1 + (s + 1) * Math.pow(p - 1, 3) + s * Math.pow(p - 1, 2),
+  outQuint: p => 1 - Math.pow(1 - p, 5),
+};
+// eased progress between a and b
+const ep = (t, a, b, e = ease.outCubic) => e(seg(t, a, b));
+
+// ------------------------------------------------------------------ layout
+const PORTRAIT = location.hash === "#portrait";
+const W = PORTRAIT ? 1080 : 1920, H = PORTRAIT ? 1920 : 1080;
+const M = window.MANIFEST;             // boxes from capture_app.py (app CSS px)
+const APP_W = M.viewport.width, APP_H = M.viewport.height;
+
+const L = PORTRAIT ? {
+  screenH: 1040, phoneX: 400, phoneY: 1330,
+  copyX: 90, copyY: 150, copyW: 900, over: 26, head: 104, body: 34, statV: 80, statK: 22,
+  calloutT: 24, calloutS: 18, wordmark: 200, tagline: 40, outroScale: .62, outroSpread: 320, outroY: 820,
+  outroWord: 120, outroTag: 32, outroWordY: 1560,
+} : {
+  screenH: 860, phoneX: 1235, phoneY: 540,
+  copyX: 170, copyY: 300, copyW: 760, over: 24, head: 108, body: 32, statV: 96, statK: 24,
+  calloutT: 26, calloutS: 20, wordmark: 220, tagline: 38, outroScale: .74, outroSpread: 430, outroY: 470,
+  outroWord: 104, outroTag: 30, outroWordY: 900,
+};
+const SH = L.screenH, SW = Math.round(SH * APP_W / APP_H), K = SW / APP_W;
+const BZ = Math.round(SH * .016);                 // bezel
+const PW = SW + 2 * BZ, PH = SH + 2 * BZ;
+
+const stage = document.getElementById("stage");
+stage.style.width = W + "px"; stage.style.height = H + "px";
+document.body.style.width = W + "px"; document.body.style.height = H + "px";
+
+function el(tag, cls, parent = stage, html) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (html !== undefined) e.innerHTML = html;
+  parent.appendChild(e);
+  return e;
+}
+function place(e, { x = 0, y = 0, s = 1, r = 0, o = 1, ox, oy }) {
+  e.style.transform = `translate(${x}px, ${y}px) rotate(${r}deg) scale(${s})`;
+  e.style.opacity = o;
+  e.style.visibility = o <= 0.001 ? "hidden" : "visible";
+}
+
+// ------------------------------------------------------------------ assets
+const IMG = {};
+function loadImage(src) {
+  return new Promise((res, rej) => {
+    const i = new Image();
+    i.onload = () => i.decode().then(() => res(i), () => res(i));
+    i.onerror = () => rej(new Error("missing " + src));
+    i.src = src;
+  });
+}
+const SCREENS = ["today", "warmup-1", "warmup-2", "warmup-3", "warmup-4", "workset-2",
+  "workset-2-bumped", "today-done", "progress-chart", "summary"];
+const REST = Array.from({ length: 61 }, (_, i) => "rest/" + String(i).padStart(3, "0"));
+const SCROLL = Array.from({ length: 31 }, (_, i) => "scroll/" + String(i).padStart(3, "0"));
+
+// ------------------------------------------------------------------ background
+const topo = el("div", "abs", stage); topo.id = "topo";
+const glow = el("div", "abs", stage); glow.id = "glow";
+const vignette = el("div", "abs", stage); vignette.id = "vignette";
+vignette.style.width = W + "px"; vignette.style.height = H + "px";
+let topoPaths = [];
+
+// ------------------------------------------------------------------ phones
+function makePhone() {
+  const p = el("div", "abs phone");
+  p.style.width = PW + "px"; p.style.height = PH + "px";
+  p.style.setProperty("--r-outer", Math.round(SH * .062) + "px");
+  p.style.setProperty("--r-inner", Math.round(SH * .052) + "px");
+  p.style.transformOrigin = "50% 50%";
+  const scr = el("div", "screen", p);
+  Object.assign(scr.style, { left: BZ + "px", top: BZ + "px", width: SW + "px", height: SH + "px" });
+  const cv = el("canvas", "", scr);
+  cv.width = SW; cv.height = SH;
+  const layer = el("div", "", scr);            // taps live in screen space
+  Object.assign(layer.style, { position: "absolute", inset: 0 });
+  el("div", "gloss", scr);
+  const cam = el("div", "cam", scr);
+  const cs = Math.round(SH * .014);
+  Object.assign(cam.style, { width: cs + "px", height: cs + "px", left: (SW - cs) / 2 + "px", top: Math.round(SH * .011) + "px" });
+  const b1 = el("div", "btn", p), b2 = el("div", "btn", p);
+  Object.assign(b1.style, { right: "-5px", top: PH * .2 + "px", width: "4px", height: PH * .1 + "px" });
+  Object.assign(b2.style, { right: "-5px", top: PH * .33 + "px", width: "4px", height: PH * .06 + "px" });
+  const shade = el("div", "shade", p);
+  const ctx = cv.getContext("2d");
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
+  return { root: p, ctx, layer, shade, taps: [] };
+}
+
+// A screen timeline: [{t, show, fx, dur}] -- show is a screen name or a
+// flipbook {frames, from, to, e}. fx: "cut" | "fade" | "push" | "pop".
+function drawTimeline(phone, tl, t) {
+  const ctx = phone.ctx;
+  let i = -1;
+  for (let k = 0; k < tl.length; k++) if (tl[k].t <= t) i = k;
+  if (i < 0) i = 0;
+  const cur = tl[i], prev = tl[i - 1];
+  const frameOf = (key, tt) => {
+    const s = key.show;
+    if (typeof s === "string") return IMG[s];
+    const p = s.e(seg(tt, s.from, s.to));
+    return IMG[s.frames[Math.round(p * (s.frames.length - 1))]];
+  };
+  const now = frameOf(cur, t);
+  const p = cur.dur ? seg(t, cur.t, cur.t + cur.dur) : 1;
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = "#14120F"; ctx.fillRect(0, 0, SW, SH);
+  if (!prev || p >= 1 || cur.fx === "cut") { ctx.drawImage(now, 0, 0, SW, SH); return; }
+  const before = frameOf(prev, cur.t);
+  if (cur.fx === "fade") {
+    ctx.drawImage(before, 0, 0, SW, SH);
+    ctx.globalAlpha = ease.inOutCubic(p); ctx.drawImage(now, 0, 0, SW, SH); ctx.globalAlpha = 1;
+  } else if (cur.fx === "push") {
+    const q = ease.inOutQuint(p);
+    ctx.drawImage(before, -SW * .28 * q, 0, SW, SH);
+    ctx.fillStyle = `rgba(8,7,6,${.55 * q})`; ctx.fillRect(0, 0, SW, SH);
+    const x = SW * (1 - q);
+    ctx.save(); ctx.shadowColor = "rgba(0,0,0,.6)"; ctx.shadowBlur = 40; ctx.shadowOffsetX = -10;
+    ctx.drawImage(now, x, 0, SW, SH); ctx.restore();
+  } else if (cur.fx === "pop") {                       // bottom-up, for new "pages"
+    const q = ease.outQuint(p);
+    ctx.drawImage(before, 0, 0, SW, SH);
+    ctx.fillStyle = `rgba(8,7,6,${.5 * q})`; ctx.fillRect(0, 0, SW, SH);
+    ctx.globalAlpha = clamp(p * 3);
+    ctx.drawImage(now, 0, SH * .06 * (1 - q), SW, SH); ctx.globalAlpha = 1;
+  }
+}
+
+function tapEls(phone) {
+  const core = el("div", "tap core", phone.layer), ring = el("div", "tap ring", phone.layer);
+  return { core, ring };
+}
+// taps: [{t, box}] ; press starts .16 s before t, ripple runs .5 s after
+function drawTaps(phone, taps, t) {
+  while (phone.taps.length < taps.length) phone.taps.push(tapEls(phone));
+  taps.forEach((tap, i) => {
+    const { core, ring } = phone.taps[i];
+    const b = tap.box, cx = (b.x + b.width * (tap.fx ?? .5)) * K, cy = (b.y + b.height * (tap.fy ?? .5)) * K;
+    const R = 30 * K;
+    const pin = ep(t, tap.t - .16, tap.t, ease.outCubic), pout = seg(t, tap.t + .05, tap.t + .35);
+    const coreO = t < tap.t - .16 || t > tap.t + .35 ? 0 : pin * (1 - pout) * .9;
+    const coreS = lerp(.55, 1, pin) * lerp(1, .85, pout);
+    Object.assign(core.style, { width: 2 * R + "px", height: 2 * R + "px", left: cx - R + "px", top: cy - R + "px" });
+    place(core, { s: coreS, o: coreO });
+    const pr = seg(t, tap.t, tap.t + .55);
+    Object.assign(ring.style, { width: 2 * R + "px", height: 2 * R + "px", left: cx - R + "px", top: cy - R + "px" });
+    place(ring, { s: lerp(1, 2.3, ease.outCubic(pr)), o: pr > 0 && pr < 1 ? (1 - pr) * .85 : 0 });
+  });
+}
+
+// ------------------------------------------------------------------ copy blocks
+function makeCopy(num, over, lines, body) {
+  const c = el("div", "abs copy");
+  c.style.width = L.copyW + "px";
+  const o = el("div", "overline", c);
+  o.style.fontSize = L.over + "px";
+  const rule = el("span", "rule", o); rule.style.width = "0px";
+  el("span", "num", o, num);
+  el("span", "", o, over);
+  const h = el("div", "headline", c);
+  h.style.fontSize = L.head + "px"; h.style.marginTop = L.over * .9 + "px";
+  const spans = lines.map(line => { const l = el("span", "line", h); return el("span", "", l, line); });
+  const b = el("div", "body", c, body);
+  b.style.fontSize = L.body + "px"; b.style.marginTop = L.body * 1.1 + "px"; b.style.maxWidth = L.copyW * .86 + "px";
+  place(c, { x: L.copyX, y: L.copyY });
+  return { c, o, rule, spans, b };
+}
+function drawCopy(cp, t, tin, tout) {
+  const vis = t >= tin - .01 && t <= tout + .6;
+  cp.c.style.display = vis ? "block" : "none";
+  if (!vis) return;
+  const out = ep(t, tout, tout + .45, ease.inCubic);
+  cp.rule.style.width = 46 * ep(t, tin, tin + .5, ease.outExpo) + "px";
+  place(cp.o, { x: 0, y: 0, o: ep(t, tin, tin + .35) * (1 - out) });
+  cp.spans.forEach((s, i) => {
+    const pin = ep(t, tin + .08 + i * .08, tin + .78 + i * .08, ease.outExpo);
+    const pout = ep(t, tout + i * .05, tout + .4 + i * .05, ease.inCubic);
+    // mask wipe up, fading as it goes so no glyph slivers linger at the edge
+    place(s, { y: (1 - pin) * 110 + pout * -110, o: 1 - seg(t, tout + i * .05, tout + .28 + i * .05) });
+  });
+  place(cp.b, { y: (1 - ep(t, tin + .3, tin + 1.0, ease.outExpo)) * 24 - out * 16, o: ep(t, tin + .3, tin + .8) * (1 - out) });
+}
+
+// ------------------------------------------------------------------ callouts
+function makeCallout(title, sub) {
+  const leader = el("div", "abs leader");
+  const anchor = el("div", "abs anchor");
+  const box = el("div", "abs callout");
+  el("span", "ico", box);
+  const txt = el("div", "", box);
+  const tt = el("div", "t", txt, title); tt.style.fontSize = L.calloutT + "px";
+  if (sub) { const ss = el("div", "s", txt, sub); ss.style.fontSize = L.calloutS + "px"; }
+  return { leader, anchor, box };
+}
+// anchor in app px on the given phone; the pill sits at (bx, by) stage px
+function drawCallout(co, phoneState, ax, ay, bx, by, t, tin, tout) {
+  const pin = ep(t, tin, tin + .5, ease.outExpo), pout = ep(t, tout, tout + .3, ease.inCubic);
+  const o = pin * (1 - pout);
+  const a = phoneToStage(phoneState, ax, ay);
+  const bw = co.box.offsetWidth, bh = co.box.offsetHeight;
+  const left = bx < a.x;                               // pill left of the anchor?
+  const ex = left ? bx + bw : bx, ey = by + bh / 2;    // leader end on the pill
+  const len = Math.hypot(ex - a.x, ey - a.y), ang = Math.atan2(ey - a.y, ex - a.x) * 180 / Math.PI;
+  const grow = ep(t, tin, tin + .45, ease.outCubic);
+  co.leader.style.width = len * grow + "px";
+  co.leader.style.transform = `translate(${a.x}px, ${a.y - 1}px) rotate(${ang}deg)`;
+  co.leader.style.opacity = o; co.leader.style.visibility = o > 0 ? "visible" : "hidden";
+  const pulse = 1 + .12 * Math.sin((t - tin) * 7);
+  place(co.anchor, { x: a.x, y: a.y, s: ep(t, tin, tin + .3, ease.outBack) * pulse, o });
+  place(co.box, { x: bx + (left ? 1 : -1) * (1 - ep(t, tin + .15, tin + .7, ease.outExpo)) * -30, y: by, o: ep(t, tin + .15, tin + .5) * (1 - pout) });
+}
+function phoneToStage(ps, ax, ay) {
+  // ps = {x, y, s, r} phone centre in stage px; (ax, ay) in app px
+  const lx = (BZ + ax * K - PW / 2) * ps.s, ly = (BZ + ay * K - PH / 2) * ps.s;
+  const rr = ps.r * Math.PI / 180;
+  return { x: ps.x + lx * Math.cos(rr) - ly * Math.sin(rr), y: ps.y + lx * Math.sin(rr) + ly * Math.cos(rr) };
+}
+
+// ------------------------------------------------------------------ script
+// Beat sheet (seconds). See docs/marketing/video-script.md.
+const T = {
+  logoIn: .3, logoOut: 2.1,
+  phoneIn: 2.45,
+  today: 2.75, sessionCopy: 5.65, progressCopy: 11.05, outro: 14.95,
+  end: 18.5,
+};
+const B = M.boxes;
+
+const mainTL = [
+  { t: 0, show: "today" },
+  { t: 5.45, show: "warmup-1", fx: "pop", dur: .5 },
+  { t: 6.33, show: "warmup-2", fx: "fade", dur: .14 },
+  { t: 6.78, show: "warmup-3", fx: "fade", dur: .14 },
+  { t: 7.23, show: "warmup-4", fx: "fade", dur: .14 },
+  { t: 7.72, show: "workset-2", fx: "push", dur: .5 },
+  { t: 8.62, show: "workset-2-bumped", fx: "fade", dur: .08 },
+  { t: 9.3, show: { frames: REST, from: 9.62, to: 10.75, e: ease.inOutCubic }, fx: "push", dur: .45 },
+  { t: 11.0, show: { frames: SCROLL, from: 11.75, to: 12.55, e: ease.inOutCubic }, fx: "push", dur: .5 },
+  { t: 15.25, show: "today-done", fx: "fade", dur: .35 },
+];
+const mainTaps = [
+  { t: 5.3, box: B.today_start },
+  { t: 6.25, box: B.rung_done },
+  { t: 6.7, box: B.rung_done },
+  { t: 7.15, box: B.rung_done },
+  { t: 7.62, box: B.rung_done, fy: .3 },
+  { t: 8.55, box: B.weight_plus_left },
+  { t: 9.2, box: B.set_done },
+];
+const leftTL = [{ t: 0, show: "workset-2-bumped" }];
+const rightTL = [{ t: 0, show: "progress-chart" }];
+
+let phoneMain, phoneL, phoneR, copies, callouts, logo, stats, outroWord, fade;
+
+function build(topoSvg) {
+  topo.innerHTML = topoSvg;
+  topo.style.width = W * 1.08 + "px"; topo.style.height = H * 1.08 + "px";
+  topoPaths = [...topo.querySelectorAll("path")].map(p => {
+    const len = p.getTotalLength();
+    p.style.strokeDasharray = `${len} ${len}`;
+    return { p, len, level: +p.dataset.level };
+  });
+  glow.style.width = SH * 1.5 + "px"; glow.style.height = SH * 1.5 + "px";
+
+  // logo
+  logo = el("div", "abs");
+  const wm = el("div", "wordmark", logo);
+  wm.style.fontSize = L.wordmark + "px";
+  logo.chars = [..."GripTrack"].map(ch => { const c = el("span", "clip", wm); return el("span", "ch", c, ch); });
+  logo.dot = el("span", "dot", wm, ".");
+  logo.tag = el("div", "tagline", logo, "Finger-strength training for climbers");
+  logo.tag.style.fontSize = L.tagline + "px"; logo.tag.style.textAlign = "center"; logo.tag.style.marginTop = L.tagline * .5 + "px";
+
+  phoneL = makePhone(); phoneR = makePhone(); phoneMain = makePhone();
+
+  copies = {
+    today: makeCopy("01", "Today", ["Today’s plan,", "worked out<span class=dot>.</span>"],
+      "Each hand’s load comes from your <b>current max</b>, rounded to the plates you actually own."),
+    session: makeCopy("02", "Session", ["A session that", "runs itself<span class=dot>.</span>"],
+      "Warmup ramp, one set at a time, and a <b>rest ring</b> that keeps counting on the lock screen."),
+    progress: makeCopy("03", "Progress", ["See it show up", "on the wall<span class=dot>.</span>"],
+      "Strength as <b>% of bodyweight</b>, next to every boulder you send."),
+  };
+
+  stats = el("div", "abs");
+  stats.style.display = "flex"; stats.style.gap = PORTRAIT ? "70px" : "64px";
+  const mk = (cls, k) => { const s = el("div", "stat", stats); const v = el("div", "v " + cls, s); v.style.fontSize = L.statV + "px";
+    const kk = el("div", "k", s, k); kk.style.fontSize = L.statK + "px"; return v; };
+  stats.left = mk("ok", "left hand, 3 months");
+  stats.right = mk("ok", "right hand, 3 months");
+  stats.sends = mk("", "boulder sends logged");
+
+  callouts = {
+    autoreg: makeCallout("Autoregulated", "+0.5 kg after two easy sessions"),
+    ramp: makeCallout("Warmup ramp", "50 → 90 % of your max"),
+    plates: makeCallout("Plate-loadable steps", "Only weights your plates can make"),
+    rest: makeCallout("3:00 rest ring", "Lock-screen countdown + buzz"),
+    chart: makeCallout("Current max, % bodyweight", "Steps up with every max test"),
+  };
+
+  outroWord = el("div", "abs");
+  const ow = el("div", "wordmark", outroWord, "GripTrack<span class=dot>.</span>");
+  ow.style.fontSize = L.outroWord + "px"; ow.style.textAlign = "center";
+  outroWord.tag = el("div", "tagline", outroWord, PORTRAIT
+    ? "Block-pull training · plans · progress<br>on your Android phone, offline"
+    : "Block-pull training · plans · progress&nbsp;&nbsp;—&nbsp;&nbsp;on your Android phone, offline");
+  outroWord.tag.style.lineHeight = "1.35";
+  outroWord.tag.style.fontSize = L.outroTag + "px"; outroWord.tag.style.marginTop = L.outroTag * .45 + "px"; outroWord.tag.style.textAlign = "center";
+
+  fade = el("div", "abs"); fade.id = "fade"; fade.style.width = W + "px"; fade.style.height = H + "px";
+}
+
+function centered(e, cx, cy, extra = {}) {
+  const w = e.offsetWidth, h = e.offsetHeight;
+  place(e, { x: cx - w / 2, y: cy - h / 2, ...extra });
+}
+
+function renderFrame(t) {
+  // ---- background: contour lines draw in, then drift
+  const drift = t * 3.2;
+  place(topo, { x: -W * .04 - drift, y: -H * .04 + drift * .35, s: 1 + t * .002 });
+  for (const tp of topoPaths) {
+    const start = .05 + (tp.level % 13) * .07, p = ep(t, start, start + 1.6, ease.inOutCubic);
+    tp.p.style.strokeDashoffset = tp.len * (1 - p);
+  }
+
+  // ---- intro wordmark
+  const logoOut = ep(t, T.logoOut, T.logoOut + .45, ease.inCubic);
+  logo.chars.forEach((c, i) => {
+    const p = ep(t, T.logoIn + i * .04, T.logoIn + .75 + i * .04, ease.outExpo);
+    place(c, { y: (1 - p) * L.wordmark * 1.05, o: 1 });
+  });
+  place(logo.dot, { s: ep(t, T.logoIn + .55, T.logoIn + 1.0, p => ease.outBack(p, 2.6)), o: seg(t, T.logoIn + .55, T.logoIn + .6) });
+  place(logo.tag, { y: (1 - ep(t, T.logoIn + .8, T.logoIn + 1.5, ease.outExpo)) * 30, o: ep(t, T.logoIn + .8, T.logoIn + 1.3) });
+  centered(logo, W / 2, H / 2 - L.wordmark * .05, { y: undefined });
+  const lw = logo.offsetWidth, lh = logo.offsetHeight;
+  place(logo, { x: W / 2 - lw / 2, y: H / 2 - lh / 2 - logoOut * 60, s: 1 - logoOut * .06, o: 1 - logoOut });
+
+  // ---- main phone path
+  let ps;
+  const enter = ep(t, T.phoneIn, T.phoneIn + 1.0, ease.outQuint);
+  const toOutro = ep(t, T.outro, T.outro + 1.1, ease.inOutCubic);
+  const breathe = ep(t, 12.6, T.outro, ease.inOutCubic) * .035;
+  ps = {
+    x: lerp(L.phoneX, W / 2, toOutro),
+    y: lerp(L.phoneY + (1 - enter) * H * .95, L.outroY, toOutro),
+    s: lerp(1 + breathe, L.outroScale, toOutro),
+    r: (1 - enter) * 7,
+  };
+  if (PORTRAIT) ps.y = lerp(L.phoneY + (1 - enter) * H * .8, L.outroY, toOutro);
+  place(phoneMain.root, { x: ps.x - PW / 2, y: ps.y - PH / 2, s: ps.s, r: ps.r, o: t < T.phoneIn ? 0 : 1 });
+  phoneMain.shade.style.opacity = 0;
+  drawTimeline(phoneMain, mainTL, t);
+  drawTaps(phoneMain, mainTaps, t);
+
+  // glow follows the phone
+  const gs = SH * 1.5;
+  place(glow, { x: ps.x - gs / 2, y: ps.y - gs / 2, s: ps.s, o: enter * .95 });
+
+  // ---- side phones in the outro
+  const side = ep(t, T.outro + .3, T.outro + 1.4, ease.outQuint);
+  [[phoneL, -1, leftTL], [phoneR, 1, rightTL]].forEach(([ph, dir, tl]) => {
+    const x = W / 2 + dir * L.outroSpread * side, y = L.outroY + 30 * side;
+    place(ph.root, { x: x - PW / 2, y: y - PH / 2, s: L.outroScale * lerp(.85, .9, side), r: dir * 7 * side, o: side > 0 ? 1 : 0 });
+    ph.shade.style.opacity = lerp(.9, .35, side);
+    if (side > 0) drawTimeline(ph, tl, t);
+  });
+
+  // ---- copy
+  drawCopy(copies.today, t, T.today, T.sessionCopy - .45);
+  drawCopy(copies.session, t, T.sessionCopy, T.progressCopy - .45);
+  drawCopy(copies.progress, t, T.progressCopy, T.outro - .2);
+
+  // ---- stats (progress scene)
+  const sIn = 12.6, sOut = T.outro - .2;
+  const sp = ep(t, sIn, sIn + 1.1, ease.outCubic);
+  const so = ep(t, sOut, sOut + .4, ease.inCubic);
+  const copyH = copies.progress.c.offsetHeight;
+  place(stats, { x: L.copyX, y: L.copyY + copyH + (PORTRAIT ? 36 : 56) + (1 - ep(t, sIn, sIn + .8, ease.outExpo)) * 24, o: seg(t, sIn, sIn + .4) * (1 - so) });
+  stats.left.innerHTML = "+" + Math.round(25 * sp) + "<small>%</small>";
+  stats.right.innerHTML = "+" + Math.round(21 * sp) + "<small>%</small>";
+  stats.sends.innerHTML = String(Math.round(85 * sp));
+
+  // ---- callouts (landscape: right of the phone; portrait: over the copy side)
+  const cx = L.phoneX + PW / 2 + (PORTRAIT ? 28 : 56);
+  const cpos = (ay, dy = 0) => ({ bx: cx, by: phoneToStage(ps, 0, ay).y - 40 + dy });
+  const autoreg = cpos(390, 70);
+  drawCallout(callouts.autoreg, ps, 360, 390, autoreg.bx, autoreg.by, t, 3.7, 5.05);
+  const ramp = cpos(120, 20);
+  drawCallout(callouts.ramp, ps, 300, 120, ramp.bx, ramp.by, t, 5.95, 7.55);
+  const wv = B.weight_value_left, plates = cpos(wv.y + wv.height / 2, 90);
+  drawCallout(callouts.plates, ps, B.weight_plus_left.x + B.weight_plus_left.width + 3, wv.y + wv.height / 2,
+    plates.bx, plates.by, t, 7.95, 9.2);
+  const rest = cpos(215, 40);
+  drawCallout(callouts.rest, ps, 334, 215, rest.bx, rest.by, t, 9.75, 10.95);
+  // the headline chart's latest CurrentMax step (measured on the capture)
+  const chart = cpos(432, 40);
+  drawCallout(callouts.chart, ps, 336, 432, chart.bx, chart.by, t, 12.9, 14.75);
+
+  // ---- outro wordmark
+  const wIn = T.outro + 1.0;
+  centered(outroWord, W / 2, L.outroWordY);
+  const owp = ep(t, wIn, wIn + .9, ease.outExpo);
+  place(outroWord, { x: W / 2 - outroWord.offsetWidth / 2, y: L.outroWordY - outroWord.offsetHeight / 2 + (1 - owp) * 40, o: seg(t, wIn, wIn + .5) });
+  place(outroWord.tag, { y: (1 - ep(t, wIn + .35, wIn + 1.1, ease.outExpo)) * 20, o: seg(t, wIn + .35, wIn + .85) });
+
+  // ---- fade in from / out to black
+  place(fade, { o: Math.max(1 - seg(t, 0, .35), seg(t, T.end - .45, T.end)) });
+}
+
+// Poster only: a "Watch" pill under the Today copy (render_video.py --poster).
+window.showPlayBadge = function () {
+  const b = el("div", "abs play", stage, "<i></i>Watch the promo <span>0:18</span>");
+  const cp = copies.today.c;
+  place(b, { x: L.copyX, y: L.copyY + cp.offsetHeight + (PORTRAIT ? 40 : 64) });
+};
+
+window.DURATION = T.end;
+window.stageReady = async function (topoSvg) {
+  await Promise.all([
+    ...SCREENS.map(n => loadImage("screens/" + n + ".png").then(i => IMG[n] = i)),
+    ...REST.map(n => loadImage("screens/" + n + ".png").then(i => IMG[n] = i)),
+    ...SCROLL.map(n => loadImage("screens/" + n + ".png").then(i => IMG[n] = i)),
+  ]);
+  await document.fonts.load("700 100px 'Barlow Condensed'");
+  await document.fonts.load("600 100px 'Barlow Condensed'");
+  await Promise.all(["400", "500", "600", "700"].map(w => document.fonts.load(w + " 30px Barlow")));
+  build(topoSvg);
+  renderFrame(0);
+  return true;
+};
+window.renderFrame = renderFrame;
+</script>
+</body>
+</html>
