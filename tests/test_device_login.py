@@ -386,3 +386,50 @@ def test_first_run_bootstrap_grant_is_spent_after_the_user_is_created(webview_cl
 
     assert response.status_code in (303, 403)
     assert "session=" not in response.headers.get("set-cookie", "")
+
+
+# --- Origin: null from the shell's cold-start postUrl ---------------------
+
+
+def test_device_login_accepts_the_null_origin_a_blank_webview_sends(webview_client):
+    # The shell's cold-start WebView.postUrl fires from a blank WebView, an
+    # opaque origin, so Chromium sends `Origin: null`. The CSRF backstop must
+    # not refuse it here -- the device token is the credential.
+    complete_first_run(webview_client)
+    webview_client.cookies.clear()
+
+    response = webview_client.post(
+        "/device-login",
+        data={"token": WEBVIEW_DEVICE_TOKEN},
+        headers={"Origin": "null"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/"
+
+
+def test_null_origin_post_with_a_wrong_token_is_still_refused(webview_client):
+    complete_first_run(webview_client)
+    webview_client.cookies.clear()
+
+    response = webview_client.post(
+        "/device-login",
+        data={"token": "not-the-device-token"},
+        headers={"Origin": "null"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 403
+    assert response.text == "Invalid device token."
+
+
+def test_null_origin_is_still_refused_on_every_other_post(webview_client):
+    complete_first_run(webview_client)
+
+    response = webview_client.post(
+        "/logout", headers={"Origin": "null"}, follow_redirects=False
+    )
+
+    assert response.status_code == 403
+    assert response.text == "Cross-origin request rejected."

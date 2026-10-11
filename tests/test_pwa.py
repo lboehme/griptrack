@@ -50,3 +50,20 @@ def test_manifest_route_unaffected_by_existing_csp(client):
     # already covers the icons — no CSP change was needed for this slice,
     # confirmed by the header still being present and unmodified here.
     assert "default-src 'self'" in response.headers["Content-Security-Policy"]
+
+
+def test_pages_link_static_assets_by_content_hash(client):
+    # The on-device build serves static files with a 1980 mtime, so the
+    # WebView's heuristic cache would keep an unversioned app.css forever;
+    # the URL itself must change whenever the file's content does.
+    import hashlib
+    from pathlib import Path
+
+    css = Path(__file__).resolve().parent.parent / "backend" / "static" / "app.css"
+    digest = hashlib.sha256(css.read_bytes()).hexdigest()[:12]
+
+    html = client.get("/login").text
+
+    assert f'href="/static/app.css?v={digest}"' in html
+    assert 'src="/static/htmx.min.js?v=' in html
+    assert client.get(f"/static/app.css?v={digest}").status_code == 200
