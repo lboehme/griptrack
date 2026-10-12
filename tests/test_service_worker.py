@@ -33,7 +33,7 @@ def test_offline_fallback_page_renders_standalone(client):
 def test_base_template_registers_the_service_worker(client):
     response = client.get("/health")
 
-    assert '<script src="/static/register-sw.js"' in response.text
+    assert '<script src="/static/register-sw.js?v=' in response.text
 
     registration_script = client.get("/static/register-sw.js")
     assert registration_script.status_code == 200
@@ -53,7 +53,7 @@ def test_webview_build_flag_skips_service_worker_registration_and_manifest(
 
     response = client.get("/health")
 
-    assert '<script src="/static/register-sw.js"' not in response.text
+    assert '/static/register-sw.js' not in response.text
     assert '<link rel="manifest"' not in response.text
 
 
@@ -64,7 +64,7 @@ def test_default_build_still_registers_the_service_worker_and_manifest(client_fa
 
     response = client.get("/health")
 
-    assert '<script src="/static/register-sw.js"' in response.text
+    assert '<script src="/static/register-sw.js?v=' in response.text
     assert '<link rel="manifest" href="/manifest.webmanifest">' in response.text
 
 

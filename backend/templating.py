@@ -1,4 +1,6 @@
 import datetime
+import functools
+import hashlib
 from pathlib import Path
 from typing import Any
 
@@ -79,6 +81,19 @@ def grade_color(grade: Any) -> str:
     return f"var({token})" if token else ""
 
 
+_STATIC_DIR = Path(__file__).parent / "static"
+
+
+@functools.cache
+def static_url(path: str) -> str:
+    """`/static/<path>?v=<content hash>` -- a URL that changes whenever the
+    file does. The on-device build serves static files with a 1980 mtime
+    (Chaquopy's extracted assets), so without a versioned URL the WebView's
+    heuristic HTTP cache keeps an old app.css for years after an update."""
+    digest = hashlib.sha256((_STATIC_DIR / path).read_bytes()).hexdigest()[:12]
+    return f"/static/{path}?v={digest}"
+
+
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 # Badging unparsed boulder grades in _climb_list.html needs the same parser
 # the correlation uses, so history/climbs stay in lockstep with analytics.py
@@ -92,3 +107,4 @@ templates.env.filters["grade_color"] = grade_color
 templates.env.globals["plate_breakdown"] = plate_breakdown
 # A missing number renders as nothing, never "None".
 templates.env.filters["num_trim"] = lambda v: "" if v is None else f"{v:g}"
+templates.env.globals["static_url"] = static_url
