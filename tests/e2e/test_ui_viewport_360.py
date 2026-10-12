@@ -200,7 +200,20 @@ def test_today_and_log_sheet_fit_360px(live_server, authenticated_page):
     sheet = page.locator(".log-sheet")
     expect(sheet).to_be_visible()
     for tab in ("Climb", "Bodyweight", "Tweak"):
+        # Each tab click is an htmx swap of the whole sheet -- even Climb,
+        # which is already showing, so its form is visible *before* the swap.
+        # Measure only once the swap has settled, never mid-swap while
+        # .log-sheet is detached.
+        page.evaluate(
+            """() => {
+                window.__sheetSettled = false;
+                document.body.addEventListener(
+                    "htmx:afterSettle", () => { window.__sheetSettled = true; }, { once: true }
+                );
+            }"""
+        )
         page.locator(".sheet-tab", has_text=tab).click()
+        page.wait_for_function("() => window.__sheetSettled")
         expect(page.locator(f".sheet-{tab.lower()}")).to_be_visible()
         _no_horizontal_overflow(page, f"sheet {tab}")
         box = sheet.bounding_box()
