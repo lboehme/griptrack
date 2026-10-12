@@ -11,6 +11,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import android.view.View
+import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
@@ -28,6 +29,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.core.view.updateLayoutParams
 import androidx.core.view.updatePadding
 
 /**
@@ -142,16 +144,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupEdgeToEdgeInsets() {
+        // Margins, not padding: WebView ignores its own padding when laying
+        // out page content, so padded insets still let the page draw under
+        // the status bar. The strips this leaves show rootContainer's
+        // splash_bg, which is the app's own dark ground.
         ViewCompat.setOnApplyWindowInsetsListener(webView) { view, windowInsets ->
             val insets = windowInsets.getInsets(
                 WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime()
             )
-            view.updatePadding(
-                left = insets.left,
-                top = insets.top,
-                right = insets.right,
-                bottom = insets.bottom
-            )
+            view.updateLayoutParams<ViewGroup.MarginLayoutParams> {
+                leftMargin = insets.left
+                topMargin = insets.top
+                rightMargin = insets.right
+                bottomMargin = insets.bottom
+            }
             windowInsets
         }
 
