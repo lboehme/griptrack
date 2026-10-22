@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ title }} — GripTrack{% endblock %}
 {% block extra_head %}
-<link rel="stylesheet" href="/static/uplot.min.css">
+<link rel="stylesheet" href="{{ static_url('uplot.min.css') }}">
 {% endblock %}
 {% block content %}
 {# Go deeper detail pages (#150). Each section's markup moved unchanged
@@ -153,7 +153,7 @@
 {% endif %}
 {% endif %}
 {% if (section == "volume" and combos) or (section == "balance" and asymmetry_pairs) %}
-<script src="/static/uplot.iife.min.js" defer></script>
-<script src="/static/dashboard-chart.js" defer></script>
+<script src="{{ static_url('uplot.iife.min.js') }}" defer></script>
+<script src="{{ static_url('dashboard-chart.js') }}" defer></script>
 {% endif %}
 {% endblock %}

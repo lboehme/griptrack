@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{% if user %}Today — GripTrack{% else %}GripTrack{% endif %}{% endblock %}
-{% block extra_head %}<script src="/static/dimension-label.js" defer></script>{% endblock %}
+{% block extra_head %}<script src="{{ static_url('dimension-label.js') }}" defer></script>{% endblock %}
 {% block content %}
 {% if user %}
 {# Today (#149): a small coach. All the rules (which state, which weights,

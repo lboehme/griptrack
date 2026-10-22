@@ -109,7 +109,8 @@ self.addEventListener("fetch", (event) => {
   const path = new URL(request.url).pathname;
   if (PRECACHE_URLS.includes(path)) {
     event.respondWith(
-      caches.match(request).then((cached) => cached || fetch(request))
+      caches.match(request, { ignoreSearch: true })
+        .then((cached) => cached || fetch(request))
     );
   }
 });

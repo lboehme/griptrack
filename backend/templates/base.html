@@ -12,13 +12,13 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="GripTrack">
   <title>{% block title %}GripTrack{% endblock %}</title>
-  <link rel="stylesheet" href="/static/app.css">
-  <script src="/static/htmx.min.js" defer></script>
-  <script src="/static/client-date.js" defer></script>
-  <script src="/static/steppers.js" defer></script>
-  <script src="/static/log-sheet.js" defer></script>
+  <link rel="stylesheet" href="{{ static_url('app.css') }}">
+  <script src="{{ static_url('htmx.min.js') }}" defer></script>
+  <script src="{{ static_url('client-date.js') }}" defer></script>
+  <script src="{{ static_url('steppers.js') }}" defer></script>
+  <script src="{{ static_url('log-sheet.js') }}" defer></script>
   {% if not webview_build %}
-  <script src="/static/register-sw.js" defer></script>
+  <script src="{{ static_url('register-sw.js') }}" defer></script>
   {% endif %}
   {% block extra_head %}{% endblock %}
 </head>

@@ -93,9 +93,19 @@ def create_app() -> FastAPI:
         # Origin header on form posts — if it names a different host than
         # the one being posted to, refuse. Requests without an Origin
         # (curl, tests, same-site GET navigations) pass through.
+        # The one exception is `Origin: null` on /device-login: the Android
+        # shell's cold-start postUrl fires from a blank WebView (an opaque
+        # origin), and the device token it carries is itself the credential.
         if request.method == "POST":
             origin = request.headers.get("origin")
-            if origin and urlparse(origin).netloc != request.headers.get("host"):
+            device_login_from_blank_webview = (
+                origin == "null" and request.url.path == "/device-login"
+            )
+            if (
+                origin
+                and not device_login_from_blank_webview
+                and urlparse(origin).netloc != request.headers.get("host")
+            ):
                 return PlainTextResponse(
                     "Cross-origin request rejected.", status_code=403
                 )
